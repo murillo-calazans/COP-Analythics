@@ -1,0 +1,16 @@
+# Configurações locais do Claude Code — específicas da máquina, não do projeto
+.claude/
+
+# Planilhas reais (Base.xlsx/Ordens.xlsx) nunca devem ir pro repositório —
+# podem conter dados de clientes/colaboradores (ver docs/privacidade-lgpd.md)
+database/*.xlsx
+database/*.xls
+database/*.csv
+*.xlsx
+*.xls
+!docs/**/*.xlsx
+
+# Lixo comum de SO/editor
+Thumbs.db
+.DS_Store
+*.log

@@ -1,0 +1,32 @@
+.tabela-alertas {
+
+    width: 100%;
+    margin-top: 16px;
+
+    border-collapse: collapse;
+    font-size: 14px;
+
+}
+
+.tabela-alertas th,
+.tabela-alertas td {
+
+    padding: 10px 12px;
+    text-align: left;
+
+    border-bottom: 1px solid var(--cor-borda);
+
+}
+
+.tabela-alertas th {
+
+    color: var(--cor-texto-suave);
+    font-weight: 600;
+
+}
+
+.tabela-alertas tbody tr:hover {
+
+    background: var(--cor-fundo-elevado);
+
+}

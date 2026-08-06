@@ -1,0 +1,66 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Segoe UI, sans-serif;
+}
+
+/*
+ * Tema claro/escuro via variáveis CSS. O cabeçalho NÃO usa essas
+ * variáveis — a marca (fundo navy) é fixa nos dois temas, só o
+ * conteúdo (main/cards/tabelas/modal) alterna. Alternado em
+ * js/ui/tema.js, que grava data-tema="dark" na <html> e persiste
+ * a escolha no localStorage.
+ */
+:root{
+
+    --cor-fundo: #F1F5F9;
+    --cor-fundo-card: #FFFFFF;
+    --cor-fundo-elevado: #F8FAFC;
+    --cor-borda: #E2E8F0;
+
+    --cor-texto: #0F172A;
+    --cor-texto-suave: #64748B;
+
+    --cor-primaria: #2563EB;
+    --cor-primaria-hover: #1D4ED8;
+
+    --cor-sombra: rgba(15, 23, 42, 0.08);
+
+    /* Paleta de gráficos (skill dataviz — hex validados p/ contraste e CVD) */
+    --grafico-serie-1: #2a78d6;
+    --grafico-serie-2: #eb6834;
+    --grafico-grade: #e1e0d9;
+    --grafico-eixo: #c3c2b7;
+
+}
+
+html[data-tema="dark"]{
+
+    --cor-fundo: #111827;
+    --cor-fundo-card: #1F2937;
+    --cor-fundo-elevado: #17212B;
+    --cor-borda: #2f3b4d;
+
+    --cor-texto: #F1F5F9;
+    --cor-texto-suave: #9CA3AF;
+
+    --cor-primaria: #2563EB;
+    --cor-primaria-hover: #1D4ED8;
+
+    --cor-sombra: rgba(0, 0, 0, 0.4);
+
+    --grafico-serie-1: #3987e5;
+    --grafico-serie-2: #d95926;
+    --grafico-grade: #2c2c2a;
+    --grafico-eixo: #383835;
+
+}
+
+body{
+
+    background: var(--cor-fundo);
+    color: var(--cor-texto);
+    transition: background .2s, color .2s;
+
+}

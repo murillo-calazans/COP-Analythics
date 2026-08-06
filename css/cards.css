@@ -1,0 +1,341 @@
+.upload-card {
+
+    max-width: 520px;
+    margin: 40px auto;
+    padding: 30px;
+
+    background: var(--cor-fundo-card);
+    border: 1px solid var(--cor-borda);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px var(--cor-sombra);
+
+}
+
+.upload-card h2 {
+
+    margin-bottom: 8px;
+
+}
+
+.upload-card > p {
+
+    color: var(--cor-texto-suave);
+    margin-bottom: 24px;
+
+}
+
+.upload-step {
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    padding: 16px 0;
+    border-top: 1px solid var(--cor-borda);
+
+}
+
+.upload-step label {
+
+    font-size: 14px;
+    color: var(--cor-texto-suave);
+
+}
+
+.upload-step input[type="file"] {
+
+    color: var(--cor-texto-suave);
+
+}
+
+.upload-step button {
+
+    align-self: flex-start;
+
+    background: var(--cor-primaria);
+    color: white;
+    border: none;
+
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+
+    transition: .25s;
+
+}
+
+.upload-step button:hover:not(:disabled) {
+
+    background: var(--cor-primaria-hover);
+
+}
+
+.upload-step button:disabled {
+
+    background: var(--cor-borda);
+    color: var(--cor-texto-suave);
+    cursor: not-allowed;
+
+}
+
+#status {
+
+    margin-top: 16px;
+    padding: 12px;
+
+    background: var(--cor-fundo-elevado);
+    border-radius: 8px;
+
+    font-size: 14px;
+    color: var(--cor-texto-suave);
+
+}
+
+.placeholder-card {
+
+    max-width: 720px;
+    margin: 20px auto;
+    padding: 30px;
+
+    background: var(--cor-fundo-card);
+    border: 1px solid var(--cor-borda);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px var(--cor-sombra);
+
+}
+
+.placeholder-card h2 {
+
+    margin-bottom: 8px;
+
+}
+
+.placeholder-card > p {
+
+    color: var(--cor-texto-suave);
+
+}
+
+.auditoria-card {
+
+    max-width: 960px;
+
+}
+
+.form-busca {
+
+    display: flex;
+    gap: 12px;
+
+    margin-top: 16px;
+
+}
+
+.form-busca input {
+
+    flex: 1;
+
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+
+    padding: 10px 14px;
+
+    color: var(--cor-texto);
+    font-size: 14px;
+
+}
+
+.form-busca button {
+
+    background: var(--cor-primaria);
+    color: white;
+    border: none;
+
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: .25s;
+
+}
+
+.form-busca button:hover {
+
+    background: var(--cor-primaria-hover);
+
+}
+
+.resultados-contagem {
+
+    margin-top: 16px;
+    margin-bottom: 8px;
+
+    color: var(--cor-texto-suave);
+    font-size: 13px;
+
+}
+
+.linha-clicavel {
+
+    cursor: pointer;
+
+}
+
+.alerta-vazio {
+
+    color: var(--cor-texto-suave);
+    margin-top: 16px;
+
+}
+
+.form-config {
+
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 24px;
+
+    margin-top: 16px;
+
+}
+
+.form-config h3 {
+
+    grid-column: 1 / -1;
+
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--cor-borda);
+
+    color: var(--cor-texto-suave);
+    font-size: 15px;
+
+}
+
+.form-config label {
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+
+}
+
+.form-config input,
+.form-config select {
+
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+    border-radius: 6px;
+
+    padding: 8px 10px;
+
+    color: var(--cor-texto);
+    font-size: 14px;
+
+}
+
+.form-config-acoes {
+
+    grid-column: 1 / -1;
+
+    display: flex;
+    gap: 12px;
+
+    margin-top: 8px;
+
+}
+
+.form-config-acoes button {
+
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: .25s;
+
+}
+
+#btnSalvarConfig,
+#btnSalvarFunilAssuntos {
+
+    background: var(--cor-primaria);
+    color: white;
+
+}
+
+#btnSalvarConfig:hover,
+#btnSalvarFunilAssuntos:hover {
+
+    background: var(--cor-primaria-hover);
+
+}
+
+#btnRestaurarConfig {
+
+    background: var(--cor-fundo-elevado);
+    color: var(--cor-texto-suave);
+    border: 1px solid var(--cor-borda);
+
+}
+
+#btnRestaurarConfig:hover {
+
+    background: var(--cor-borda);
+
+}
+
+.resumo-filtro {
+
+    color: var(--cor-texto-suave);
+    font-size: 13px;
+    margin: 12px 0;
+
+}
+
+#btnAplicarFiltroGlobal {
+
+    background: var(--cor-primaria);
+    color: white;
+
+}
+
+#btnAplicarFiltroGlobal:hover {
+
+    background: var(--cor-primaria-hover);
+
+}
+
+#btnLimparFiltroGlobal {
+
+    background: var(--cor-fundo-elevado);
+    color: var(--cor-texto-suave);
+    border: 1px solid var(--cor-borda);
+
+}
+
+#btnLimparFiltroGlobal:hover {
+
+    background: var(--cor-borda);
+
+}
+
+#btnAbrirFiltroAssuntos {
+
+    background: var(--cor-primaria);
+    color: white;
+    border: none;
+
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: .25s;
+
+}
+
+#btnAbrirFiltroAssuntos:hover {
+
+    background: var(--cor-primaria-hover);
+
+}
