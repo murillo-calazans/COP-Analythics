@@ -23,9 +23,15 @@ const APP = {
 
         carregando: false,
 
-        baseCarregada: false
+        baseCarregada: false,
+
+        autenticado: false
 
     },
+
+    // Preenchido após login bem-sucedido: { id, email, papel }.
+    // papel "admin" importa/apaga; papel "leitor" só pesquisa/analisa.
+    usuario: null,
 
     referencias: {
 

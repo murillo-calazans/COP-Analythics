@@ -1,142 +1,226 @@
 /**
  * ==========================================================
- * Serviço de Armazenamento (IndexedDB)
+ * Serviço de Armazenamento (Supabase)
  * ==========================================================
- * Persiste APP.referencias e APP.dados.ordens entre sessões,
- * pra não precisar reimportar um arquivo de dezenas/centenas
- * de MB toda vez que a página é recarregada.
+ * Busca APP.referencias e APP.dados.ordens do banco compartilhado
+ * (Supabase) — substitui o antigo IndexedDB local por navegador.
+ * Qualquer usuário autenticado (admin ou leitor) vê os mesmos
+ * dados; só admin consegue escrever (RLS, ver
+ * database/schema-supabase.sql).
  *
- * IndexedDB clona os objetos (structured clone) e, ao fazer
- * isso, instâncias de OrdemServico/Movimentacao perdem seus
- * métodos (viram Object puro). Por isso, ao carregar de volta,
- * reconstruímos cada uma com "new OrdemServico(...)"/"new
- * Movimentacao(...)" — mantendo o restante do sistema livre
- * pra chamar métodos do modelo sem se preocupar com a origem
- * dos dados (import fresco ou carregado do armazenamento).
+ * "ref_operadores"/"ref_eventos"/"ref_diagnosticos" guardam a
+ * linha bruta da planilha inteira em JSONB — reconstruímos
+ * APP.referencias.* exatamente como antes (Map<chave, linhaBruta>),
+ * então resolverReferencia/encontrarColuna continuam funcionando
+ * sem nenhuma mudança. "ordens"/"movimentacoes" já são tipadas, e
+ * reconstruímos "new OrdemServico(...)"/"new Movimentacao(...)"
+ * igual o restante do sistema já espera.
  */
 
-const ARMAZENAMENTO_DB = "cop_analytics";
-const ARMAZENAMENTO_VERSAO = 1;
-const ARMAZENAMENTO_STORE = "estado";
-const ARMAZENAMENTO_CHAVE = "app";
+async function buscarReferencias() {
+    const [operadores, eventos, diagnosticos] = await Promise.all([
+        supabaseClient.from("ref_operadores").select("chave, dados"),
+        supabaseClient.from("ref_eventos").select("chave, dados"),
+        supabaseClient.from("ref_diagnosticos").select("chave, dados")
+    ]);
 
-function abrirBancoArmazenamento() {
-    return new Promise((resolve, reject) => {
-        const requisicao = indexedDB.open(ARMAZENAMENTO_DB, ARMAZENAMENTO_VERSAO);
+    if (operadores.error) throw operadores.error;
+    if (eventos.error) throw eventos.error;
+    if (diagnosticos.error) throw diagnosticos.error;
 
-        requisicao.onupgradeneeded = () => {
-            requisicao.result.createObjectStore(ARMAZENAMENTO_STORE);
-        };
-
-        requisicao.onsuccess = () => resolve(requisicao.result);
-        requisicao.onerror = () => reject(requisicao.error);
-    });
+    return {
+        operadores: new Map(operadores.data.map(linha => [linha.chave, linha.dados])),
+        eventos: new Map(eventos.data.map(linha => [linha.chave, linha.dados])),
+        diagnosticos: new Map(diagnosticos.data.map(linha => [linha.chave, linha.dados]))
+    };
 }
 
-async function salvarEstado() {
-    const db = await abrirBancoArmazenamento();
+async function buscarOrdens() {
+    const { data: linhasOrdens, error: erroOrdens } = await supabaseClient.from("ordens").select("*");
+    if (erroOrdens) throw erroOrdens;
 
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(ARMAZENAMENTO_STORE, "readwrite");
+    const { data: linhasMovimentacoes, error: erroMovs } = await supabaseClient.from("movimentacoes").select("*");
+    if (erroMovs) throw erroMovs;
 
-        tx.objectStore(ARMAZENAMENTO_STORE).put(
-            {
-                referencias: APP.referencias,
-                ordens: APP.dados.ordens,
-                salvoEm: new Date()
-            },
-            ARMAZENAMENTO_CHAVE
-        );
+    const movimentacoesPorOrdem = new Map();
+    for (const linha of linhasMovimentacoes) {
+        if (!movimentacoesPorOrdem.has(linha.ordem_id)) movimentacoesPorOrdem.set(linha.ordem_id, []);
+        movimentacoesPorOrdem.get(linha.ordem_id).push(linha);
+    }
 
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
-}
-
-async function carregarEstado() {
-    const db = await abrirBancoArmazenamento();
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(ARMAZENAMENTO_STORE, "readonly");
-        const requisicao = tx.objectStore(ARMAZENAMENTO_STORE).get(ARMAZENAMENTO_CHAVE);
-
-        requisicao.onsuccess = () => resolve(requisicao.result ?? null);
-        requisicao.onerror = () => reject(requisicao.error);
-    });
-}
-
-async function limparEstado() {
-    const db = await abrirBancoArmazenamento();
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(ARMAZENAMENTO_STORE, "readwrite");
-        tx.objectStore(ARMAZENAMENTO_STORE).delete(ARMAZENAMENTO_CHAVE);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
-}
-
-function reconstruirOrdens(mapaBruto) {
     const ordens = new Map();
 
-    for (const [id, bruta] of mapaBruto) {
+    for (const linha of linhasOrdens) {
         const ordem = new OrdemServico({
-            id: bruta.id,
-            cliente: bruta.cliente,
-            login: bruta.login,
-            cidade: bruta.cidade,
-            bairro: bruta.bairro,
-            assunto: bruta.assunto,
-            dataAbertura: bruta.dataAbertura
+            id: linha.id,
+            cliente: linha.cliente,
+            login: linha.login,
+            cidade: linha.cidade,
+            bairro: linha.bairro,
+            assunto: linha.assunto,
+            dataAbertura: linha.data_abertura ? new Date(linha.data_abertura) : null
         });
 
-        ordem.dataFechamento = bruta.dataFechamento;
-        ordem.statusAtual = bruta.statusAtual;
-        ordem.tecnicoResponsavel = bruta.tecnicoResponsavel;
-        ordem.indicadores = bruta.indicadores;
-        ordem.alertas = bruta.alertas;
-        ordem.auditoriaIA = bruta.auditoriaIA;
-        ordem.movimentacoes = bruta.movimentacoes.map(m => new Movimentacao(m));
+        ordem.dataFechamento = linha.data_fechamento ? new Date(linha.data_fechamento) : null;
+        ordem.statusAtual = linha.status_atual;
+        ordem.tecnicoResponsavel = linha.tecnico_responsavel;
 
-        ordens.set(id, ordem);
+        const movimentacoesBrutas = movimentacoesPorOrdem.get(linha.id) ?? [];
+        ordem.movimentacoes = movimentacoesBrutas
+            .map(m => new Movimentacao({
+                operador: m.operador,
+                equipe: m.equipe,
+                evento: m.evento,
+                diagnostico: m.diagnostico,
+                status: m.status,
+                respostaPadrao: m.resposta_padrao,
+                mensagem: m.mensagem ?? "",
+                historico: m.historico ?? [],
+                data: m.data ? new Date(m.data) : null
+            }))
+            .sort((a, b) => (a.data ?? 0) - (b.data ?? 0));
+
+        ordens.set(ordem.id, ordem);
     }
 
     return ordens;
 }
 
+/**
+ * Upsert das referências (Base.xlsx) no Supabase — chamado por
+ * importarBase() em js/services/importador.js. Guarda a linha bruta
+ * inteira em JSONB, exatamente como já vem de ReferenceEngine.carregar.
+ */
+async function persistirReferenciasNoSupabase(referencias) {
+    const paraLinhas = mapa => [...mapa.entries()].map(([chave, dados]) => ({ chave: String(chave), dados }));
+
+    const [operadores, eventos, diagnosticos] = await Promise.all([
+        supabaseClient.from("ref_operadores").upsert(paraLinhas(referencias.operadores), { onConflict: "chave" }),
+        supabaseClient.from("ref_eventos").upsert(paraLinhas(referencias.eventos), { onConflict: "chave" }),
+        supabaseClient.from("ref_diagnosticos").upsert(paraLinhas(referencias.diagnosticos), { onConflict: "chave" })
+    ]);
+
+    if (operadores.error) throw operadores.error;
+    if (eventos.error) throw eventos.error;
+    if (diagnosticos.error) throw diagnosticos.error;
+}
+
+/**
+ * Upsert das OS + insert das movimentações NOVAS no Supabase —
+ * chamado por importarOrdens() depois do merge local
+ * (DataEngine.mesclarOrdens). "ordensNovas" é o resultado cru dessa
+ * importação (antes do merge) — usamos ele pra saber quais IDs foram
+ * tocados e quais movimentações são realmente novas (evita duplicar no
+ * banco movimentações já persistidas em uma importação anterior).
+ * O snapshot da OS em si (cliente/status/etc.) vem do estado JÁ
+ * mesclado em APP.dados.ordens, que é o mais atualizado.
+ */
+async function persistirOrdensNoSupabase(ordensNovas) {
+    const idsTocados = [...ordensNovas.keys()];
+
+    const linhasOrdens = idsTocados.map(id => {
+        const ordem = APP.dados.ordens.get(id);
+        return {
+            id: String(ordem.id),
+            cliente: ordem.cliente,
+            login: ordem.login,
+            cidade: ordem.cidade,
+            bairro: ordem.bairro,
+            assunto: ordem.assunto,
+            data_abertura: ordem.dataAbertura,
+            data_fechamento: ordem.dataFechamento,
+            status_atual: ordem.statusAtual,
+            tecnico_responsavel: ordem.tecnicoResponsavel,
+            atualizado_em: new Date()
+        };
+    });
+
+    const { error: erroOrdens } = await supabaseClient.from("ordens").upsert(linhasOrdens, { onConflict: "id" });
+    if (erroOrdens) throw erroOrdens;
+
+    const linhasMovimentacoes = [];
+    for (const [id, ordem] of ordensNovas) {
+        for (const mov of ordem.movimentacoes) {
+            linhasMovimentacoes.push({
+                ordem_id: String(id),
+                operador: mov.operador === null || mov.operador === undefined ? null : String(mov.operador),
+                equipe: mov.equipe === null || mov.equipe === undefined ? null : String(mov.equipe),
+                evento: mov.evento === null || mov.evento === undefined ? null : String(mov.evento),
+                diagnostico: mov.diagnostico === null || mov.diagnostico === undefined ? null : String(mov.diagnostico),
+                status: mov.status,
+                resposta_padrao: mov.respostaPadrao,
+                mensagem: mov.mensagem,
+                historico: mov.historico,
+                data: mov.data
+            });
+        }
+    }
+
+    if (linhasMovimentacoes.length === 0) return;
+
+    const { error: erroMovs } = await supabaseClient.from("movimentacoes").insert(linhasMovimentacoes);
+    if (erroMovs) throw erroMovs;
+}
+
+/**
+ * Busca tudo do Supabase e popula APP.referencias/APP.dados.ordens.
+ * Chamado uma vez ao logar (ver js/ui/login.js), não a cada troca de
+ * tela — a partir daí o app trabalha em memória, igual sempre fez.
+ */
 async function tentarRestaurarEstado() {
     try {
-        const estado = await carregarEstado();
-        if (!estado) return false;
+        const [referencias, ordens] = await Promise.all([buscarReferencias(), buscarOrdens()]);
 
-        APP.referencias.operadores = estado.referencias.operadores;
-        APP.referencias.eventos = estado.referencias.eventos;
-        APP.referencias.diagnosticos = estado.referencias.diagnosticos;
-        APP.dados.ordens = reconstruirOrdens(estado.ordens);
-        APP.status.baseCarregada = true;
+        APP.referencias.operadores = referencias.operadores;
+        APP.referencias.eventos = referencias.eventos;
+        APP.referencias.diagnosticos = referencias.diagnosticos;
+        APP.dados.ordens = ordens;
+        APP.status.baseCarregada = ordens.size > 0 || referencias.operadores.size > 0;
 
-        console.log(`Estado restaurado do armazenamento local (salvo em ${estado.salvoEm.toLocaleString("pt-BR")}).`);
-        return true;
+        return APP.status.baseCarregada;
 
     } catch (erro) {
-        console.error("Falha ao restaurar estado salvo:", erro);
+        console.error("Falha ao buscar dados do Supabase:", erro);
         return false;
     }
 }
 
 /**
- * Apaga Base + Ordens importadas (memória e IndexedDB) pra recomeçar do
- * zero. NÃO mexe em configurações (colunas, assuntos p/ recorrência,
- * funil de assuntos, tema) — isso é preferência do usuário, não dado
- * importado, e apagar junto seria surpresa desagradável.
+ * Apaga Base + Ordens compartilhadas (banco Supabase — pra TODO MUNDO
+ * que usa o sistema, não só quem clicou) pra recomeçar do zero. Só
+ * admin chega a essa função (botão escondido pra leitor, ver
+ * js/ui/login.js -> aplicarGateDePapel; e a RLS recusaria a escrita de
+ * qualquer forma). NÃO mexe em configurações (colunas, assuntos p/
+ * recorrência, funil de assuntos, tema) — isso é preferência local do
+ * navegador de cada um, não dado compartilhado.
  */
 async function limparDadosImportados() {
+    if (!ehAdmin()) {
+        alert("Só administradores podem apagar os dados compartilhados.");
+        return;
+    }
+
     const confirmado = confirm(
-        "Isso vai apagar todas as Ordens e a Base importadas (inclusive o que está salvo localmente). " +
-        "Suas configurações (colunas, filtros, tema) não são afetadas. Confirmar?"
+        "Isso vai apagar TODAS as Ordens e a Base compartilhadas — pra TODO MUNDO que usa o " +
+        "sistema, não só o seu navegador. Suas configurações pessoais (colunas, filtros, tema) " +
+        "não são afetadas. Confirmar?"
     );
 
     if (!confirmado) return;
+
+    try {
+        await supabaseClient.from("movimentacoes").delete().neq("id", 0);
+        await Promise.all([
+            supabaseClient.from("ordens").delete().neq("id", ""),
+            supabaseClient.from("ref_operadores").delete().neq("chave", ""),
+            supabaseClient.from("ref_eventos").delete().neq("chave", ""),
+            supabaseClient.from("ref_diagnosticos").delete().neq("chave", "")
+        ]);
+    } catch (erro) {
+        console.error("Falha ao apagar dados no Supabase:", erro);
+        alert("Não foi possível apagar os dados compartilhados. Veja o console pra detalhes.");
+        return;
+    }
 
     APP.dados.ordens = new Map();
     APP.referencias.operadores = new Map();
@@ -144,12 +228,6 @@ async function limparDadosImportados() {
     APP.referencias.diagnosticos = new Map();
     APP.indicadores = {};
     APP.status.baseCarregada = false;
-
-    try {
-        await limparEstado();
-    } catch (erro) {
-        console.error("Falha ao limpar estado salvo:", erro);
-    }
 
     atualizarBadgeAlertas();
     renderizarDashboard();
@@ -163,7 +241,7 @@ async function limparDadosImportados() {
     if (inputOrdens) inputOrdens.value = "";
 
     const status = document.getElementById("status");
-    if (status) status.textContent = 'Dados limpos. Selecione os arquivos e clique em "Gerar Relatório".';
+    if (status) status.textContent = 'Dados limpos pra todo mundo. Selecione os arquivos e clique em "Gerar Relatório".';
 
     abrirModal("modalImportar");
 }

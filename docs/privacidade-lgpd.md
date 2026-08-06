@@ -2,56 +2,73 @@
 
 ## O que o sistema armazena hoje
 
-A partir da v0.1, o COP Analytics passou a importar, além de dados operacionais
-(status, datas, eventos, diagnósticos), dois campos de identificação do
-cliente vindos de Ordens.xlsx: **cliente** (nome) e **login**. O login é a
-chave usada para calcular recorrência, porque um mesmo cliente pode ter mais
-de um login e o nome digitado pode variar entre OS.
+O COP Analytics importa, além de dados operacionais (status, datas, eventos,
+diagnósticos), dois campos de identificação do cliente vindos de Ordens.xlsx:
+**cliente** (nome) e **login**. O login é a chave usada para calcular
+recorrência, porque um mesmo cliente pode ter mais de um login e o nome
+digitado pode variar entre OS. Também importa nome e setor de operadores
+(Base.xlsx) — dado pessoal de colaborador, não só de cliente.
 
-Nome e login de cliente são **dados pessoais** na definição da LGPD (Lei
-13.709/2018). A partir de agora, qualquer decisão de arquitetura que envolva
-essas duas colunas precisa considerar isso.
+Nome/login de cliente e nome/setor de operador são **dados pessoais** na
+definição da LGPD (Lei 13.709/2018). Qualquer decisão de arquitetura que
+envolva essas colunas precisa considerar isso.
 
 ## Como os dados são tratados hoje
 
-- **Tudo roda no navegador.** Não existe backend, API ou servidor no COP
-  Analytics hoje — o Excel é lido inteiramente no lado do cliente
-  (JavaScript), e nenhum dado é enviado para fora da máquina de quem importou
-  o arquivo.
-- **Persistência é local.** O que foi importado fica salvo no IndexedDB do
-  navegador (implementado em `js/services/armazenamento.js`), que também é
-  local à máquina — não sincroniza com nenhum servidor.
-- **Sem transmissão de rede.** Não há chamada de rede em nenhum ponto do
-  fluxo de importação/processamento atual.
+> **Mudança de arquitetura**: até a v0.x anterior, o sistema era 100%
+> client-side (sem backend, dado nunca saía do navegador). A partir da
+> introdução de login com papéis e dados compartilhados entre a equipe, isso
+> deixou de valer — o dado agora vive num banco compartilhado na nuvem. Veja
+> abaixo o que mudou de fato.
 
-Isso significa que, na arquitetura atual, dado de cliente nunca sai da
-máquina de quem está usando o sistema — o que é uma vantagem de privacidade
-em relação a uma solução com backend centralizado, mas **não elimina** a
-responsabilidade sobre esses dados: eles ainda ficam armazenados em texto
-puro no disco de quem usa o navegador.
+- **Backend**: [Supabase](https://supabase.com) (Postgres gerenciado +
+  Autenticação + Row Level Security), projeto hospedado na região **São
+  Paulo (sa-east-1)** — dado fica no Brasil.
+- **Autenticação obrigatória**: sem login, nada do sistema é visível (só a
+  tela de entrada — ver `js/ui/login.js`). Sem autocadastro: contas são
+  criadas manualmente no painel do Supabase.
+- **Dois papéis de acesso**:
+  - `admin` — importa, apaga, faz tudo.
+  - `leitor` — só pesquisa/analisa; não importa nem apaga nada. Essa
+    restrição não é só de interface: é aplicada como política de **Row Level
+    Security** no próprio banco (`database/schema-supabase.sql`), então uma
+    tentativa de escrita direta (fora da tela) também é recusada.
+- **O que é compartilhado**: Base.xlsx e Ordens.xlsx importados por um
+  `admin` ficam visíveis pra todo mundo com conta no sistema — inclusive
+  nome/login de cliente e nome/setor de operador. Não existe hoje segregação
+  por empresa/equipe (single-tenant): todo usuário autenticado enxerga o
+  mesmo conjunto de dados.
+- **Sem transmissão pra terceiros além do Supabase**: o Excel ainda é lido
+  inteiramente no navegador (JavaScript, `xlsx.full.min.js`); só o resultado
+  já processado é que vai pro banco, via chamadas HTTPS diretas do navegador
+  pra API do Supabase.
 
-## Pontos de atenção para quando o projeto virar SaaS
+## Pontos de atenção com a arquitetura atual
 
-O roadmap do projeto prevê o COP Analytics evoluindo para uma plataforma SaaS
-multi-empresa. Nesse momento, os dados deixam de ficar só na máquina do
-usuário e passam a trafegar/ficar armazenados em um servidor compartilhado
-entre clientes (provedores de internet). Isso muda completamente o cenário de
-risco e exige, no mínimo:
+1. **Dado de cliente/operador agora sai da máquina de quem importa** — fica
+   num banco gerenciado por terceiro (Supabase), ainda que hospedado no
+   Brasil e protegido por autenticação + RLS. Isso é uma mudança real de
+   superfície de risco em relação à versão anterior.
+2. **Todo usuário logado vê tudo** — não há hoje um papel intermediário que
+   veja só indicadores agregados sem nome/login de cliente. Se isso vier a
+   ser necessário, dá pra criar uma "view" no Postgres que omite essas
+   colunas e liberar esse papel só nela.
+3. **Retenção**: os dados ficam no banco até alguém com papel `admin` usar
+   "Limpar dados" (que agora apaga pra todo mundo, não só localmente) — não
+   há expiração automática configurada.
+4. **Base legal e finalidade**: seguem sendo os mesmos do uso original —
+   detectar recorrência de chamados e medir desempenho operacional
+   (TMS/TMA/TMR/TME) — não houve mudança de finalidade, só de onde o dado
+   fica guardado.
+5. **Auditor IA** (quando ativado): o histórico de uma OS é enviado a um
+   provedor de IA externo através de uma Edge Function do Supabase — a
+   chave de API fica só no servidor, nunca no navegador, mas o conteúdo da
+   OS (que pode incluir nome/login de cliente) passa a trafegar até esse
+   terceiro também.
 
-1. **Criptografia em trânsito e em repouso** para os campos `cliente` e
-   `login` (e qualquer outro dado pessoal que vier a ser importado).
-2. **Isolamento entre empresas** (multi-tenancy) — dados de um provedor nunca
-   podem vazar para outro.
-3. **Controle de acesso** — nem todo usuário do sistema precisa enxergar
-   nome/login de cliente; times que só olham indicadores agregados
-   (dashboards, MTTR, SLA) podem trabalhar com dados anonimizados.
-4. **Base legal e finalidade** — documentar por que o dado é coletado
-   (no caso, detectar recorrência de chamados) e por quanto tempo é retido.
-5. **Anonimização para análises agregadas** — sempre que possível, cálculos
-   de indicador (não ligados a um cliente específico) devem rodar sobre
-   dados anonimizados/pseudonimizados.
+## Se o projeto virar SaaS multi-empresa
 
-Nada disso precisa ser resolvido agora — a arquitetura atual (100%
-client-side) já é razoavelmente segura para o uso interno de hoje. Este
-documento existe para que a decisão de ir para SaaS não comece do zero em
-relação a privacidade.
+O ponto 2 acima passa a ser obrigatório nesse cenário: isolamento entre
+empresas (multi-tenancy) via RLS adicional (coluna de empresa + política
+comparando com o usuário logado), pra dados de um provedor nunca vazarem
+para outro.

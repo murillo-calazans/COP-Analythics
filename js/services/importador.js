@@ -6,6 +6,14 @@
  *  1. importarBase()   -> lê Base.xlsx, popula APP.referencias
  *  2. importarOrdens() -> lê Ordens.xlsx, popula APP.dados.ordens
  * Nenhuma outra camada acessa o Excel diretamente.
+ *
+ * A leitura/parse do Excel em si não muda nada (XLSX.read,
+ * ReferenceEngine, DataEngine) — só o passo final de cada etapa, que
+ * agora persiste no Supabase (js/services/armazenamento.js) em vez de
+ * IndexedDB local, pra ficar compartilhado entre todo mundo que usa o
+ * sistema. Só chega até aqui quem tem papel "admin" (botão escondido
+ * pra "leitor" — ver js/ui/login.js -> aplicarGateDePapel), e a RLS
+ * do banco recusaria a escrita de qualquer forma.
  */
 
 async function importarBase() {
@@ -29,11 +37,14 @@ async function importarBase() {
         APP.status.baseCarregada = true;
 
         status.textContent =
-            `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos.`;
+            `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos. Salvando...`;
 
         console.log("APP.referencias:", APP.referencias);
 
-        salvarEstado().catch(erro => console.error("Falha ao salvar estado local:", erro));
+        await persistirReferenciasNoSupabase({ operadores, eventos, diagnosticos });
+
+        status.textContent =
+            `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos.`;
 
         return true;
 
@@ -101,6 +112,10 @@ async function importarOrdens() {
         const totalOrdensAntes = APP.dados.ordens.size;
         DataEngine.mesclarOrdens(APP.dados.ordens, ordens);
 
+        status.textContent = `Importação processada: ${estatisticas.ordens} ordens, ${estatisticas.movimentacoes} movimentações. Salvando no banco compartilhado...`;
+
+        await persistirOrdensNoSupabase(ordens);
+
         const recorrentes = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
         APP.indicadores.recorrencia = recorrentes;
 
@@ -122,7 +137,6 @@ async function importarOrdens() {
 
         renderizarAlertas();
         atualizarBadgeAlertas();
-        salvarEstado().catch(erro => console.error("Falha ao salvar estado local:", erro));
 
         return true;
 

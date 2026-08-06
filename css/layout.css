@@ -177,6 +177,145 @@ header{
 
 }
 
+.usuario-logado{
+
+    font-size: 13px;
+    color: #CBD5E1;
+    white-space: nowrap;
+
+}
+
+/*
+ * Sem sessão: só a tela de login aparece — cabeçalho e conteúdo
+ * ficam escondidos até autenticar (ver js/core/app.js).
+ */
+body.nao-autenticado header,
+body.nao-autenticado main{
+
+    display: none;
+
+}
+
+.tela-login{
+
+    display: none;
+
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+
+    align-items: center;
+    justify-content: center;
+
+    background: #0F172A;
+
+}
+
+body.nao-autenticado .tela-login{
+
+    display: flex;
+
+}
+
+.tela-login-card{
+
+    width: 100%;
+    max-width: 360px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+
+    padding: 32px;
+
+    /* Tela de login ignora o tema claro/escuro de propósito, igual o
+       cabeçalho — sempre a cor de marca (navy). */
+    background: #1E293B;
+    border: 1px solid #334155;
+    border-radius: 12px;
+
+}
+
+.tela-login-logo{
+
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+
+    margin-bottom: 4px;
+
+}
+
+.tela-login-card h1{
+
+    font-size: 20px;
+    color: white;
+
+}
+
+.tela-login-card > p{
+
+    font-size: 13px;
+    color: #94A3B8;
+
+    margin-bottom: 16px;
+
+}
+
+.tela-login-card form{
+
+    width: 100%;
+
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+
+}
+
+.tela-login-card label{
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    font-size: 13px;
+    color: #CBD5E1;
+
+}
+
+.tela-login-card input{
+
+    background: #0F172A;
+    border: 1px solid #334155;
+    border-radius: 8px;
+
+    padding: 10px 12px;
+
+    color: white;
+    font-size: 14px;
+
+}
+
+.tela-login-card .botao-primario{
+
+    width: 100%;
+    justify-content: center;
+
+    margin-top: 6px;
+
+}
+
+.tela-login-erro{
+
+    margin-top: 14px;
+
+    font-size: 13px;
+    color: #FCA5A5;
+    text-align: center;
+
+}
+
 main{
 
     padding: 30px;

@@ -32,6 +32,7 @@ async function iniciarSistema() {
     registrarDiagnosticosExcluidos();
     registrarBuscaAuditoria();
     registrarBuscaTecnicos();
+    registrarLogin();
     registrarModal("modalImportar");
     registrarModal("modalOS");
     registrarModal("modalFiltro");
@@ -42,35 +43,61 @@ async function iniciarSistema() {
     registrarModal("modalFiltroGlobal");
     registrarModal("modalFunilAssuntos");
 
-    await tentarRestaurarDoArmazenamento();
+    // Sem login, nada mais roda — a tela de login (ver js/ui/login.js)
+    // é a única coisa visível até autenticar (css/layout.css,
+    // body.nao-autenticado). Uma sessão do Supabase Auth já existente
+    // (aba recarregada, por exemplo) pula direto pro app autenticado.
+    const sessao = await obterSessaoAtual();
 
-    // Sem dado nenhum ainda: o popup de importação já nasce aberto no
-    // HTML (classe "aberto"), então não faz nada aqui. Com dado
-    // restaurado, fecha o popup — não precisa importar de novo.
-    if (APP.status.baseCarregada) {
-        fecharModal("modalImportar");
+    if (sessao) {
+        const usuario = await carregarUsuarioAtual(sessao);
+
+        if (usuario) {
+            APP.usuario = usuario;
+            APP.status.autenticado = true;
+            mostrarAppAutenticado();
+            await inicializarDadosAutenticado();
+        } else {
+            await sair();
+            mostrarTelaLogin();
+        }
+    } else {
+        mostrarTelaLogin();
     }
-
-    renderizarDashboard();
 
     APP.status.inicializado = true;
 
 }
 
-async function tentarRestaurarDoArmazenamento() {
-    const restaurado = await tentarRestaurarEstado();
-    if (!restaurado) return;
+/**
+ * Busca os dados compartilhados do Supabase e mostra o Dashboard —
+ * chamado tanto ao carregar a página com sessão já ativa (acima)
+ * quanto logo depois de um login bem-sucedido (js/ui/login.js).
+ */
+async function inicializarDadosAutenticado() {
+    const carregado = await tentarRestaurarEstado();
 
     const status = document.getElementById("status");
-    APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
-    atualizarBadgeAlertas();
 
-    if (status) {
-        status.textContent =
-            `Dados restaurados do último import: ${APP.dados.ordens.size} ordens, ` +
-            `${APP.referencias.operadores.size} operadores, ${APP.referencias.eventos.size} eventos, ` +
-            `${APP.referencias.diagnosticos.size} diagnósticos.`;
+    if (carregado) {
+        fecharModal("modalImportar");
+
+        APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
+        atualizarBadgeAlertas();
+
+        if (status) {
+            status.textContent =
+                `Dados carregados: ${APP.dados.ordens.size} ordens, ` +
+                `${APP.referencias.operadores.size} operadores, ${APP.referencias.eventos.size} eventos, ` +
+                `${APP.referencias.diagnosticos.size} diagnósticos.`;
+        }
+    } else if (ehAdmin()) {
+        // Sem dado nenhum ainda — só faz sentido oferecer o popup de
+        // importação pra quem pode importar.
+        abrirModal("modalImportar");
     }
+
+    renderizarDashboard();
 }
 
 function registrarEventos() {
