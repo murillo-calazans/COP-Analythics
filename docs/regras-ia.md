@@ -3,21 +3,23 @@
 ## O que é
 
 Avaliação qualitativa de uma OS individual, feita por um modelo de IA
-(Google Gemini — `gemini-2.0-flash`, gratuito) a partir do histórico
+(Groq — `llama-3.3-70b-versatile`, gratuito) a partir do histórico
 completo de movimentações — não é uma métrica calculada, é um
 julgamento de texto.
 
 ## Onde roda
 
 Edge Function do Supabase: `supabase/functions/auditor-ia/index.ts`. A
-chave da API (`GEMINI_API_KEY`, gerada em aistudio.google.com/apikey)
-fica só nas variáveis de ambiente da function — nunca chega no
-navegador. Ver `js/services/auditoriaia.js` (chamada do lado do app) e
+chave da API (`GROQ_API_KEY`, gerada em console.groq.com/keys) fica só
+nas variáveis de ambiente da function — nunca chega no navegador. Ver
+`js/services/auditoriaia.js` (chamada do lado do app) e
 `js/ui/timeline.js` (botão + exibição, dentro do modal de detalhe da OS).
 
-Gemini foi escolhido especificamente por ter camada gratuita sem
-precisar de cartão de crédito — dá conta do uso esperado aqui (análise
-manual, uma OS por vez, disparada só por admin).
+Groq foi escolhido especificamente por ter camada gratuita sem
+precisar de cartão de crédito nem vincular faturamento (diferente do
+Gemini, que exigia isso mesmo pra ficar dentro do limite grátis) — dá
+conta do uso esperado aqui (análise manual, uma OS por vez, disparada
+só por admin).
 
 ## Quem pode fazer o quê
 

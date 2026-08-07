@@ -3,9 +3,10 @@
 // ==========================================================
 // Avalia qualitativamente uma OS (coerência do diagnóstico com o
 // histórico, tempo de atendimento razoável, sinais de atendimento
-// malfeito) usando a API do Google Gemini (gratuita, sem cartão, com
-// limite de chamadas por minuto/dia). A chave da API fica só aqui
-// (variável de ambiente da function) — nunca chega no navegador.
+// malfeito) usando a API da Groq (gratuita, sem cartão — modelos
+// open-source, com limite de chamadas por minuto/dia). A chave da API
+// fica só aqui (variável de ambiente da function) — nunca chega no
+// navegador.
 //
 // Segurança em duas camadas:
 // 1. Verifica quem chamou (token do usuário logado) e confirma que
@@ -16,15 +17,15 @@
 //
 // Deploy: cole este arquivo em Supabase -> Edge Functions -> New
 // function (nome "auditor-ia") -> Deploy. Depois, em Edge Functions
-// -> Manage secrets, adicione GEMINI_API_KEY com sua chave gerada em
-// aistudio.google.com/apikey. SUPABASE_URL/SUPABASE_ANON_KEY/
+// -> Manage secrets, adicione GROQ_API_KEY com sua chave gerada em
+// console.groq.com/keys. SUPABASE_URL/SUPABASE_ANON_KEY/
 // SUPABASE_SERVICE_ROLE_KEY já vêm prontos automaticamente, não
 // precisa configurar.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") ?? "";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -141,41 +142,31 @@ Avalie:
 2. O tempo entre abertura e fechamento parece razoável para esse tipo de assunto?
 3. Existe algo no histórico que sugira atendimento malfeito, incompleto, ou diagnóstico genérico/errado?
 
-Responda só com o JSON pedido, nada mais.`;
+Responda APENAS com um JSON no formato exato:
+{"veredito": "ok" | "questionavel" | "problematico", "justificativa": "2-4 frases explicando o motivo"}
+Nada de texto antes ou depois do JSON.`;
 
-        const respostaIA = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-            {
-                method: "POST",
-                headers: {
-                    "x-goog-api-key": GEMINI_API_KEY,
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: "OBJECT",
-                            properties: {
-                                veredito: { type: "STRING", enum: ["ok", "questionavel", "problematico"] },
-                                justificativa: { type: "STRING", description: "Explicação curta (2-4 frases) do veredito." },
-                            },
-                            required: ["veredito", "justificativa"],
-                        },
-                    },
-                }),
+        const respostaIA = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${GROQ_API_KEY}`,
+                "content-type": "application/json",
             },
-        );
+            body: JSON.stringify({
+                model: GROQ_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                response_format: { type: "json_object" },
+            }),
+        });
 
         if (!respostaIA.ok) {
             const erroTexto = await respostaIA.text();
-            console.error("Erro da API Gemini:", erroTexto);
+            console.error("Erro da API Groq:", erroTexto);
             return jsonResponse({ error: "Falha ao consultar a IA." }, 502);
         }
 
         const corpoIA = await respostaIA.json();
-        const textoResposta = corpoIA.candidates?.[0]?.content?.parts?.[0]?.text;
+        const textoResposta = corpoIA.choices?.[0]?.message?.content;
 
         if (!textoResposta) {
             return jsonResponse({ error: "A IA não retornou um veredito estruturado." }, 502);
@@ -187,6 +178,12 @@ Responda só com o JSON pedido, nada mais.`;
         } catch {
             console.error("Resposta da IA não é JSON válido:", textoResposta);
             return jsonResponse({ error: "A IA não retornou um veredito estruturado." }, 502);
+        }
+
+        const veredictosValidos = ["ok", "questionavel", "problematico"];
+        if (!veredictosValidos.includes(veredictoJson.veredito)) {
+            console.error("Veredito fora do esperado:", veredictoJson);
+            return jsonResponse({ error: "A IA retornou um veredito inesperado." }, 502);
         }
 
         const avaliacao = {
