@@ -64,6 +64,7 @@ async function buscarOrdens() {
         ordem.dataFechamento = linha.data_fechamento ? new Date(linha.data_fechamento) : null;
         ordem.statusAtual = linha.status_atual;
         ordem.tecnicoResponsavel = linha.tecnico_responsavel;
+        ordem.auditoriaIA = linha.auditoria_ia ?? null;
 
         const movimentacoesBrutas = movimentacoesPorOrdem.get(linha.id) ?? [];
         ordem.movimentacoes = movimentacoesBrutas

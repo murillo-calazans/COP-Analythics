@@ -654,3 +654,97 @@
     font-variant-numeric: tabular-nums;
 
 }
+
+.auditoria-ia-card {
+
+    margin: 16px 0;
+    padding: 14px 16px;
+
+    background: var(--cor-fundo-elevado);
+    border-radius: 8px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+}
+
+.auditoria-ia-vazio {
+
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+
+}
+
+.auditoria-ia-resultado {
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    padding: 10px 12px;
+    border-radius: 6px;
+    border-left: 3px solid var(--cor-borda);
+
+}
+
+.auditoria-ia-veredito {
+
+    align-self: flex-start;
+
+    padding: 2px 10px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    font-weight: 600;
+
+}
+
+.auditoria-ia-resultado.veredito-ok {
+    border-left-color: #16A34A;
+}
+
+.auditoria-ia-resultado.veredito-ok .auditoria-ia-veredito {
+    background: #16A34A33;
+    color: #16A34A;
+}
+
+.auditoria-ia-resultado.veredito-questionavel {
+    border-left-color: #D97706;
+}
+
+.auditoria-ia-resultado.veredito-questionavel .auditoria-ia-veredito {
+    background: #D9770633;
+    color: #D97706;
+}
+
+.auditoria-ia-resultado.veredito-problematico {
+    border-left-color: #DC2626;
+}
+
+.auditoria-ia-resultado.veredito-problematico .auditoria-ia-veredito {
+    background: #DC262633;
+    color: #DC2626;
+}
+
+.auditoria-ia-justificativa {
+
+    font-size: 13px;
+    color: var(--cor-texto);
+    line-height: 1.5;
+
+}
+
+.auditoria-ia-data {
+
+    font-size: 11px;
+    color: var(--cor-texto-suave);
+
+}
+
+.auditoria-ia-status {
+
+    font-size: 12px;
+    color: var(--cor-texto-suave);
+
+}

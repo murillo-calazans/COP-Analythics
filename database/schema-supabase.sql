@@ -46,7 +46,8 @@ create table if not exists ordens (
     data_fechamento timestamptz,
     status_atual text,
     tecnico_responsavel text,
-    atualizado_em timestamptz not null default now()
+    atualizado_em timestamptz not null default now(),
+    auditoria_ia jsonb
 );
 
 create table if not exists movimentacoes (
