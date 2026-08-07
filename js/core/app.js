@@ -39,6 +39,7 @@ async function iniciarSistema() {
     registrarModal("modalDiagnosticosExcluidos");
     registrarModal("modalTecnico");
     registrarModal("modalTecnicoDetalhe");
+    registrarModal("modalGraficoCompleto");
     registrarModal("modalCliente");
     registrarModal("modalFiltroGlobal");
     registrarModal("modalFunilAssuntos");

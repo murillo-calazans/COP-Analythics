@@ -30,6 +30,9 @@ function renderizarSecaoIndicadores() {
     const tmsPorCidade = IndicatorEngine.calcularTmsPorCidade(ordensFiltradas);
     const tmaPorCidade = IndicatorEngine.calcularTmaPorCidade(ordensFiltradas);
     const tmrPorCidade = IndicatorEngine.calcularTmrPorCidade(ordensFiltradas);
+    const tmsPorSetor = IndicatorEngine.calcularTmsPorSetor(ordensFiltradas);
+    const tmaPorSetor = IndicatorEngine.calcularTmaPorSetor(ordensFiltradas);
+    const tmrPorSetor = IndicatorEngine.calcularTmrPorSetor(ordensFiltradas);
 
     const periodoMensal = tendenciaMensal.ano
         ? `Jan–${tendenciaMensal.meses[tendenciaMensal.meses.length - 1].rotulo}/${tendenciaMensal.ano}`
@@ -122,7 +125,6 @@ function renderizarSecaoIndicadores() {
                         <div class="grafico-titulo">TMS por técnico</div>
                         <div class="grafico-subtitulo">Deslocamento até finalização, sem contar espera de reagendamento — do mais rápido pro mais lento</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoTmsTecnico')">Ver como tabela</button>
                 </div>
                 <div id="graficoTmsTecnico"></div>
             </div>
@@ -133,7 +135,6 @@ function renderizarSecaoIndicadores() {
                         <div class="grafico-titulo">TMA por técnico</div>
                         <div class="grafico-subtitulo">Só "Em Execução" até finalização, sem contar deslocamento nem espera de reagendamento</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoTmaTecnico')">Ver como tabela</button>
                 </div>
                 <div id="graficoTmaTecnico"></div>
             </div>
@@ -171,10 +172,39 @@ function renderizarSecaoIndicadores() {
             <div class="grafico-card">
                 <div class="grafico-cabecalho">
                     <div>
+                        <div class="grafico-titulo">Top 5 setores — melhor TMS</div>
+                        <div class="grafico-subtitulo">Deslocamento até finalização, sem espera de reagendamento — setores com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
+                    </div>
+                </div>
+                <div id="graficoTmsSetor"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Top 5 setores — melhor TMA</div>
+                        <div class="grafico-subtitulo">Só "Em Execução" até finalização — setores com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
+                    </div>
+                </div>
+                <div id="graficoTmaSetor"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Top 5 setores — melhor TMR</div>
+                        <div class="grafico-subtitulo">Abertura até 1º agendamento — setores com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
+                    </div>
+                </div>
+                <div id="graficoTmrSetor"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
                         <div class="grafico-titulo">Motivos mais frequentes de reagendamento</div>
                         <div class="grafico-subtitulo">Registrado na Resposta Padrão da movimentação de Reagendar</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoMotivosReagendamento')">Ver como tabela</button>
                 </div>
                 <div id="graficoMotivosReagendamento"></div>
             </div>
@@ -183,9 +213,8 @@ function renderizarSecaoIndicadores() {
                 <div class="grafico-cabecalho">
                     <div>
                         <div class="grafico-titulo">Assuntos com maior volume</div>
-                        <div class="grafico-subtitulo">Lista completa (o Dashboard mostra só os 8 primeiros)</div>
+                        <div class="grafico-subtitulo">Top 5 (o Dashboard também mostra os 5 primeiros)</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoAssuntosCompleto')">Ver como tabela</button>
                 </div>
                 <div id="graficoAssuntosCompleto"></div>
             </div>
@@ -194,9 +223,8 @@ function renderizarSecaoIndicadores() {
                 <div class="grafico-cabecalho">
                     <div>
                         <div class="grafico-titulo">Diagnósticos mais utilizados</div>
-                        <div class="grafico-subtitulo">Lista completa</div>
+                        <div class="grafico-subtitulo">Top 5</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoDiagnosticosCompleto')">Ver como tabela</button>
                 </div>
                 <div id="graficoDiagnosticosCompleto"></div>
             </div>
@@ -217,7 +245,6 @@ function renderizarSecaoIndicadores() {
                         <div class="grafico-titulo">Deslocamentos abandonados por técnico</div>
                         <div class="grafico-subtitulo">Início de atendimento substituído por um Agendamento de outro operador, sem reagendar nem executar</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoAbandonosTecnico')">Ver como tabela</button>
                 </div>
                 <div id="graficoAbandonosTecnico"></div>
             </div>
@@ -277,14 +304,16 @@ function renderizarSecaoIndicadores() {
 
     renderizarGraficoBarras("graficoTmsTecnico", tmsPorTecnico, {
         serie: "serie-1",
-        limite: tmsPorTecnico.length,
-        formatoValor: formatarDuracaoHoras
+        limite: 5,
+        formatoValor: formatarDuracaoHoras,
+        titulo: "TMS por técnico"
     });
 
     renderizarGraficoBarras("graficoTmaTecnico", tmaPorTecnico, {
         serie: "serie-1",
-        limite: tmaPorTecnico.length,
-        formatoValor: formatarDuracaoHoras
+        limite: 5,
+        formatoValor: formatarDuracaoHoras,
+        titulo: "TMA por técnico"
     });
 
     renderizarGraficoBarras("graficoTmsCidade", tmsPorCidade, {
@@ -305,19 +334,40 @@ function renderizarSecaoIndicadores() {
         formatoValor: formatarDuracaoHoras
     });
 
+    renderizarGraficoBarras("graficoTmsSetor", tmsPorSetor, {
+        serie: "serie-1",
+        limite: tmsPorSetor.length,
+        formatoValor: formatarDuracaoHoras
+    });
+
+    renderizarGraficoBarras("graficoTmaSetor", tmaPorSetor, {
+        serie: "serie-1",
+        limite: tmaPorSetor.length,
+        formatoValor: formatarDuracaoHoras
+    });
+
+    renderizarGraficoBarras("graficoTmrSetor", tmrPorSetor, {
+        serie: "serie-2",
+        limite: tmrPorSetor.length,
+        formatoValor: formatarDuracaoHoras
+    });
+
     renderizarGraficoBarras("graficoMotivosReagendamento", painel.motivosReagendamento, {
         serie: "serie-2",
-        limite: painel.motivosReagendamento.length
+        limite: 5,
+        titulo: "Motivos mais frequentes de reagendamento"
     });
 
     renderizarGraficoBarras("graficoAssuntosCompleto", painel.porAssunto, {
         serie: "serie-1",
-        limite: painel.porAssunto.length
+        limite: 5,
+        titulo: "Assuntos com maior volume"
     });
 
     renderizarGraficoBarras("graficoDiagnosticosCompleto", painel.diagnosticosMaisUsados, {
         serie: "serie-1",
-        limite: painel.diagnosticosMaisUsados.length
+        limite: 5,
+        titulo: "Diagnósticos mais utilizados"
     });
 
     renderizarGraficoBarras("graficoSoloVsDupla", [
@@ -330,7 +380,8 @@ function renderizarSecaoIndicadores() {
 
     renderizarGraficoBarras("graficoAbandonosTecnico", painel.deslocamentosAbandonados.porTecnico, {
         serie: "serie-2",
-        limite: painel.deslocamentosAbandonados.porTecnico.length
+        limite: 5,
+        titulo: "Deslocamentos abandonados por técnico"
     });
 
     const botaoConfigurarFunil = document.getElementById("btnConfigurarFunilAssuntos");

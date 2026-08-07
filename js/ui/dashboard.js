@@ -92,7 +92,6 @@ function renderizarDashboard() {
                         <div class="grafico-titulo">OS por Assunto</div>
                         <div class="grafico-subtitulo">Volume de atendimento por tipo de chamado</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoAssuntos')">Ver como tabela</button>
                 </div>
                 <div id="graficoAssuntos"></div>
             </div>
@@ -103,7 +102,6 @@ function renderizarDashboard() {
                         <div class="grafico-titulo">Diagnósticos mais utilizados</div>
                         <div class="grafico-subtitulo">Contagem entre todas as movimentações</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoDiagnosticos')">Ver como tabela</button>
                 </div>
                 <div id="graficoDiagnosticos"></div>
             </div>
@@ -114,7 +112,6 @@ function renderizarDashboard() {
                         <div class="grafico-titulo">Top 5 técnicos por volume</div>
                         <div class="grafico-subtitulo">OS finalizadas (evento Fechamento) — ranking de qualidade vem no Auditor IA</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoRankingTecnicos')">Ver como tabela</button>
                 </div>
                 <div id="graficoRankingTecnicos"></div>
             </div>
@@ -125,7 +122,6 @@ function renderizarDashboard() {
                         <div class="grafico-titulo">Recorrência por técnico</div>
                         <div class="grafico-subtitulo">Técnico do fechamento anterior quando o mesmo cliente reabre depois</div>
                     </div>
-                    <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoRecorrenciaTecnicos')">Ver como tabela</button>
                 </div>
                 <div id="graficoRecorrenciaTecnicos"></div>
             </div>
@@ -135,8 +131,8 @@ function renderizarDashboard() {
 
     const aoClicarTecnico = item => abrirModalTecnico(item.rotulo);
 
-    renderizarGraficoBarras("graficoAssuntos", painel.porAssunto, { serie: "serie-1", limite: 8 });
-    renderizarGraficoBarras("graficoDiagnosticos", painel.diagnosticosMaisUsados, { serie: "serie-1", limite: 8 });
-    renderizarGraficoBarras("graficoRankingTecnicos", painel.rankingTecnicos, { serie: "serie-1", limite: 5, aoClicar: aoClicarTecnico });
-    renderizarGraficoBarras("graficoRecorrenciaTecnicos", painel.recorrenciaPorTecnico, { serie: "serie-2", limite: 5, aoClicar: aoClicarTecnico });
+    renderizarGraficoBarras("graficoAssuntos", painel.porAssunto, { serie: "serie-1", limite: 5, titulo: "OS por Assunto" });
+    renderizarGraficoBarras("graficoDiagnosticos", painel.diagnosticosMaisUsados, { serie: "serie-1", limite: 5, titulo: "Diagnósticos mais utilizados" });
+    renderizarGraficoBarras("graficoRankingTecnicos", painel.rankingTecnicos, { serie: "serie-1", limite: 5, aoClicar: aoClicarTecnico, titulo: "Técnicos por volume" });
+    renderizarGraficoBarras("graficoRecorrenciaTecnicos", painel.recorrenciaPorTecnico, { serie: "serie-2", limite: 5, aoClicar: aoClicarTecnico, titulo: "Recorrência por técnico" });
 }

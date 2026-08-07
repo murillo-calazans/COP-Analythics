@@ -4,8 +4,11 @@
  * ==========================================================
  * Recebe dados já prontos do IndicatorEngine ([{rotulo, valor}],
  * ordenado do maior pro menor) e desenha. Não calcula nada aqui
- * — só apresenta. Cada gráfico tem alternância "ver como tabela"
- * e tooltip acessível por mouse e teclado (mesma info nos dois).
+ * — só apresenta. Sempre mostra só os "limite" primeiros (padrão
+ * 5) — se tiver mais que isso, aparece um link "Ver todos" que
+ * abre a lista completa num popup, pra página não ficar comprida
+ * demais com ranking grande (técnico, cidade, assunto, etc.).
+ * Tooltip acessível por mouse e teclado.
  */
 
 function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
@@ -15,11 +18,11 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
     const serie = opcoes.serie ?? "serie-1";
     const limite = opcoes.limite ?? 5;
     const formatoValor = opcoes.formatoValor ?? (v => String(v));
+    const titulo = opcoes.titulo ?? "Lista completa";
+
+    container._dadosGrafico = { dados, formatoValor, opcoesOriginais: opcoes, titulo };
 
     const lista = dados.slice(0, limite);
-
-    container._dadosGrafico = { dados: lista, formatoValor, opcoesOriginais: opcoes };
-    container.dataset.modo = "grafico";
 
     if (lista.length === 0) {
         container.innerHTML = '<p class="grafico-vazio">Sem dados suficientes ainda.</p>';
@@ -81,46 +84,44 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
     });
 
     container.appendChild(corpo);
+
+    if (dados.length > limite) {
+        const verTodos = document.createElement("button");
+        verTodos.type = "button";
+        verTodos.className = "grafico-ver-todos";
+        verTodos.textContent = `Ver todos (${dados.length})`;
+        verTodos.addEventListener("click", () => abrirGraficoCompleto(containerId));
+        container.appendChild(verTodos);
+    }
 }
 
-function alternarVisualizacaoGrafico(containerId) {
+/** Popup com a lista completa (não só os "limite" primeiros) em tabela. */
+function abrirGraficoCompleto(containerId) {
     const container = document.getElementById(containerId);
     if (!container || !container._dadosGrafico) return;
 
-    const { dados, formatoValor, opcoesOriginais } = container._dadosGrafico;
+    const { dados, formatoValor, titulo } = container._dadosGrafico;
 
-    if (container.dataset.modo === "tabela") {
-        renderizarGraficoBarras(containerId, dados, opcoesOriginais);
-        return;
-    }
+    document.getElementById("modalGraficoCompletoTitulo").textContent = titulo;
 
-    container.innerHTML = "";
+    const conteudo = document.getElementById("modalGraficoCompletoConteudo");
+    conteudo.innerHTML = `
+        <table class="tabela-alertas">
+            <thead>
+                <tr><th>Item</th><th>Valor</th></tr>
+            </thead>
+            <tbody>
+                ${dados.map(item => `
+                    <tr>
+                        <td>${escaparHtml(String(item.rotulo))}</td>
+                        <td>${escaparHtml(String(formatoValor(item.valor)))}</td>
+                    </tr>
+                `).join("")}
+            </tbody>
+        </table>
+    `;
 
-    const tabela = document.createElement("table");
-    tabela.className = "tabela-alertas";
-
-    const cabecalho = document.createElement("thead");
-    cabecalho.innerHTML = "<tr><th>Item</th><th>Valor</th></tr>";
-    tabela.appendChild(cabecalho);
-
-    const corpo = document.createElement("tbody");
-    dados.forEach(item => {
-        const tr = document.createElement("tr");
-
-        const tdRotulo = document.createElement("td");
-        tdRotulo.textContent = item.rotulo;
-
-        const tdValor = document.createElement("td");
-        tdValor.textContent = formatoValor(item.valor);
-
-        tr.appendChild(tdRotulo);
-        tr.appendChild(tdValor);
-        corpo.appendChild(tr);
-    });
-    tabela.appendChild(corpo);
-
-    container.appendChild(tabela);
-    container.dataset.modo = "tabela";
+    abrirModal("modalGraficoCompleto");
 }
 
 function garantirTooltipGrafico() {

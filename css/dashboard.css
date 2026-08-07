@@ -194,6 +194,34 @@
 
 }
 
+.grafico-ver-todos {
+
+    display: block;
+    width: 100%;
+
+    margin-top: 10px;
+
+    background: none;
+    border: 1px dashed var(--cor-borda);
+    border-radius: 6px;
+
+    padding: 6px 10px;
+
+    font-size: 12px;
+    color: var(--cor-texto-suave);
+    cursor: pointer;
+    transition: .2s;
+
+}
+
+.grafico-ver-todos:hover {
+
+    background: var(--cor-fundo-elevado);
+    color: var(--cor-texto);
+    border-style: solid;
+
+}
+
 .grafico-corpo {
 
     display: flex;

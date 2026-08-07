@@ -1119,40 +1119,59 @@ const IndicatorEngine = {
             .sort((a, b) => a.valor - b.valor);
     },
 
-    // Cidade com poucas OS distorce a média (1 OS rápida "vence" fácil) —
-    // exige um mínimo pra entrar no ranking de melhores tempos por cidade.
+    // Cidade/setor com poucas OS distorce a média (1 OS rápida "vence"
+    // fácil) — exige um mínimo pra entrar no ranking de melhores tempos.
     MINIMO_OS_RANKING_CIDADE: 3,
 
     /**
-     * Agrupa por cidade um valor calculado por OS (calcularHorasDaOS
-     * devolve horas ou null), tira a média de cada cidade e devolve as
-     * "top" com o MENOR tempo primeiro (melhores) — cidade com menos de
+     * Agrupa (por cidade, setor, etc. — quem chama decide via
+     * calcularGrupo) um valor calculado por OS (calcularHorasDaOS devolve
+     * horas ou null), tira a média de cada grupo e devolve os "top" com o
+     * MENOR tempo primeiro (melhores) — grupo com menos de
      * MINIMO_OS_RANKING_CIDADE OS no período fica de fora, pra não deixar
      * 1 OS isolada "vencer" o ranking por acaso.
      */
-    agregarPorCidade(ordens, analise, calcularHorasDaOS, top) {
+    agregarPorGrupo(ordens, analise, calcularGrupo, calcularHorasDaOS, top) {
         const acumulado = new Map();
 
         for (const ordem of ordens.values()) {
-            if (!ordem.cidade) continue;
-
             const info = analise.get(ordem.id);
             if (!info?.ultimoFechamento) continue;
+
+            const grupo = calcularGrupo(ordem, info);
+            if (!grupo) continue;
 
             const horas = calcularHorasDaOS(ordem, info);
             if (horas === null) continue;
 
-            if (!acumulado.has(ordem.cidade)) acumulado.set(ordem.cidade, { soma: 0, contagem: 0 });
-            const registro = acumulado.get(ordem.cidade);
+            if (!acumulado.has(grupo)) acumulado.set(grupo, { soma: 0, contagem: 0 });
+            const registro = acumulado.get(grupo);
             registro.soma += horas;
             registro.contagem++;
         }
 
         return [...acumulado.entries()]
             .filter(([, r]) => r.contagem >= this.MINIMO_OS_RANKING_CIDADE)
-            .map(([cidade, r]) => ({ rotulo: cidade, valor: Math.round((r.soma / r.contagem) * 10) / 10 }))
+            .map(([rotulo, r]) => ({ rotulo, valor: Math.round((r.soma / r.contagem) * 10) / 10 }))
             .sort((a, b) => a.valor - b.valor)
             .slice(0, top);
+    },
+
+    agregarPorCidade(ordens, analise, calcularHorasDaOS, top) {
+        return this.agregarPorGrupo(ordens, analise, ordem => ordem.cidade, calcularHorasDaOS, top);
+    },
+
+    // Setor é atributo do OPERADOR (Base.xlsx), não da OS — usa quem
+    // fechou (ultimoFechamento.operador), igual o Filtro Global já faz
+    // (ver FiltroEngine.fechamentoEhDoSetor).
+    agregarPorSetor(ordens, analise, calcularHorasDaOS, top) {
+        const calcularGrupo = (ordem, info) => {
+            if (info.ultimoFechamento.operador === null || info.ultimoFechamento.operador === undefined) return null;
+            return AuditEngine.resolverReferencia(
+                APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.setor
+            );
+        };
+        return this.agregarPorGrupo(ordens, analise, calcularGrupo, calcularHorasDaOS, top);
     },
 
     /** Top cidades com o melhor TMS médio (segmentado, visão do técnico). */
@@ -1177,6 +1196,34 @@ const IndicatorEngine = {
     calcularTmrPorCidade(ordens, top = 5) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) return null;
+            const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top);
+    },
+
+    /** Top setores com o melhor TMS médio (segmentado, visão do técnico). */
+    calcularTmsPorSetor(ordens, top = 5) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorSetor(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosSolucao);
+        }, top);
+    },
+
+    /** Top setores com o melhor TMA médio (segmentado, visão do técnico). */
+    calcularTmaPorSetor(ordens, top = 5) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorSetor(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosAtendimento);
+        }, top);
+    },
+
+    /** Top setores com o melhor TMR médio (abertura até 1º agendamento). */
+    calcularTmrPorSetor(ordens, top = 5) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorSetor(ordens, analise, (ordem, info) => {
             if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) return null;
             const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
