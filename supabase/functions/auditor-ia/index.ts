@@ -3,7 +3,8 @@
 // ==========================================================
 // Avalia qualitativamente uma OS (coerência do diagnóstico com o
 // histórico, tempo de atendimento razoável, sinais de atendimento
-// malfeito) usando a API da Anthropic. A chave da API fica só aqui
+// malfeito) usando a API do Google Gemini (gratuita, sem cartão, com
+// limite de chamadas por minuto/dia). A chave da API fica só aqui
 // (variável de ambiente da function) — nunca chega no navegador.
 //
 // Segurança em duas camadas:
@@ -15,13 +16,15 @@
 //
 // Deploy: cole este arquivo em Supabase -> Edge Functions -> New
 // function (nome "auditor-ia") -> Deploy. Depois, em Edge Functions
-// -> Manage secrets, adicione ANTHROPIC_API_KEY com sua chave da
-// Anthropic. SUPABASE_URL/SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY
-// já vêm prontos automaticamente, não precisa configurar.
+// -> Manage secrets, adicione GEMINI_API_KEY com sua chave gerada em
+// aistudio.google.com/apikey. SUPABASE_URL/SUPABASE_ANON_KEY/
+// SUPABASE_SERVICE_ROLE_KEY já vêm prontos automaticamente, não
+// precisa configurar.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+const GEMINI_MODEL = "gemini-2.0-flash";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -138,51 +141,57 @@ Avalie:
 2. O tempo entre abertura e fechamento parece razoável para esse tipo de assunto?
 3. Existe algo no histórico que sugira atendimento malfeito, incompleto, ou diagnóstico genérico/errado?
 
-Responda usando a ferramenta "avaliar_os" com sua conclusão.`;
+Responda só com o JSON pedido, nada mais.`;
 
-        const respostaIA = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "claude-sonnet-5",
-                max_tokens: 500,
-                messages: [{ role: "user", content: prompt }],
-                tools: [{
-                    name: "avaliar_os",
-                    description: "Registra o veredito da auditoria dessa OS.",
-                    input_schema: {
-                        type: "object",
-                        properties: {
-                            veredito: { type: "string", enum: ["ok", "questionavel", "problematico"] },
-                            justificativa: { type: "string", description: "Explicação curta (2-4 frases) do veredito." },
+        const respostaIA = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+            {
+                method: "POST",
+                headers: {
+                    "x-goog-api-key": GEMINI_API_KEY,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                veredito: { type: "STRING", enum: ["ok", "questionavel", "problematico"] },
+                                justificativa: { type: "STRING", description: "Explicação curta (2-4 frases) do veredito." },
+                            },
+                            required: ["veredito", "justificativa"],
                         },
-                        required: ["veredito", "justificativa"],
                     },
-                }],
-                tool_choice: { type: "tool", name: "avaliar_os" },
-            }),
-        });
+                }),
+            },
+        );
 
         if (!respostaIA.ok) {
             const erroTexto = await respostaIA.text();
-            console.error("Erro da API Anthropic:", erroTexto);
+            console.error("Erro da API Gemini:", erroTexto);
             return jsonResponse({ error: "Falha ao consultar a IA." }, 502);
         }
 
         const corpoIA = await respostaIA.json();
-        const blocoFerramenta = corpoIA.content?.find((b: { type: string }) => b.type === "tool_use");
+        const textoResposta = corpoIA.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        if (!blocoFerramenta) {
+        if (!textoResposta) {
+            return jsonResponse({ error: "A IA não retornou um veredito estruturado." }, 502);
+        }
+
+        let veredictoJson;
+        try {
+            veredictoJson = JSON.parse(textoResposta);
+        } catch {
+            console.error("Resposta da IA não é JSON válido:", textoResposta);
             return jsonResponse({ error: "A IA não retornou um veredito estruturado." }, 502);
         }
 
         const avaliacao = {
-            veredito: blocoFerramenta.input.veredito,
-            justificativa: blocoFerramenta.input.justificativa,
+            veredito: veredictoJson.veredito,
+            justificativa: veredictoJson.justificativa,
             avaliadoEm: new Date().toISOString(),
         };
 
