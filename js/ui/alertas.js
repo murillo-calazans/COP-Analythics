@@ -26,7 +26,7 @@ function renderizarAlertas() {
                 <td>${escaparHtml(item.cliente ?? "(sem nome)")}</td>
                 <td>${escaparHtml(item.login)}</td>
                 <td>${item.totalOS}</td>
-                <td>${item.ordens.join(", ")}</td>
+                <td>${escaparHtml(item.ordens.join(", "))}</td>
             </tr>
         `).join("");
 

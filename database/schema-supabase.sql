@@ -86,12 +86,21 @@ alter table ordens enable row level security;
 alter table movimentacoes enable row level security;
 alter table perfis enable row level security;
 
--- Leitura: qualquer usuário logado (papel admin ou leitor) vê tudo.
-create policy "leitura autenticada" on ref_operadores for select to authenticated using (true);
-create policy "leitura autenticada" on ref_eventos for select to authenticated using (true);
-create policy "leitura autenticada" on ref_diagnosticos for select to authenticated using (true);
-create policy "leitura autenticada" on ordens for select to authenticated using (true);
-create policy "leitura autenticada" on movimentacoes for select to authenticated using (true);
+-- Leitura: qualquer usuário logado com papel configurado em "perfis" (admin
+-- OU leitor) vê tudo. NÃO basta estar autenticado — o Supabase permite
+-- autocadastro por padrão, então "to authenticated using (true)" deixaria
+-- qualquer um que se cadastre direto pela API (sem passar pela nossa tela
+-- de login) ler os dados, mesmo sem um admin ter liberado essa pessoa.
+create policy "leitura autenticada" on ref_operadores for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
+create policy "leitura autenticada" on ref_eventos for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
+create policy "leitura autenticada" on ref_diagnosticos for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
+create policy "leitura autenticada" on ordens for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
+create policy "leitura autenticada" on movimentacoes for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
 
 -- Perfis: cada usuário só enxerga o próprio papel.
 create policy "leitura do proprio perfil" on perfis for select to authenticated using (id = auth.uid());
