@@ -151,29 +151,38 @@ async function importarOrdens() {
 }
 
 /**
- * Orquestra o fluxo completo do popup de importação: Base → Ordens →
- * fecha o modal e leva direto pro Dashboard já com os gráficos.
+ * Orquestra o fluxo do popup de importação: Base e/ou Ordens, o que
+ * tiver sido selecionado — não exige mais os dois juntos. Faz sentido
+ * agora que os dados são compartilhados (Supabase): a Base já
+ * importada por alguém continua valendo, então reimportar só um
+ * Ordens.xlsx novo (ex.: mais um mês) não deveria pedir a Base nunca
+ * de novo. Ao final, fecha o modal e leva pro Dashboard já com os
+ * gráficos.
  */
 async function gerarRelatorio() {
     const inputBase = document.getElementById("arquivoBase");
     const inputOrdens = document.getElementById("arquivoOrdens");
     const botao = document.getElementById("btnGerarRelatorio");
 
-    if (inputBase.files.length === 0 || inputOrdens.files.length === 0) {
-        alert("Selecione os dois arquivos (Base.xlsx e Ordens.xlsx) antes de gerar o relatório.");
+    const temBase = inputBase.files.length > 0;
+    const temOrdens = inputOrdens.files.length > 0;
+
+    if (!temBase && !temOrdens) {
+        alert("Selecione ao menos um arquivo (Base.xlsx ou Ordens.xlsx) antes de gerar o relatório.");
         return;
     }
 
     if (botao) botao.disabled = true;
 
-    const baseOk = await importarBase();
-
-    if (!baseOk) {
-        if (botao) botao.disabled = false;
-        return;
+    if (temBase) {
+        const baseOk = await importarBase();
+        if (!baseOk) {
+            if (botao) botao.disabled = false;
+            return;
+        }
     }
 
-    const ordensOk = await importarOrdens();
+    const ordensOk = temOrdens ? await importarOrdens() : true;
 
     if (botao) botao.disabled = false;
 
