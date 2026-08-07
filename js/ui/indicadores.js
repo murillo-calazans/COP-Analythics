@@ -23,15 +23,17 @@ function renderizarSecaoIndicadores() {
         return;
     }
 
-    const tendencias = IndicatorEngine.calcularTendencias(ordensFiltradas);
+    const tendenciaMensal = IndicatorEngine.calcularTendenciaMensal(ordensFiltradas);
     const painel = IndicatorEngine.calcularPainelDashboard(ordensFiltradas);
     const tmsPorTecnico = IndicatorEngine.calcularTmsPorTecnico(ordensFiltradas);
     const tmaPorTecnico = IndicatorEngine.calcularTmaPorTecnico(ordensFiltradas);
 
-    const rotuloGranularidade = { dia: "por dia", semana: "por semana", mes: "por mês" }[tendencias.granularidade];
+    const periodoMensal = tendenciaMensal.ano
+        ? `Jan–${tendenciaMensal.meses[tendenciaMensal.meses.length - 1].rotulo}/${tendenciaMensal.ano}`
+        : "";
 
     container.innerHTML = `
-        <div class="indicadores-secao-titulo">Tendência ${rotuloGranularidade}</div>
+        <div class="indicadores-secao-titulo">Visão mensal ${periodoMensal ? `(${periodoMensal})` : ""}</div>
 
         <div class="graficos-grid">
 
@@ -39,40 +41,70 @@ function renderizarSecaoIndicadores() {
                 <div class="grafico-cabecalho">
                     <div>
                         <div class="grafico-titulo">OS finalizadas</div>
-                        <div class="grafico-subtitulo">Volume de fechamentos ao longo do tempo</div>
+                        <div class="grafico-subtitulo">Volume de fechamentos por mês</div>
                     </div>
                 </div>
-                <div id="tendenciaVolume"></div>
+                <div id="mensalVolume"></div>
             </div>
 
             <div class="grafico-card">
                 <div class="grafico-cabecalho">
                     <div>
-                        <div class="grafico-titulo">TMS</div>
-                        <div class="grafico-subtitulo">Tempo médio de solução ao longo do tempo (visão da OS, tempo corrido)</div>
+                        <div class="grafico-titulo">TMS por mês</div>
+                        <div class="grafico-subtitulo">Tempo médio de solução (visão da OS, tempo corrido)</div>
                     </div>
                 </div>
-                <div id="tendenciaTms"></div>
+                <div id="mensalTms"></div>
             </div>
 
             <div class="grafico-card">
                 <div class="grafico-cabecalho">
                     <div>
-                        <div class="grafico-titulo">Índice de reabertura</div>
-                        <div class="grafico-subtitulo">% de OS finalizadas que voltaram a abrir</div>
+                        <div class="grafico-titulo">TMA por mês</div>
+                        <div class="grafico-subtitulo">"Em Execução" até finalização, sem espera de reagendamento</div>
                     </div>
                 </div>
-                <div id="tendenciaReabertura"></div>
+                <div id="mensalTma"></div>
             </div>
 
             <div class="grafico-card">
                 <div class="grafico-cabecalho">
                     <div>
-                        <div class="grafico-titulo">Índice de reagendamento</div>
-                        <div class="grafico-subtitulo">% de OS encerradas que passaram por Reagendamento</div>
+                        <div class="grafico-titulo">TMR por mês</div>
+                        <div class="grafico-subtitulo">Tempo médio de resposta (abertura até 1º agendamento)</div>
                     </div>
                 </div>
-                <div id="tendenciaReagendamento"></div>
+                <div id="mensalTmr"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">TME por mês</div>
+                        <div class="grafico-subtitulo">Tempo médio de espera do cliente (abertura até fechamento)</div>
+                    </div>
+                </div>
+                <div id="mensalTme"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Reaberturas por mês</div>
+                        <div class="grafico-subtitulo">Quantidade de OS finalizadas que voltaram a abrir</div>
+                    </div>
+                </div>
+                <div id="mensalReaberturas"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Técnicos ativos por mês</div>
+                        <div class="grafico-subtitulo">Técnicos distintos que finalizaram ao menos 1 OS no mês</div>
+                    </div>
+                </div>
+                <div id="mensalTecnicosAtivos"></div>
             </div>
 
         </div>
@@ -173,31 +205,41 @@ function renderizarSecaoIndicadores() {
         </div>
     `;
 
-    renderizarGraficoLinha(
-        "tendenciaVolume",
-        tendencias.pontos.map(p => ({ rotulo: p.rotulo, valor: p.totalFinalizadas })),
-        { cor: "var(--grafico-serie-1)", formatoValor: v => v.toLocaleString("pt-BR") }
+    const meses = tendenciaMensal.meses;
+
+    renderizarGraficoBarras("mensalVolume",
+        meses.map(m => ({ rotulo: m.rotulo, valor: m.totalFinalizadas })),
+        { serie: "serie-1", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
     );
 
-    renderizarGraficoLinha(
-        "tendenciaTms",
-        tendencias.pontos.map(p => ({
-            rotulo: p.rotulo,
-            valor: p.tmsHoras !== null ? Math.round(p.tmsHoras * 10) / 10 : null
-        })),
-        { cor: "var(--grafico-serie-1)", formatoValor: formatarDuracaoHoras }
+    renderizarGraficoBarras("mensalTms",
+        meses.filter(m => m.tmsHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmsHoras * 10) / 10 })),
+        { serie: "serie-1", limite: meses.length, formatoValor: formatarDuracaoHoras }
     );
 
-    renderizarGraficoLinha(
-        "tendenciaReabertura",
-        tendencias.pontos.map(p => ({ rotulo: p.rotulo, valor: Math.round(p.indiceReaberturaPercentual * 10) / 10 })),
-        { cor: "var(--grafico-serie-2)", formatoValor: v => `${v}%` }
+    renderizarGraficoBarras("mensalTma",
+        meses.filter(m => m.tmaHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmaHoras * 10) / 10 })),
+        { serie: "serie-1", limite: meses.length, formatoValor: formatarDuracaoHoras }
     );
 
-    renderizarGraficoLinha(
-        "tendenciaReagendamento",
-        tendencias.pontos.map(p => ({ rotulo: p.rotulo, valor: Math.round(p.indiceReagendamentoPercentual * 10) / 10 })),
-        { cor: "var(--grafico-serie-2)", formatoValor: v => `${v}%` }
+    renderizarGraficoBarras("mensalTmr",
+        meses.filter(m => m.tmrHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmrHoras * 10) / 10 })),
+        { serie: "serie-2", limite: meses.length, formatoValor: formatarDuracaoHoras }
+    );
+
+    renderizarGraficoBarras("mensalTme",
+        meses.filter(m => m.tmeHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmeHoras * 10) / 10 })),
+        { serie: "serie-2", limite: meses.length, formatoValor: formatarDuracaoHoras }
+    );
+
+    renderizarGraficoBarras("mensalReaberturas",
+        meses.map(m => ({ rotulo: m.rotulo, valor: m.reabertas })),
+        { serie: "serie-2", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
+    );
+
+    renderizarGraficoBarras("mensalTecnicosAtivos",
+        meses.map(m => ({ rotulo: m.rotulo, valor: m.tecnicosAtivos })),
+        { serie: "serie-1", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
     );
 
     renderizarGraficoBarras("graficoTmsTecnico", tmsPorTecnico, {

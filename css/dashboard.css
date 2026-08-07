@@ -319,42 +319,6 @@
 
 }
 
-.grafico-linha-svg {
-
-    width: 100%;
-    height: 220px;
-    display: block;
-
-}
-
-.grafico-linha-grade {
-
-    stroke: var(--grafico-grade);
-    stroke-width: 1;
-
-}
-
-.grafico-linha-eixo-texto {
-
-    fill: var(--cor-texto-suave);
-    font-size: 10px;
-
-}
-
-.grafico-linha-hit {
-
-    cursor: pointer;
-
-}
-
-.grafico-linha-valor-final {
-
-    fill: var(--cor-texto);
-    font-size: 12px;
-    font-weight: 600;
-
-}
-
 .indicadores-secao-titulo {
 
     font-size: 13px;

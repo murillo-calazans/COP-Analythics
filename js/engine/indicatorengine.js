@@ -1008,129 +1008,99 @@ const IndicatorEngine = {
         return lista;
     },
 
+    NOMES_MES: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
+
     /**
-     * Tendência ao longo do tempo: volume de OS finalizadas, TMS médio
-     * (visão da OS/empresa, tempo corrido) e índice de reabertura por
-     * período. Granularidade é escolhida automaticamente pelo tamanho do
-     * intervalo de dados (dia/semana/mês) — evita virar um gráfico
-     * ilegível de 400 pontos diários num ano inteiro, ou um gráfico vazio
-     * de 3 pontos mensais numa semana.
+     * Visão mensal (Jan até o último mês com dado) das OS finalizadas
+     * naquele ano: volume, TMS/TMA/TMR/TME médios, reaberturas (contagem)
+     * e técnicos ativos — todos agrupados pelo mês em que a OS foi
+     * FECHADA (não abertura nem agendamento), pra ficar consistente entre
+     * as métricas. Ano de referência é o ano da finalização mais recente
+     * nos dados (ou, sem nenhuma finalizada, o da abertura mais recente).
+     * Só entram OS com Fechamento — igual ao resto do sistema.
      */
-    calcularTendencias(ordens) {
+    calcularTendenciaMensal(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
-        const pontosBrutos = [];
 
-        for (const ordem of ordens.values()) {
-            const info = analise.get(ordem.id);
-            if (!info?.ultimoEncerramento?.data) continue;
-
-            let horas = null;
-            if (info.primeiroInicioAtendimento?.data && !info.excluidoDoTempo) {
-                const diferenca = (info.ultimoEncerramento.data - info.primeiroInicioAtendimento.data) / 3600000;
-                if (diferenca >= 0) horas = diferenca;
+        let dataReferencia = null;
+        for (const info of analise.values()) {
+            const data = info.ultimoEncerramento?.data;
+            if (data && (!dataReferencia || data > dataReferencia)) dataReferencia = data;
+        }
+        if (!dataReferencia) {
+            for (const ordem of ordens.values()) {
+                if (ordem.dataAbertura && (!dataReferencia || ordem.dataAbertura > dataReferencia)) {
+                    dataReferencia = ordem.dataAbertura;
+                }
             }
+        }
+        if (!dataReferencia) return { ano: null, meses: [] };
 
-            pontosBrutos.push({
-                data: info.ultimoEncerramento.data,
-                tmsHoras: horas,
-                reaberta: info.temReabertura,
-                reagendada: info.temReagendamento
+        const ano = dataReferencia.getFullYear();
+        const ultimoMes = dataReferencia.getMonth();
+
+        const buckets = [];
+        for (let mes = 0; mes <= ultimoMes; mes++) {
+            buckets.push({
+                totalFinalizadas: 0,
+                somaTms: 0, contagemTms: 0,
+                somaTma: 0, contagemTma: 0,
+                somaTmr: 0, contagemTmr: 0,
+                somaTme: 0, contagemTme: 0,
+                reabertas: 0,
+                tecnicosAtivos: new Set()
             });
         }
 
-        if (pontosBrutos.length === 0) {
-            return { granularidade: "dia", pontos: [] };
-        }
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!info?.ultimoFechamento?.data) continue;
 
-        const granularidade = this.escolherGranularidade(pontosBrutos);
-        const porPeriodo = new Map();
+            const dataFechamento = info.ultimoFechamento.data;
+            if (dataFechamento.getFullYear() !== ano) continue;
 
-        for (const ponto of pontosBrutos) {
-            const chave = this.chavePeriodo(ponto.data, granularidade);
+            const mes = dataFechamento.getMonth();
+            if (mes > ultimoMes) continue;
+            const bucket = buckets[mes];
 
-            if (!porPeriodo.has(chave)) {
-                porPeriodo.set(chave, {
-                    data: ponto.data,
-                    totalFinalizadas: 0,
-                    somaHoras: 0,
-                    contagemHoras: 0,
-                    reabertas: 0,
-                    reagendadas: 0
-                });
+            bucket.totalFinalizadas++;
+            if (info.temReabertura) bucket.reabertas++;
+
+            if (info.ultimoFechamento.operador !== null && info.ultimoFechamento.operador !== undefined) {
+                bucket.tecnicosAtivos.add(String(info.ultimoFechamento.operador));
             }
 
-            const registro = porPeriodo.get(chave);
-            registro.totalFinalizadas++;
+            if (!info.excluidoDoTempo) {
+                const tms = this.somarHorasSegmentos(info.segmentosSolucao);
+                if (tms !== null) { bucket.somaTms += tms; bucket.contagemTms++; }
 
-            if (ponto.tmsHoras !== null) {
-                registro.somaHoras += ponto.tmsHoras;
-                registro.contagemHoras++;
+                const tma = this.somarHorasSegmentos(info.segmentosAtendimento);
+                if (tma !== null) { bucket.somaTma += tma; bucket.contagemTma++; }
             }
 
-            if (ponto.reaberta) registro.reabertas++;
-            if (ponto.reagendada) registro.reagendadas++;
+            if (ordem.dataAbertura && info.primeiroAgendamento?.data) {
+                const horasTmr = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
+                if (horasTmr >= 0) { bucket.somaTmr += horasTmr; bucket.contagemTmr++; }
+            }
+
+            if (ordem.dataAbertura) {
+                const horasTme = (dataFechamento - ordem.dataAbertura) / 3600000;
+                if (horasTme >= 0) { bucket.somaTme += horasTme; bucket.contagemTme++; }
+            }
         }
 
-        const pontos = [...porPeriodo.values()]
-            .sort((a, b) => a.data - b.data)
-            .map(p => ({
-                rotulo: this.rotuloPeriodo(p.data, granularidade),
-                totalFinalizadas: p.totalFinalizadas,
-                tmsHoras: p.contagemHoras > 0 ? p.somaHoras / p.contagemHoras : null,
-                indiceReaberturaPercentual: p.totalFinalizadas > 0
-                    ? (p.reabertas / p.totalFinalizadas) * 100
-                    : 0,
-                indiceReagendamentoPercentual: p.totalFinalizadas > 0
-                    ? (p.reagendadas / p.totalFinalizadas) * 100
-                    : 0
-            }));
+        const meses = buckets.map((b, mes) => ({
+            rotulo: this.NOMES_MES[mes],
+            totalFinalizadas: b.totalFinalizadas,
+            tmsHoras: b.contagemTms > 0 ? b.somaTms / b.contagemTms : null,
+            tmaHoras: b.contagemTma > 0 ? b.somaTma / b.contagemTma : null,
+            tmrHoras: b.contagemTmr > 0 ? b.somaTmr / b.contagemTmr : null,
+            tmeHoras: b.contagemTme > 0 ? b.somaTme / b.contagemTme : null,
+            reabertas: b.reabertas,
+            tecnicosAtivos: b.tecnicosAtivos.size
+        }));
 
-        return { granularidade, pontos };
-    },
-
-    escolherGranularidade(pontos) {
-        // Loop manual em vez de Math.min/max(...array): array pode ter
-        // dezenas de milhares de pontos (ano inteiro) e o spread operator
-        // estoura a pilha de chamadas do JS nesse tamanho.
-        let min = pontos[0].data;
-        let max = pontos[0].data;
-
-        for (const ponto of pontos) {
-            if (ponto.data < min) min = ponto.data;
-            if (ponto.data > max) max = ponto.data;
-        }
-
-        const dias = (max - min) / 86400000;
-
-        if (dias <= 31) return "dia";
-        if (dias <= 180) return "semana";
-        return "mes";
-    },
-
-    chavePeriodo(data, granularidade) {
-        if (granularidade === "dia") {
-            return `${data.getFullYear()}-${data.getMonth()}-${data.getDate()}`;
-        }
-
-        if (granularidade === "semana") {
-            const inicioSemana = new Date(data);
-            inicioSemana.setDate(data.getDate() - data.getDay());
-            return `${inicioSemana.getFullYear()}-${inicioSemana.getMonth()}-${inicioSemana.getDate()}`;
-        }
-
-        return `${data.getFullYear()}-${data.getMonth()}`;
-    },
-
-    rotuloPeriodo(data, granularidade) {
-        if (granularidade === "dia") {
-            return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-        }
-
-        if (granularidade === "semana") {
-            return `Sem. ${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
-        }
-
-        return data.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+        return { ano, meses };
     },
 
     /** TMS médio por técnico (segmentado) — ranking de velocidade, não de volume. */

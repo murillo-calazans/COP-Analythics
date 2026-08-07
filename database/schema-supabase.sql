@@ -139,7 +139,7 @@ create policy "exclusao admin" on movimentacoes for delete to authenticated
 -- 2. Copie o UUID desse usuário (aparece na lista de Users).
 -- 3. Rode o comando abaixo, TROCANDO o UUID, pra virar admin:
 --
---    insert into perfis (id, papel) values ('COLE-O-UUID-AQUI', 'admin');
+--    insert into perfis (id, papel) values ('53877fb0-39fa-47ca-be6e-f7794ddccc13', 'admin');
 --
 -- 4. Pra criar um usuário "leitor" depois, repita os passos 1-3 com
 --    papel = 'leitor' em vez de 'admin'.
