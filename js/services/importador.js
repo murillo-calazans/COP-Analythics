@@ -41,7 +41,10 @@ async function importarBase() {
 
         console.log("APP.referencias:", APP.referencias);
 
-        await persistirReferenciasNoSupabase({ operadores, eventos, diagnosticos });
+        await persistirReferenciasNoSupabase(
+            { operadores, eventos, diagnosticos },
+            mensagem => { status.textContent = mensagem; }
+        );
 
         status.textContent =
             `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos.`;
@@ -114,7 +117,7 @@ async function importarOrdens() {
 
         status.textContent = `Importação processada: ${estatisticas.ordens} ordens, ${estatisticas.movimentacoes} movimentações. Salvando no banco compartilhado...`;
 
-        await persistirOrdensNoSupabase(ordens);
+        await persistirOrdensNoSupabase(ordens, mensagem => { status.textContent = mensagem; });
 
         const recorrentes = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
         APP.indicadores.recorrencia = recorrentes;

@@ -15,32 +15,80 @@
  * sem nenhuma mudança. "ordens"/"movimentacoes" já são tipadas, e
  * reconstruímos "new OrdemServico(...)"/"new Movimentacao(...)"
  * igual o restante do sistema já espera.
+ *
+ * Duas coisas exigem cuidado especial por causa do volume de dados
+ * (dezenas de milhares de movimentações não é incomum aqui):
+ * - LEITURA: o PostgREST do Supabase limita cada resposta a um teto de
+ *   linhas (1000 por padrão) — um único .select("*") silenciosamente
+ *   devolveria só a primeira página, sem erro nenhum. buscarTodasLinhas
+ *   pagina com .range() até esgotar.
+ * - ESCRITA: mandar dezenas de milhares de linhas numa upsert/insert só
+ *   trava o navegador por muito tempo sem feedback nenhum (parece
+ *   travado, mesmo funcionando). enviarEmLotes quebra em pedaços
+ *   menores e reporta progresso.
  */
+
+const TAMANHO_PAGINA_LEITURA = 1000;
+const TAMANHO_LOTE_ESCRITA = 500;
+
+async function buscarTodasLinhas(tabela, colunas, colunaOrdem) {
+    const linhas = [];
+    let pagina = 0;
+
+    while (true) {
+        const inicio = pagina * TAMANHO_PAGINA_LEITURA;
+        const fim = inicio + TAMANHO_PAGINA_LEITURA - 1;
+
+        // Ordena pela chave primária: sem isso, o Postgres não garante a
+        // mesma ordem entre chamadas de .range() diferentes, e uma linha
+        // poderia ficar de fora (ou duplicada) entre uma página e outra.
+        const { data, error } = await supabaseClient.from(tabela).select(colunas).order(colunaOrdem).range(inicio, fim);
+        if (error) throw error;
+
+        linhas.push(...data);
+        if (data.length < TAMANHO_PAGINA_LEITURA) break;
+
+        pagina++;
+    }
+
+    return linhas;
+}
+
+/**
+ * Executa "operacao" em pedaços de "linhas", chamando aoProgredir(feitas,
+ * total) depois de cada lote — pra UI conseguir mostrar progresso em vez
+ * de parecer travada numa importação grande.
+ */
+async function enviarEmLotes(linhas, operacao, aoProgredir) {
+    if (linhas.length === 0) return;
+
+    for (let inicio = 0; inicio < linhas.length; inicio += TAMANHO_LOTE_ESCRITA) {
+        const lote = linhas.slice(inicio, inicio + TAMANHO_LOTE_ESCRITA);
+        await operacao(lote);
+
+        if (aoProgredir) aoProgredir(Math.min(inicio + TAMANHO_LOTE_ESCRITA, linhas.length), linhas.length);
+    }
+}
 
 async function buscarReferencias() {
     const [operadores, eventos, diagnosticos] = await Promise.all([
-        supabaseClient.from("ref_operadores").select("chave, dados"),
-        supabaseClient.from("ref_eventos").select("chave, dados"),
-        supabaseClient.from("ref_diagnosticos").select("chave, dados")
+        buscarTodasLinhas("ref_operadores", "chave, dados", "chave"),
+        buscarTodasLinhas("ref_eventos", "chave, dados", "chave"),
+        buscarTodasLinhas("ref_diagnosticos", "chave, dados", "chave")
     ]);
 
-    if (operadores.error) throw operadores.error;
-    if (eventos.error) throw eventos.error;
-    if (diagnosticos.error) throw diagnosticos.error;
-
     return {
-        operadores: new Map(operadores.data.map(linha => [linha.chave, linha.dados])),
-        eventos: new Map(eventos.data.map(linha => [linha.chave, linha.dados])),
-        diagnosticos: new Map(diagnosticos.data.map(linha => [linha.chave, linha.dados]))
+        operadores: new Map(operadores.map(linha => [linha.chave, linha.dados])),
+        eventos: new Map(eventos.map(linha => [linha.chave, linha.dados])),
+        diagnosticos: new Map(diagnosticos.map(linha => [linha.chave, linha.dados]))
     };
 }
 
 async function buscarOrdens() {
-    const { data: linhasOrdens, error: erroOrdens } = await supabaseClient.from("ordens").select("*");
-    if (erroOrdens) throw erroOrdens;
-
-    const { data: linhasMovimentacoes, error: erroMovs } = await supabaseClient.from("movimentacoes").select("*");
-    if (erroMovs) throw erroMovs;
+    const [linhasOrdens, linhasMovimentacoes] = await Promise.all([
+        buscarTodasLinhas("ordens", "*", "id"),
+        buscarTodasLinhas("movimentacoes", "*", "id")
+    ]);
 
     const movimentacoesPorOrdem = new Map();
     for (const linha of linhasMovimentacoes) {
@@ -91,19 +139,25 @@ async function buscarOrdens() {
  * Upsert das referências (Base.xlsx) no Supabase — chamado por
  * importarBase() em js/services/importador.js. Guarda a linha bruta
  * inteira em JSONB, exatamente como já vem de ReferenceEngine.carregar.
+ * Em lotes (ver enviarEmLotes) — Base.xlsx costuma ser pequena, mas não
+ * custa nada ficar consistente com o resto.
  */
-async function persistirReferenciasNoSupabase(referencias) {
+async function persistirReferenciasNoSupabase(referencias, aoProgredir) {
     const paraLinhas = mapa => [...mapa.entries()].map(([chave, dados]) => ({ chave: String(chave), dados }));
 
-    const [operadores, eventos, diagnosticos] = await Promise.all([
-        supabaseClient.from("ref_operadores").upsert(paraLinhas(referencias.operadores), { onConflict: "chave" }),
-        supabaseClient.from("ref_eventos").upsert(paraLinhas(referencias.eventos), { onConflict: "chave" }),
-        supabaseClient.from("ref_diagnosticos").upsert(paraLinhas(referencias.diagnosticos), { onConflict: "chave" })
-    ]);
+    const gravar = async (tabela, linhas, rotulo) => {
+        await enviarEmLotes(
+            linhas,
+            lote => supabaseClient.from(tabela).upsert(lote, { onConflict: "chave" }).then(({ error }) => {
+                if (error) throw error;
+            }),
+            aoProgredir ? (feitas, total) => aoProgredir(`Salvando ${rotulo}: ${feitas}/${total}`) : null
+        );
+    };
 
-    if (operadores.error) throw operadores.error;
-    if (eventos.error) throw eventos.error;
-    if (diagnosticos.error) throw diagnosticos.error;
+    await gravar("ref_operadores", paraLinhas(referencias.operadores), "operadores");
+    await gravar("ref_eventos", paraLinhas(referencias.eventos), "eventos");
+    await gravar("ref_diagnosticos", paraLinhas(referencias.diagnosticos), "diagnósticos");
 }
 
 /**
@@ -114,9 +168,12 @@ async function persistirReferenciasNoSupabase(referencias) {
  * tocados e quais movimentações são realmente novas (evita duplicar no
  * banco movimentações já persistidas em uma importação anterior).
  * O snapshot da OS em si (cliente/status/etc.) vem do estado JÁ
- * mesclado em APP.dados.ordens, que é o mais atualizado.
+ * mesclado em APP.dados.ordens, que é o mais atualizado. Em lotes (ver
+ * enviarEmLotes) — um Ordens.xlsx grande facilmente passa de dezenas de
+ * milhares de movimentações, e mandar tudo numa chamada só trava o
+ * navegador por muito tempo sem dar nenhum retorno visual.
  */
-async function persistirOrdensNoSupabase(ordensNovas) {
+async function persistirOrdensNoSupabase(ordensNovas, aoProgredir) {
     const idsTocados = [...ordensNovas.keys()];
 
     const linhasOrdens = idsTocados.map(id => {
@@ -136,8 +193,13 @@ async function persistirOrdensNoSupabase(ordensNovas) {
         };
     });
 
-    const { error: erroOrdens } = await supabaseClient.from("ordens").upsert(linhasOrdens, { onConflict: "id" });
-    if (erroOrdens) throw erroOrdens;
+    await enviarEmLotes(
+        linhasOrdens,
+        lote => supabaseClient.from("ordens").upsert(lote, { onConflict: "id" }).then(({ error }) => {
+            if (error) throw error;
+        }),
+        aoProgredir ? (feitas, total) => aoProgredir(`Salvando ordens: ${feitas}/${total}`) : null
+    );
 
     const linhasMovimentacoes = [];
     for (const [id, ordem] of ordensNovas) {
@@ -157,10 +219,13 @@ async function persistirOrdensNoSupabase(ordensNovas) {
         }
     }
 
-    if (linhasMovimentacoes.length === 0) return;
-
-    const { error: erroMovs } = await supabaseClient.from("movimentacoes").insert(linhasMovimentacoes);
-    if (erroMovs) throw erroMovs;
+    await enviarEmLotes(
+        linhasMovimentacoes,
+        lote => supabaseClient.from("movimentacoes").insert(lote).then(({ error }) => {
+            if (error) throw error;
+        }),
+        aoProgredir ? (feitas, total) => aoProgredir(`Salvando movimentações: ${feitas}/${total}`) : null
+    );
 }
 
 /**
