@@ -1117,6 +1117,70 @@ const IndicatorEngine = {
             .filter(ficha => ficha.tmaHoras !== null)
             .map(ficha => ({ rotulo: ficha.nome, valor: Math.round(ficha.tmaHoras * 10) / 10 }))
             .sort((a, b) => a.valor - b.valor);
+    },
+
+    // Cidade com poucas OS distorce a média (1 OS rápida "vence" fácil) —
+    // exige um mínimo pra entrar no ranking de melhores tempos por cidade.
+    MINIMO_OS_RANKING_CIDADE: 3,
+
+    /**
+     * Agrupa por cidade um valor calculado por OS (calcularHorasDaOS
+     * devolve horas ou null), tira a média de cada cidade e devolve as
+     * "top" com o MENOR tempo primeiro (melhores) — cidade com menos de
+     * MINIMO_OS_RANKING_CIDADE OS no período fica de fora, pra não deixar
+     * 1 OS isolada "vencer" o ranking por acaso.
+     */
+    agregarPorCidade(ordens, analise, calcularHorasDaOS, top) {
+        const acumulado = new Map();
+
+        for (const ordem of ordens.values()) {
+            if (!ordem.cidade) continue;
+
+            const info = analise.get(ordem.id);
+            if (!info?.ultimoFechamento) continue;
+
+            const horas = calcularHorasDaOS(ordem, info);
+            if (horas === null) continue;
+
+            if (!acumulado.has(ordem.cidade)) acumulado.set(ordem.cidade, { soma: 0, contagem: 0 });
+            const registro = acumulado.get(ordem.cidade);
+            registro.soma += horas;
+            registro.contagem++;
+        }
+
+        return [...acumulado.entries()]
+            .filter(([, r]) => r.contagem >= this.MINIMO_OS_RANKING_CIDADE)
+            .map(([cidade, r]) => ({ rotulo: cidade, valor: Math.round((r.soma / r.contagem) * 10) / 10 }))
+            .sort((a, b) => a.valor - b.valor)
+            .slice(0, top);
+    },
+
+    /** Top cidades com o melhor TMS médio (segmentado, visão do técnico). */
+    calcularTmsPorCidade(ordens, top = 5) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorCidade(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosSolucao);
+        }, top);
+    },
+
+    /** Top cidades com o melhor TMA médio (segmentado, visão do técnico). */
+    calcularTmaPorCidade(ordens, top = 5) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorCidade(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosAtendimento);
+        }, top);
+    },
+
+    /** Top cidades com o melhor TMR médio (abertura até 1º agendamento). */
+    calcularTmrPorCidade(ordens, top = 5) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorCidade(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) return null;
+            const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top);
     }
 
 };

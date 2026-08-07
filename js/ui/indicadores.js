@@ -27,6 +27,9 @@ function renderizarSecaoIndicadores() {
     const painel = IndicatorEngine.calcularPainelDashboard(ordensFiltradas);
     const tmsPorTecnico = IndicatorEngine.calcularTmsPorTecnico(ordensFiltradas);
     const tmaPorTecnico = IndicatorEngine.calcularTmaPorTecnico(ordensFiltradas);
+    const tmsPorCidade = IndicatorEngine.calcularTmsPorCidade(ordensFiltradas);
+    const tmaPorCidade = IndicatorEngine.calcularTmaPorCidade(ordensFiltradas);
+    const tmrPorCidade = IndicatorEngine.calcularTmrPorCidade(ordensFiltradas);
 
     const periodoMensal = tendenciaMensal.ano
         ? `Jan–${tendenciaMensal.meses[tendenciaMensal.meses.length - 1].rotulo}/${tendenciaMensal.ano}`
@@ -133,6 +136,36 @@ function renderizarSecaoIndicadores() {
                     <button type="button" class="grafico-toggle-tabela" onclick="alternarVisualizacaoGrafico('graficoTmaTecnico')">Ver como tabela</button>
                 </div>
                 <div id="graficoTmaTecnico"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Top 5 cidades — melhor TMS</div>
+                        <div class="grafico-subtitulo">Deslocamento até finalização, sem espera de reagendamento — cidades com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
+                    </div>
+                </div>
+                <div id="graficoTmsCidade"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Top 5 cidades — melhor TMA</div>
+                        <div class="grafico-subtitulo">Só "Em Execução" até finalização — cidades com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
+                    </div>
+                </div>
+                <div id="graficoTmaCidade"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Top 5 cidades — melhor TMR</div>
+                        <div class="grafico-subtitulo">Abertura até 1º agendamento — cidades com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
+                    </div>
+                </div>
+                <div id="graficoTmrCidade"></div>
             </div>
 
             <div class="grafico-card">
@@ -251,6 +284,24 @@ function renderizarSecaoIndicadores() {
     renderizarGraficoBarras("graficoTmaTecnico", tmaPorTecnico, {
         serie: "serie-1",
         limite: tmaPorTecnico.length,
+        formatoValor: formatarDuracaoHoras
+    });
+
+    renderizarGraficoBarras("graficoTmsCidade", tmsPorCidade, {
+        serie: "serie-1",
+        limite: tmsPorCidade.length,
+        formatoValor: formatarDuracaoHoras
+    });
+
+    renderizarGraficoBarras("graficoTmaCidade", tmaPorCidade, {
+        serie: "serie-1",
+        limite: tmaPorCidade.length,
+        formatoValor: formatarDuracaoHoras
+    });
+
+    renderizarGraficoBarras("graficoTmrCidade", tmrPorCidade, {
+        serie: "serie-2",
+        limite: tmrPorCidade.length,
         formatoValor: formatarDuracaoHoras
     });
 
