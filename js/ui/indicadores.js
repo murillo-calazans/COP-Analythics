@@ -249,6 +249,16 @@ function renderizarSecaoIndicadores() {
                 <div id="graficoAbandonosTecnico"></div>
             </div>
 
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Reagendamentos por técnico</div>
+                        <div class="grafico-subtitulo">Quantidade de vezes que cada técnico executou a movimentação Reagendar</div>
+                    </div>
+                </div>
+                <div id="graficoReagendamentosTecnico"></div>
+            </div>
+
         </div>
 
         <div class="indicadores-secao-titulo">Funil de Assuntos</div>
@@ -382,6 +392,12 @@ function renderizarSecaoIndicadores() {
         serie: "serie-2",
         limite: 5,
         titulo: "Deslocamentos abandonados por técnico"
+    });
+
+    renderizarGraficoBarras("graficoReagendamentosTecnico", IndicatorEngine.calcularReagendamentosPorTecnico(ordensFiltradas), {
+        serie: "serie-2",
+        limite: 5,
+        titulo: "Reagendamentos por técnico"
     });
 
     const botaoConfigurarFunil = document.getElementById("btnConfigurarFunilAssuntos");

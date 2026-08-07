@@ -650,6 +650,18 @@ const IndicatorEngine = {
         return porTecnico;
     },
 
+    /** Quantidade de reagendamentos por técnico (quem executou a movimentação Reagendar). */
+    calcularReagendamentosPorTecnico(ordens) {
+        const qualidade = this.calcularQualidadeReagendamentoPorTecnico(ordens);
+        const contagem = new Map();
+
+        for (const [nome, { acertos, erros }] of qualidade) {
+            contagem.set(nome, acertos + erros);
+        }
+
+        return this.paraListaOrdenada(contagem);
+    },
+
     contarTecnicosAtivos(ordens) {
         const tecnicos = new Set();
         for (const ordem of ordens.values()) {
