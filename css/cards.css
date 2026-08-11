@@ -24,6 +24,25 @@
 
 }
 
+.logs-importacao {
+
+    margin-bottom: 8px;
+
+}
+
+.logs-importacao .modal-subtitulo {
+
+    margin-top: 0;
+
+}
+
+.logs-importacao #listaLogsImportacao {
+
+    max-height: 30vh;
+    overflow-y: auto;
+
+}
+
 .upload-step {
 
     display: flex;

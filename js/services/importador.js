@@ -46,6 +46,13 @@ async function importarBase() {
             mensagem => { status.textContent = mensagem; }
         );
 
+        await registrarLogImportacao(arquivo.name, "base", {
+            operadores: operadores.size,
+            eventos: eventos.size,
+            diagnosticos: diagnosticos.size
+        });
+        await renderizarLogsImportacao();
+
         status.textContent =
             `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos.`;
 
@@ -112,20 +119,45 @@ async function importarOrdens() {
 
         const { ordens, estatisticas } = DataEngine.processarOrdens(linhas);
 
+        // Snapshot (cópia — mesclarOrdens abaixo altera o array original em
+        // memória) de como cada OS tocada por esse arquivo estava ANTES do
+        // merge, ou seja, o que já estava no banco. Usado logo abaixo pra
+        // não duplicar movimentações já persistidas (reimportar o mesmo
+        // arquivo, ou um mês já coberto, não deve inflar a tabela).
+        const movimentacoesExistentesPorOrdem = new Map();
+        for (const id of ordens.keys()) {
+            const existente = APP.dados.ordens.get(id);
+            if (existente) movimentacoesExistentesPorOrdem.set(id, [...existente.movimentacoes]);
+        }
+
         const totalOrdensAntes = APP.dados.ordens.size;
         DataEngine.mesclarOrdens(APP.dados.ordens, ordens);
 
         status.textContent = `Importação processada: ${estatisticas.ordens} ordens, ${estatisticas.movimentacoes} movimentações. Salvando no banco compartilhado...`;
 
-        await persistirOrdensNoSupabase(ordens, mensagem => { status.textContent = mensagem; });
+        const { inseridas, ignoradas } = await persistirOrdensNoSupabase(
+            ordens,
+            movimentacoesExistentesPorOrdem,
+            mensagem => { status.textContent = mensagem; }
+        );
+
+        await registrarLogImportacao(arquivo.name, "ordens", {
+            linhas: estatisticas.linhas,
+            ordens: estatisticas.ordens,
+            movimentacoes: inseridas,
+            movimentacoesIgnoradas: ignoradas,
+            linhasIgnoradas: estatisticas.linhasIgnoradas
+        });
+        await renderizarLogsImportacao();
 
         const recorrentes = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
         APP.indicadores.recorrencia = recorrentes;
 
         status.textContent =
             `Importação concluída: ${estatisticas.linhas} linhas → ` +
-            `${estatisticas.ordens} ordens, ${estatisticas.movimentacoes} movimentações ` +
-            `(${estatisticas.tempoMs} ms)` +
+            `${estatisticas.ordens} ordens, ${inseridas} movimentação(ões) carregada(s)` +
+            (ignoradas > 0 ? `, ${ignoradas} ignorada(s) por já existir(em)` : "") +
+            ` (${estatisticas.tempoMs} ms)` +
             (estatisticas.linhasIgnoradas > 0
                 ? `. ${estatisticas.linhasIgnoradas} linha(s) ignorada(s) por não ter ID de OS.`
                 : ".") +

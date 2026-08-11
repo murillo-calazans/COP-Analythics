@@ -143,6 +143,41 @@ async function buscarOrdens() {
 }
 
 /**
+ * Registra no log qual arquivo foi importado, por quem e um resumo —
+ * mostrado no popup de Importar Dados ("Arquivos no banco"). Não
+ * interrompe a importação se falhar (log é informativo, não crítico).
+ */
+async function registrarLogImportacao(nomeArquivo, tipo, estatisticas) {
+    try {
+        const { error } = await supabaseClient.from("logs_importacao").insert({
+            nome_arquivo: nomeArquivo,
+            tipo,
+            importado_por: APP.usuario?.email ?? null,
+            estatisticas
+        });
+        if (error) throw error;
+    } catch (erro) {
+        console.error("Falha ao registrar log de importação:", erro);
+    }
+}
+
+/** Últimos logs de importação, mais recente primeiro — pro popup de Importar Dados. */
+async function buscarLogsImportacao(limite = 30) {
+    const { data, error } = await supabaseClient
+        .from("logs_importacao")
+        .select("*")
+        .order("importado_em", { ascending: false })
+        .limit(limite);
+
+    if (error) {
+        console.error("Falha ao buscar logs de importação:", error);
+        return [];
+    }
+
+    return data;
+}
+
+/**
  * Upsert das referências (Base.xlsx) no Supabase — chamado por
  * importarBase() em js/services/importador.js. Guarda a linha bruta
  * inteira em JSONB, exatamente como já vem de ReferenceEngine.carregar.
@@ -168,19 +203,46 @@ async function persistirReferenciasNoSupabase(referencias, aoProgredir) {
 }
 
 /**
+ * Chave de comparação de uma movimentação, usada só pra detectar
+ * duplicata (mesma OS + mesmo evento real) entre o que já está no
+ * banco e o que acabou de ser lido do Excel — não é um ID de verdade,
+ * é uma "impressão digital" dos campos que identificam um evento real
+ * (reimportar o mesmo arquivo, ou um arquivo com linhas sobrepostas,
+ * gera a mesma chave e cai fora).
+ */
+function chaveMovimentacao(mov) {
+    return [
+        mov.data instanceof Date ? mov.data.getTime() : mov.data,
+        mov.evento,
+        mov.operador,
+        mov.status,
+        mov.diagnostico,
+        mov.respostaPadrao
+    ].join("|");
+}
+
+/**
  * Upsert das OS + insert das movimentações NOVAS no Supabase —
  * chamado por importarOrdens() depois do merge local
  * (DataEngine.mesclarOrdens). "ordensNovas" é o resultado cru dessa
  * importação (antes do merge) — usamos ele pra saber quais IDs foram
- * tocados e quais movimentações são realmente novas (evita duplicar no
- * banco movimentações já persistidas em uma importação anterior).
+ * tocados. "movimentacoesExistentesPorOrdem" é um snapshot (Map id ->
+ * array de Movimentacao) de como cada uma dessas OS estava ANTES do
+ * merge, ou seja, o que já estava persistido no banco — usamos pra
+ * pular (ignorar) qualquer movimentação que já exista, em vez de
+ * duplicar. Isso é o que permite reimportar o mesmo arquivo, ou um mês
+ * já coberto, sem inflar a tabela: só entra o que é genuinamente novo
+ * (ex.: uma OS aberta em um mês que só fecha no mês seguinte continua
+ * ganhando as movimentações novas normalmente).
  * O snapshot da OS em si (cliente/status/etc.) vem do estado JÁ
  * mesclado em APP.dados.ordens, que é o mais atualizado. Em lotes (ver
  * enviarEmLotes) — um Ordens.xlsx grande facilmente passa de dezenas de
  * milhares de movimentações, e mandar tudo numa chamada só trava o
  * navegador por muito tempo sem dar nenhum retorno visual.
+ * Retorna { inseridas, ignoradas } (contagem de movimentações), pra
+ * importador.js poder mostrar "tantas carregadas, tantas ignoradas".
  */
-async function persistirOrdensNoSupabase(ordensNovas, aoProgredir) {
+async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPorOrdem, aoProgredir) {
     const idsTocados = [...ordensNovas.keys()];
 
     const linhasOrdens = idsTocados.map(id => {
@@ -209,8 +271,20 @@ async function persistirOrdensNoSupabase(ordensNovas, aoProgredir) {
     );
 
     const linhasMovimentacoes = [];
+    let ignoradas = 0;
+
     for (const [id, ordem] of ordensNovas) {
+        const existentes = movimentacoesExistentesPorOrdem?.get(id) ?? [];
+        const chavesVistas = new Set(existentes.map(chaveMovimentacao));
+
         for (const mov of ordem.movimentacoes) {
+            const chave = chaveMovimentacao(mov);
+            if (chavesVistas.has(chave)) {
+                ignoradas++;
+                continue;
+            }
+            chavesVistas.add(chave);
+
             linhasMovimentacoes.push({
                 ordem_id: String(id),
                 operador: mov.operador === null || mov.operador === undefined ? null : String(mov.operador),
@@ -233,6 +307,8 @@ async function persistirOrdensNoSupabase(ordensNovas, aoProgredir) {
         }),
         aoProgredir ? (feitas, total) => aoProgredir(`Salvando movimentações: ${feitas}/${total}`) : null
     );
+
+    return { inseridas: linhasMovimentacoes.length, ignoradas };
 }
 
 /**
@@ -287,7 +363,8 @@ async function limparDadosImportados() {
             supabaseClient.from("ordens").delete().neq("id", ""),
             supabaseClient.from("ref_operadores").delete().neq("chave", ""),
             supabaseClient.from("ref_eventos").delete().neq("chave", ""),
-            supabaseClient.from("ref_diagnosticos").delete().neq("chave", "")
+            supabaseClient.from("ref_diagnosticos").delete().neq("chave", ""),
+            supabaseClient.from("logs_importacao").delete().neq("id", 0)
         ]);
     } catch (erro) {
         console.error("Falha ao apagar dados no Supabase:", erro);
@@ -316,5 +393,5 @@ async function limparDadosImportados() {
     const status = document.getElementById("status");
     if (status) status.textContent = 'Dados limpos pra todo mundo. Selecione os arquivos e clique em "Gerar Relatório".';
 
-    abrirModal("modalImportar");
+    abrirModalImportar();
 }

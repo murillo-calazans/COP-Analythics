@@ -95,7 +95,7 @@ async function inicializarDadosAutenticado() {
     } else if (ehAdmin()) {
         // Sem dado nenhum ainda — só faz sentido oferecer o popup de
         // importação pra quem pode importar.
-        abrirModal("modalImportar");
+        abrirModalImportar();
     }
 
     renderizarDashboard();
@@ -107,7 +107,7 @@ function registrarEventos() {
     const botaoGerarRelatorio = document.getElementById("btnGerarRelatorio");
     const botaoLimparDados = document.getElementById("btnLimparDados");
 
-    if (botaoAbrirImportar) botaoAbrirImportar.addEventListener("click", () => abrirModal("modalImportar"));
+    if (botaoAbrirImportar) botaoAbrirImportar.addEventListener("click", abrirModalImportar);
     if (botaoGerarRelatorio) botaoGerarRelatorio.addEventListener("click", gerarRelatorio);
     if (botaoLimparDados) botaoLimparDados.addEventListener("click", limparDadosImportados);
 

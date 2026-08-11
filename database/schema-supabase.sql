@@ -76,6 +76,19 @@ create table if not exists perfis (
     criado_em timestamptz not null default now()
 );
 
+-- ---------- Log de importações ----------
+-- Um registro por arquivo importado (Base.xlsx ou Ordens.xlsx) — nome,
+-- quem, quando, resumo. Mostrado no popup de Importar Dados.
+
+create table if not exists logs_importacao (
+    id bigint generated always as identity primary key,
+    nome_arquivo text not null,
+    tipo text not null check (tipo in ('base', 'ordens')),
+    importado_por text,
+    importado_em timestamptz not null default now(),
+    estatisticas jsonb
+);
+
 -- ==========================================================
 -- Row Level Security
 -- ==========================================================
@@ -86,6 +99,7 @@ alter table ref_diagnosticos enable row level security;
 alter table ordens enable row level security;
 alter table movimentacoes enable row level security;
 alter table perfis enable row level security;
+alter table logs_importacao enable row level security;
 
 -- Leitura: qualquer usuário logado com papel configurado em "perfis" (admin
 -- OU leitor) vê tudo. NÃO basta estar autenticado — o Supabase permite
@@ -105,6 +119,11 @@ create policy "leitura autenticada" on movimentacoes for select to authenticated
 
 -- Perfis: cada usuário só enxerga o próprio papel.
 create policy "leitura do proprio perfil" on perfis for select to authenticated using (id = auth.uid());
+
+create policy "leitura autenticada" on logs_importacao for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
+create policy "escrita admin" on logs_importacao for insert to authenticated
+    with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
 -- Escrita (insert/update/delete): só quem tem papel 'admin' na tabela perfis.
 create policy "escrita admin" on ref_operadores for insert to authenticated
