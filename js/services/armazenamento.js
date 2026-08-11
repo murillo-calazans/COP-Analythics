@@ -31,24 +31,31 @@
 const TAMANHO_PAGINA_LEITURA = 1000;
 const TAMANHO_LOTE_ESCRITA = 500;
 
+/**
+ * Paginação por "keyset" (WHERE chave > última_vista ORDER BY chave
+ * LIMIT n), não por .range()/OFFSET — com OFFSET, cada página fica mais
+ * lenta que a anterior, porque o Postgres precisa varrer e descartar
+ * todas as linhas de trás antes de chegar na página pedida; numa tabela
+ * grande (dezenas de milhares de movimentações não é incomum aqui) isso
+ * é lento o bastante pra estourar o tempo limite da consulta. Keyset usa
+ * o índice da chave direto, então toda página é igualmente rápida,
+ * não importa o tamanho da tabela.
+ */
 async function buscarTodasLinhas(tabela, colunas, colunaOrdem) {
     const linhas = [];
-    let pagina = 0;
+    let ultimoValor = null;
 
     while (true) {
-        const inicio = pagina * TAMANHO_PAGINA_LEITURA;
-        const fim = inicio + TAMANHO_PAGINA_LEITURA - 1;
+        let consulta = supabaseClient.from(tabela).select(colunas).order(colunaOrdem).limit(TAMANHO_PAGINA_LEITURA);
+        if (ultimoValor !== null) consulta = consulta.gt(colunaOrdem, ultimoValor);
 
-        // Ordena pela chave primária: sem isso, o Postgres não garante a
-        // mesma ordem entre chamadas de .range() diferentes, e uma linha
-        // poderia ficar de fora (ou duplicada) entre uma página e outra.
-        const { data, error } = await supabaseClient.from(tabela).select(colunas).order(colunaOrdem).range(inicio, fim);
+        const { data, error } = await consulta;
         if (error) throw error;
 
         linhas.push(...data);
         if (data.length < TAMANHO_PAGINA_LEITURA) break;
 
-        pagina++;
+        ultimoValor = data[data.length - 1][colunaOrdem];
     }
 
     return linhas;
