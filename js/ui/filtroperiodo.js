@@ -3,11 +3,12 @@
  * UI do Filtro Global
  * ==========================================================
  * Modal com período (único) + assunto/cidade/bairro/evento/
- * operador (seleção múltipla, com busca e chips). Ao aplicar,
- * recalcula tudo que depende do recorte filtrado — Dashboard,
- * Alertas, Técnicos e a busca de Auditoria (se houver uma
- * ativa). Não decide regra nenhuma aqui — só lê o formulário e
- * chama FiltroEngine/IndicatorEngine.
+ * operador/setor (seleção múltipla, com busca e chips) +
+ * diagnóstico (lista com toggle, lógica invertida — ver mais
+ * abaixo). Ao aplicar, recalcula tudo que depende do recorte
+ * filtrado — Dashboard, Alertas, Técnicos e a busca de Auditoria
+ * (se houver uma ativa). Não decide regra nenhuma aqui — só lê o
+ * formulário e chama FiltroEngine/IndicatorEngine.
  */
 
 const CAMPOS_MULTIPLOS_FILTRO = [
@@ -20,16 +21,25 @@ const CAMPOS_MULTIPLOS_FILTRO = [
 ];
 
 let _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], eventos: [], operadores: [], setores: [] };
-let _opcoesFiltroGlobal = { assuntos: [], cidades: [], bairros: [], eventos: [], operadores: [], setores: [] };
+let _opcoesFiltroGlobal = { assuntos: [], cidades: [], bairros: [], eventos: [], operadores: [], setores: [], diagnosticos: [] };
+
+// Diagnóstico é o único campo com lógica invertida (lista negra): guarda
+// as CHAVES normalizadas dos diagnósticos ESCONDIDOS, não dos mostrados —
+// tudo que não estiver aqui continua visível (padrão: nada escondido).
+let _diagnosticosOcultosPendentes = [];
 
 function registrarFiltroGlobal() {
     const botaoAbrir = document.getElementById("btnAbrirFiltroGlobal");
     const botaoAplicar = document.getElementById("btnAplicarFiltroGlobal");
     const botaoLimpar = document.getElementById("btnLimparFiltroGlobal");
+    const buscaDiagnostico = document.getElementById("buscaFiltroDiagnostico");
 
     if (botaoAbrir) botaoAbrir.addEventListener("click", abrirFiltroGlobal);
     if (botaoAplicar) botaoAplicar.addEventListener("click", aplicarFiltroGlobalDaTela);
     if (botaoLimpar) botaoLimpar.addEventListener("click", limparFiltroGlobal);
+    if (buscaDiagnostico) {
+        buscaDiagnostico.addEventListener("input", () => renderizarListaFiltroDiagnosticos(buscaDiagnostico.value));
+    }
 
     montarCamposMultiplos();
     atualizarBadgeFiltroGlobal();
@@ -79,6 +89,7 @@ function abrirFiltroGlobal() {
         operadores: [...APP.filtrosGlobais.operadores],
         setores: [...APP.filtrosGlobais.setores]
     };
+    _diagnosticosOcultosPendentes = [...APP.filtrosGlobais.diagnosticosOcultos];
 
     document.getElementById("filtroDataInicio").value =
         APP.filtrosGlobais.dataInicio ? formatarDataParaInput(APP.filtrosGlobais.dataInicio) : "";
@@ -91,6 +102,10 @@ function abrirFiltroGlobal() {
         renderizarChips(campo.chave);
         fecharDropdown(campo.chave);
     });
+
+    const buscaDiagnostico = document.getElementById("buscaFiltroDiagnostico");
+    if (buscaDiagnostico) buscaDiagnostico.value = "";
+    renderizarListaFiltroDiagnosticos("");
 
     abrirModal("modalFiltroGlobal");
 }
@@ -173,6 +188,60 @@ function removerValorSelecionado(chave, valor) {
     renderizarDropdown(chave);
 }
 
+/**
+ * Diagnóstico é o único campo do Filtro Global com lógica invertida:
+ * mostra TODOS os diagnósticos como "visível" por padrão — clicar
+ * ESCONDE (some da tela, evento é o oposto dos outros campos, que
+ * começam vazios e você ADICIONA pra restringir).
+ */
+function renderizarListaFiltroDiagnosticos(termoBusca) {
+    const container = document.getElementById("listaFiltroDiagnosticos");
+    if (!container) return;
+
+    const todos = _opcoesFiltroGlobal.diagnosticos ?? [];
+
+    if (todos.length === 0) {
+        container.innerHTML = '<p class="alerta-vazio">Importe dados pra ver os diagnósticos.</p>';
+        return;
+    }
+
+    const termoNormalizado = normalizarTexto(termoBusca ?? "");
+    const filtrados = termoNormalizado
+        ? todos.filter(diagnostico => normalizarTexto(diagnostico).includes(termoNormalizado))
+        : todos;
+
+    if (filtrados.length === 0) {
+        container.innerHTML = '<p class="alerta-vazio">Nenhum diagnóstico bate com esse termo.</p>';
+        return;
+    }
+
+    container.innerHTML = filtrados.map(diagnostico => {
+        const chave = normalizarTexto(diagnostico);
+        const oculto = _diagnosticosOcultosPendentes.includes(chave);
+        return `
+            <div class="item-assunto-modal ${!oculto ? "incluido" : ""}" data-diagnostico="${escaparHtml(chave)}">
+                <span>${escaparHtml(diagnostico)}</span>
+                <span class="item-assunto-tag">${oculto ? "Oculto — clique pra mostrar" : "Visível — clique pra ocultar"}</span>
+            </div>
+        `;
+    }).join("");
+
+    container.querySelectorAll(".item-assunto-modal").forEach(item => {
+        item.addEventListener("click", () => alternarDiagnosticoOculto(item.dataset.diagnostico));
+    });
+}
+
+function alternarDiagnosticoOculto(chaveDiagnostico) {
+    if (_diagnosticosOcultosPendentes.includes(chaveDiagnostico)) {
+        _diagnosticosOcultosPendentes = _diagnosticosOcultosPendentes.filter(d => d !== chaveDiagnostico);
+    } else {
+        _diagnosticosOcultosPendentes.push(chaveDiagnostico);
+    }
+
+    const busca = document.getElementById("buscaFiltroDiagnostico");
+    renderizarListaFiltroDiagnosticos(busca ? busca.value : "");
+}
+
 function formatarDataParaInput(data) {
     const ano = data.getFullYear();
     const mes = String(data.getMonth() + 1).padStart(2, "0");
@@ -192,7 +261,8 @@ function aplicarFiltroGlobalDaTela() {
         bairros: [..._filtrosPendentes.bairros],
         eventos: [..._filtrosPendentes.eventos],
         operadores: [..._filtrosPendentes.operadores],
-        setores: [..._filtrosPendentes.setores]
+        setores: [..._filtrosPendentes.setores],
+        diagnosticosOcultos: [..._diagnosticosOcultosPendentes]
     };
 
     fecharModal("modalFiltroGlobal");
@@ -209,10 +279,12 @@ function limparFiltroGlobal() {
         bairros: [],
         eventos: [],
         operadores: [],
-        setores: []
+        setores: [],
+        diagnosticosOcultos: []
     };
 
     _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], eventos: [], operadores: [], setores: [] };
+    _diagnosticosOcultosPendentes = [];
 
     const dataInicio = document.getElementById("filtroDataInicio");
     const dataFim = document.getElementById("filtroDataFim");
@@ -220,6 +292,10 @@ function limparFiltroGlobal() {
     if (dataFim) dataFim.value = "";
 
     CAMPOS_MULTIPLOS_FILTRO.forEach(campo => renderizarChips(campo.chave));
+
+    const buscaDiagnostico = document.getElementById("buscaFiltroDiagnostico");
+    if (buscaDiagnostico) buscaDiagnostico.value = "";
+    renderizarListaFiltroDiagnosticos("");
 
     atualizarBadgeFiltroGlobal();
     atualizarTodasAsTelas();

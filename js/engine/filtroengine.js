@@ -3,14 +3,21 @@
  * Filtro Engine
  * ==========================================================
  * Filtro Global de verdade: recorta APP.dados.ordens por período,
- * assunto, cidade, bairro, evento, operador ou setor — e essa mesma
- * fatia é o que Dashboard, Auditoria, Técnicos e Alertas de
+ * assunto, cidade, bairro, evento, operador, setor ou diagnóstico — e
+ * essa mesma fatia é o que Dashboard, Auditoria, Técnicos e Alertas de
  * Recorrência usam pra calcular/exibir. Evento e operador são
  * atributos de Movimentacao, não de OrdemServico, então uma OS
  * entra se QUALQUER uma das suas movimentações bater com o filtro
- * — EXCETO setor, que é mais estrito: só considera o operador que
- * FECHOU a OS (ver fechamentoEhDoSetor), não qualquer um que só
+ * — EXCETO setor e diagnóstico, que são mais estritos: só consideram
+ * o que aconteceu no FECHAMENTO da OS (ver fechamentoEhDoSetor /
+ * diagnosticoDoFechamentoEstaOculto), não qualquer coisa que só
  * tocou nela no meio do caminho.
+ *
+ * "diagnosticosOcultos" é o único campo com lógica INVERTIDA (lista
+ * negra): os demais são lista branca (nada selecionado = mostra tudo,
+ * selecionar restringe); esse aqui começa com tudo visível e marcar um
+ * diagnóstico ESCONDE as OS com aquele diagnóstico no fechamento — ver
+ * js/ui/filtroperiodo.js.
  *
  * Não confundir com o filtro de "Assuntos que Contam para
  * Recorrência" (js/services/filtroglobal.js) — aquele decide o
@@ -38,7 +45,7 @@ const FiltroEngine = {
         return filtradas;
     },
 
-    CAMPOS_MULTIPLOS: ["assuntos", "cidades", "bairros", "eventos", "operadores", "setores"],
+    CAMPOS_MULTIPLOS: ["assuntos", "cidades", "bairros", "eventos", "operadores", "setores", "diagnosticosOcultos"],
 
     temFiltroAtivo(filtros) {
         if (!filtros) return false;
@@ -68,6 +75,7 @@ const FiltroEngine = {
         if (filtros.eventos?.length && !filtros.eventos.some(e => this.temMovimentacaoComEvento(ordem, e))) return false;
         if (filtros.operadores?.length && !filtros.operadores.some(o => this.temMovimentacaoComOperador(ordem, o))) return false;
         if (filtros.setores?.length && !filtros.setores.some(s => this.fechamentoEhDoSetor(ordem, s))) return false;
+        if (filtros.diagnosticosOcultos?.length && this.diagnosticoDoFechamentoEstaOculto(ordem, filtros.diagnosticosOcultos)) return false;
 
         return true;
     },
@@ -115,6 +123,26 @@ const FiltroEngine = {
         return normalizarTexto(setor ?? "") === alvo;
     },
 
+    /**
+     * Diagnóstico só existe de verdade no FECHAMENTO da OS (outras
+     * movimentações costumam trazer o campo vazio) — mesma regra já
+     * usada em IndicatorEngine.calcularDiagnosticosMaisUsados. OS sem
+     * diagnóstico nenhum no fechamento nunca é escondida por aqui (não
+     * dá pra saber se ela "é" um dos diagnósticos ocultos).
+     */
+    diagnosticoDoFechamentoEstaOculto(ordem, diagnosticosOcultos) {
+        const fechamento = this.ultimoFechamentoDaOrdem(ordem);
+        if (!fechamento || fechamento.diagnostico === null || fechamento.diagnostico === undefined || fechamento.diagnostico === "") {
+            return false;
+        }
+
+        const nome = AuditEngine.resolverReferencia(APP.referencias.diagnosticos, fechamento.diagnostico, CONFIG_BASE.diagnosticos.nome);
+        if (!nome) return false;
+
+        const alvo = normalizarTexto(nome);
+        return diagnosticosOcultos.some(d => normalizarTexto(d) === alvo);
+    },
+
     /** Movimentação de Fechamento mais recente da OS, ou null se nunca fechou. */
     ultimoFechamentoDaOrdem(ordem) {
         const alvoFechamento = normalizarTexto(IndicatorEngine.NOME_EVENTO_FECHAMENTO);
@@ -145,6 +173,7 @@ const FiltroEngine = {
         const eventos = new Set();
         const operadores = new Set();
         const setores = new Set();
+        const diagnosticos = new Set();
 
         for (const ordem of ordens.values()) {
             if (ordem.assunto) assuntos.add(ordem.assunto);
@@ -162,13 +191,20 @@ const FiltroEngine = {
                 }
             }
 
-            // Setor só considera quem FECHOU a OS — mesma regra usada no
-            // filtro em si (ver fechamentoEhDoSetor), senão a lista de
-            // opções mostraria setores que não fecham OS nenhuma.
+            // Setor e diagnóstico só consideram o FECHAMENTO da OS — mesma
+            // regra usada no filtro em si (fechamentoEhDoSetor /
+            // diagnosticoDoFechamentoEstaOculto), senão a lista de opções
+            // mostraria valores que não existem em nenhum fechamento.
             const fechamento = this.ultimoFechamentoDaOrdem(ordem);
+
             if (fechamento?.operador !== null && fechamento?.operador !== undefined) {
                 const setor = AuditEngine.resolverReferencia(APP.referencias.operadores, fechamento.operador, CONFIG_BASE.operadores.setor);
                 if (setor) setores.add(setor);
+            }
+
+            if (fechamento?.diagnostico !== null && fechamento?.diagnostico !== undefined && fechamento?.diagnostico !== "") {
+                const diagnostico = AuditEngine.resolverReferencia(APP.referencias.diagnosticos, fechamento.diagnostico, CONFIG_BASE.diagnosticos.nome);
+                if (diagnostico) diagnosticos.add(diagnostico);
             }
         }
 
@@ -180,7 +216,8 @@ const FiltroEngine = {
             bairros: ordenar(bairros),
             eventos: ordenar(eventos),
             operadores: ordenar(operadores),
-            setores: ordenar(setores)
+            setores: ordenar(setores),
+            diagnosticos: ordenar(diagnosticos)
         };
     }
 

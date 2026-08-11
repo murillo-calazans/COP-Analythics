@@ -369,6 +369,17 @@
 
 }
 
+.seletor-multiplo-label-diagnostico {
+
+    display: block;
+
+    margin: 20px 0 6px;
+
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+
+}
+
 .seletor-multiplo-chips {
 
     display: flex;

@@ -423,7 +423,8 @@
 
         <p class="modal-descricao">
             Aplica em Dashboard, Auditoria, Técnicos e Alertas ao mesmo tempo. Assunto, cidade,
-            bairro, evento e operador aceitam mais de uma opção.
+            bairro, evento, operador e setor aceitam mais de uma opção. Diagnóstico funciona ao
+            contrário dos demais: começa tudo visível — desmarque só os que você NÃO quer ver.
         </p>
 
         <div class="filtro-periodo-grid">
@@ -436,6 +437,10 @@
         </div>
 
         <div id="filtrosMultiplosContainer" class="filtros-multiplos-grid"></div>
+
+        <label class="seletor-multiplo-label-diagnostico">Diagnósticos (desmarque os que não quer ver)</label>
+        <input type="text" id="buscaFiltroDiagnostico" class="input-busca-modal" placeholder="Buscar diagnóstico..." autocomplete="off">
+        <div id="listaFiltroDiagnosticos" class="lista-assuntos-modal"></div>
 
         <div class="form-config-acoes">
             <button type="button" id="btnAplicarFiltroGlobal">Aplicar filtro</button>
