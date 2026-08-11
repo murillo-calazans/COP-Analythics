@@ -43,6 +43,52 @@
 
 }
 
+.abas-logs {
+
+    display: flex;
+    gap: 4px;
+
+    margin: 16px 0 8px;
+    border-bottom: 1px solid var(--cor-borda);
+
+}
+
+.botao-aba {
+
+    padding: 8px 16px;
+
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+
+    color: var(--cor-texto-suave);
+    font-size: 14px;
+    cursor: pointer;
+
+    transition: .25s;
+
+}
+
+.botao-aba:hover {
+
+    color: var(--cor-texto);
+
+}
+
+.botao-aba.ativo {
+
+    color: var(--cor-primaria);
+    border-bottom-color: var(--cor-primaria);
+
+}
+
+.painel-logs {
+
+    max-height: 50vh;
+    overflow-y: auto;
+
+}
+
 .upload-step {
 
     display: flex;

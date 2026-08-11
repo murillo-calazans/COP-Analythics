@@ -33,6 +33,7 @@ async function iniciarSistema() {
     registrarBuscaAuditoria();
     registrarBuscaTecnicos();
     registrarLogin();
+    registrarAbasLogs();
     registrarModal("modalImportar");
     registrarModal("modalOS");
     registrarModal("modalFiltro");
@@ -43,6 +44,7 @@ async function iniciarSistema() {
     registrarModal("modalCliente");
     registrarModal("modalFiltroGlobal");
     registrarModal("modalFunilAssuntos");
+    registrarModal("modalLogs");
 
     // Sem login, nada mais roda — a tela de login (ver js/ui/login.js)
     // é a única coisa visível até autenticar (css/layout.css,
@@ -106,9 +108,11 @@ function registrarEventos() {
     const botaoAbrirImportar = document.getElementById("btnAbrirImportar");
     const botaoGerarRelatorio = document.getElementById("btnGerarRelatorio");
     const botaoLimparDados = document.getElementById("btnLimparDados");
+    const botaoAbrirLogs = document.getElementById("btnAbrirLogs");
 
     if (botaoAbrirImportar) botaoAbrirImportar.addEventListener("click", abrirModalImportar);
     if (botaoGerarRelatorio) botaoGerarRelatorio.addEventListener("click", gerarRelatorio);
     if (botaoLimparDados) botaoLimparDados.addEventListener("click", limparDadosImportados);
+    if (botaoAbrirLogs) botaoAbrirLogs.addEventListener("click", abrirModalLogs);
 
 }

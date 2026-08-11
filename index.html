@@ -97,6 +97,10 @@
                 <span id="badgeFiltroGlobal" class="badge-alertas" hidden>0</span>
             </button>
 
+            <button id="btnAbrirLogs" class="botao-icone" type="button" title="Logs">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+            </button>
+
             <button id="btnTema" class="botao-icone" type="button" title="Mudar para tema escuro">
                 <svg class="icone" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
@@ -344,6 +348,30 @@
         <div id="status">Selecione um ou os dois arquivos e clique em "Gerar Relatório".</div>
 
         <button type="button" id="btnGerarRelatorio" class="botao-gerar-relatorio">📊 Gerar Relatório</button>
+
+    </div>
+</div>
+
+<div id="modalLogs" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2>Logs</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <div class="abas-logs">
+            <button type="button" id="abaLogsLogins" class="botao-aba ativo">Logins</button>
+            <button type="button" id="abaLogsArquivos" class="botao-aba">Arquivos</button>
+        </div>
+
+        <div id="painelLogsLogins" class="painel-logs">
+            <div id="listaLogsLogin"><p class="alerta-vazio">Carregando...</p></div>
+        </div>
+
+        <div id="painelLogsArquivos" class="painel-logs" hidden>
+            <div id="listaLogsArquivosModal"><p class="alerta-vazio">Carregando...</p></div>
+        </div>
 
     </div>
 </div>

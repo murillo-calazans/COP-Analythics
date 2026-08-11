@@ -59,6 +59,12 @@ async function tentarEntrar() {
     APP.usuario = usuario;
     APP.status.autenticado = true;
 
+    // Best-effort, sem await — não faz sentido atrasar a entrada do
+    // usuário esperando o log gravar. Só aqui (entrada de verdade pelo
+    // formulário), não numa sessão restaurada por F5, senão todo
+    // refresh viraria um "login" novo no histórico.
+    registrarLogLogin(usuario.email);
+
     botao.disabled = false;
     erro.hidden = true;
     form.reset();
@@ -82,12 +88,14 @@ function mostrarAppAutenticado() {
     aplicarGateDePapel();
 }
 
-/** Esconde ações de escrita (importar/apagar) pra quem não é admin. */
+/** Esconde ações de escrita (importar/apagar) e os Logs pra quem não é admin. */
 function aplicarGateDePapel() {
     const botaoImportar = document.getElementById("btnAbrirImportar");
     const botaoLimpar = document.getElementById("btnLimparDados");
+    const botaoLogs = document.getElementById("btnAbrirLogs");
 
     const admin = ehAdmin();
     if (botaoImportar) botaoImportar.hidden = !admin;
     if (botaoLimpar) botaoLimpar.hidden = !admin;
+    if (botaoLogs) botaoLogs.hidden = !admin;
 }

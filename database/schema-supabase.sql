@@ -89,6 +89,12 @@ create table if not exists logs_importacao (
     estatisticas jsonb
 );
 
+create table if not exists logs_login (
+    id bigint generated always as identity primary key,
+    usuario_email text not null,
+    logado_em timestamptz not null default now()
+);
+
 -- ==========================================================
 -- Row Level Security
 -- ==========================================================
@@ -100,6 +106,7 @@ alter table ordens enable row level security;
 alter table movimentacoes enable row level security;
 alter table perfis enable row level security;
 alter table logs_importacao enable row level security;
+alter table logs_login enable row level security;
 
 -- Leitura: qualquer usuário logado com papel configurado em "perfis" (admin
 -- OU leitor) vê tudo. NÃO basta estar autenticado — o Supabase permite
@@ -124,6 +131,13 @@ create policy "leitura autenticada" on logs_importacao for select to authenticat
     using (exists (select 1 from perfis where id = auth.uid()));
 create policy "escrita admin" on logs_importacao for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+
+-- Logs de login: qualquer usuário autenticado insere o próprio registro
+-- (admin e leitor os dois fazem login), leitura igual ao resto.
+create policy "leitura autenticada" on logs_login for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
+create policy "escrita autenticada" on logs_login for insert to authenticated
+    with check (exists (select 1 from perfis where id = auth.uid()));
 
 -- Escrita (insert/update/delete): só quem tem papel 'admin' na tabela perfis.
 create policy "escrita admin" on ref_operadores for insert to authenticated

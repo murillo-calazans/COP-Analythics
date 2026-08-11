@@ -178,6 +178,37 @@ async function buscarLogsImportacao(limite = 30) {
 }
 
 /**
+ * Registra no log quem entrou no sistema e quando — mostrado no popup
+ * de Logs, aba "Logins". Só em login de verdade (envio do formulário),
+ * não em toda sessão restaurada por F5 (ver js/ui/login.js). Não
+ * interrompe o login se falhar (log é informativo, não crítico).
+ */
+async function registrarLogLogin(emailUsuario) {
+    try {
+        const { error } = await supabaseClient.from("logs_login").insert({ usuario_email: emailUsuario });
+        if (error) throw error;
+    } catch (erro) {
+        console.error("Falha ao registrar log de login:", erro);
+    }
+}
+
+/** Últimos logins, mais recente primeiro — pro popup de Logs. */
+async function buscarLogsLogin(limite = 30) {
+    const { data, error } = await supabaseClient
+        .from("logs_login")
+        .select("*")
+        .order("logado_em", { ascending: false })
+        .limit(limite);
+
+    if (error) {
+        console.error("Falha ao buscar logs de login:", error);
+        return [];
+    }
+
+    return data;
+}
+
+/**
  * Upsert das referências (Base.xlsx) no Supabase — chamado por
  * importarBase() em js/services/importador.js. Guarda a linha bruta
  * inteira em JSONB, exatamente como já vem de ReferenceEngine.carregar.
@@ -317,21 +348,46 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
  * tela — a partir daí o app trabalha em memória, igual sempre fez.
  */
 async function tentarRestaurarEstado() {
-    try {
-        const [referencias, ordens] = await Promise.all([buscarReferencias(), buscarOrdens()]);
+    for (let tentativa = 1; tentativa <= 2; tentativa++) {
+        try {
+            const [referencias, ordens] = await Promise.all([buscarReferencias(), buscarOrdens()]);
 
-        APP.referencias.operadores = referencias.operadores;
-        APP.referencias.eventos = referencias.eventos;
-        APP.referencias.diagnosticos = referencias.diagnosticos;
-        APP.dados.ordens = ordens;
-        APP.status.baseCarregada = ordens.size > 0 || referencias.operadores.size > 0;
+            const vazio = ordens.size === 0 && referencias.operadores.size === 0 &&
+                referencias.eventos.size === 0 && referencias.diagnosticos.size === 0;
 
-        return APP.status.baseCarregada;
+            console.log(
+                `tentarRestaurarEstado (tentativa ${tentativa}): ${ordens.size} ordens, ` +
+                `${referencias.operadores.size} operadores, ${referencias.eventos.size} eventos, ` +
+                `${referencias.diagnosticos.size} diagnósticos.`
+            );
 
-    } catch (erro) {
-        console.error("Falha ao buscar dados do Supabase:", erro);
-        return false;
+            // Se veio tudo vazio na primeira tentativa, pode ser uma corrida
+            // entre a sessão recém-restaurada (F5) e o token de autenticação
+            // ainda não anexado às consultas — nesse caso a RLS filtra tudo
+            // silenciosamente (sem erro nenhum) e pareceria "os dados
+            // sumiram". Espera um instante e tenta de novo antes de concluir
+            // que realmente não há nada no banco.
+            if (vazio && tentativa === 1) {
+                console.warn("Leitura veio vazia na primeira tentativa — tentando de novo em 500ms...");
+                await new Promise(resolve => setTimeout(resolve, 500));
+                continue;
+            }
+
+            APP.referencias.operadores = referencias.operadores;
+            APP.referencias.eventos = referencias.eventos;
+            APP.referencias.diagnosticos = referencias.diagnosticos;
+            APP.dados.ordens = ordens;
+            APP.status.baseCarregada = !vazio;
+
+            return APP.status.baseCarregada;
+
+        } catch (erro) {
+            console.error(`Falha ao buscar dados do Supabase (tentativa ${tentativa}):`, erro);
+            if (tentativa === 2) return false;
+        }
     }
+
+    return false;
 }
 
 /**
