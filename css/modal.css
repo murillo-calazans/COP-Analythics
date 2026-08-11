@@ -511,6 +511,50 @@
 
 }
 
+.aviso-cancelamento {
+
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 8px;
+    border: 1px solid var(--cor-critico, #e11d48);
+
+    background: color-mix(in srgb, var(--cor-critico, #e11d48) 10%, transparent);
+    color: var(--cor-texto);
+    font-size: 13px;
+
+}
+
+.lista-por-mes {
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    margin-bottom: 8px;
+
+}
+
+.item-por-mes {
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--cor-borda);
+
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+
+}
+
+.item-por-mes strong {
+
+    color: var(--cor-texto);
+
+}
+
 .lista-os-simples {
 
     display: flex;

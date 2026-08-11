@@ -42,6 +42,14 @@ const IndicatorEngine = {
     LIMITE_DIAS_RECORRENCIA: 90,
     LIMITE_QTD_RECORRENCIA: 3,
 
+    // Assunto que identifica um cliente como cancelado (ver
+    // encontrarCancelamentoCliente) — de propósito FORA da lista branca
+    // de assuntosIncluidos da recorrência normal: cancelamento não é um
+    // "problema recorrente" a resolver, é o desfecho, então a busca por
+    // ele varre TODAS as OS do cliente (agruparTodasPorLogin), não só as
+    // que passam pelo filtro de assunto.
+    ASSUNTO_CANCELAMENTO: "CANCELAMENTO (350)",
+
     NOME_EVENTO_FECHAMENTO: "Fechamento",
     NOME_EVENTO_REABERTURA: "Reabertura",
     NOME_EVENTO_REAGENDAMENTO: "Reagendar",
@@ -62,6 +70,7 @@ const IndicatorEngine = {
 
         const dataReferencia = this.encontrarDataMaisRecente(ordens);
         const porLogin = this.agruparPorLogin(ordens);
+        const todasPorLogin = this.agruparTodasPorLogin(ordens);
         const recorrentes = new Map();
 
         for (const [login, listaOrdens] of porLogin) {
@@ -71,11 +80,16 @@ const IndicatorEngine = {
 
             if (recentes.length < this.LIMITE_QTD_RECORRENCIA) continue;
 
+            const cancelamento = this.encontrarCancelamentoCliente(todasPorLogin.get(login) ?? []);
+
             recorrentes.set(login, {
                 login,
                 cliente: listaOrdens[0].cliente,
                 totalOS: recentes.length,
-                ordens: recentes.map(ordem => ordem.id)
+                ordens: recentes.map(ordem => ordem.id),
+                cancelado: cancelamento !== null,
+                ordemCancelamento: cancelamento?.ordemCancelamento ?? null,
+                ultimaOrdemAntesCancelamento: cancelamento?.ultimaOrdemAntes ?? null
             });
 
             for (const ordem of recentes) {
@@ -84,6 +98,38 @@ const IndicatorEngine = {
         }
 
         return recorrentes;
+    },
+
+    /**
+     * Entre TODAS as OS de um cliente (sem o filtro de assunto da
+     * recorrência — ver ASSUNTO_CANCELAMENTO), acha a OS de cancelamento
+     * mais recente (se houver) e a última OS de verdade aberta antes
+     * dela, pra dar contexto do que motivou o cliente a cancelar.
+     */
+    encontrarCancelamentoCliente(todasOrdensCliente) {
+        const alvo = normalizarTexto(this.ASSUNTO_CANCELAMENTO);
+
+        const cancelamentos = todasOrdensCliente
+            .filter(ordem => ordem.assunto && normalizarTexto(ordem.assunto) === alvo && ordem.dataAbertura)
+            .sort((a, b) => b.dataAbertura - a.dataAbertura);
+
+        const ordemCancelamento = cancelamentos[0];
+        if (!ordemCancelamento) return null;
+
+        const anteriores = todasOrdensCliente
+            .filter(ordem =>
+                ordem.id !== ordemCancelamento.id &&
+                ordem.dataAbertura &&
+                ordem.dataAbertura < ordemCancelamento.dataAbertura
+            )
+            .sort((a, b) => b.dataAbertura - a.dataAbertura);
+
+        return {
+            ordemCancelamento: { id: ordemCancelamento.id, dataAbertura: ordemCancelamento.dataAbertura },
+            ultimaOrdemAntes: anteriores[0]
+                ? { id: anteriores[0].id, assunto: anteriores[0].assunto, dataAbertura: anteriores[0].dataAbertura }
+                : null
+        };
     },
 
     /**
@@ -119,8 +165,45 @@ const IndicatorEngine = {
             cliente: registro.cliente,
             totalOS: registro.totalOS,
             ordensDetalhes,
-            tecnicosEnvolvidos
+            tecnicosEnvolvidos,
+            porMes: this.contarOSPorMes(ordensDetalhes),
+            cancelado: registro.cancelado ?? false,
+            ordemCancelamento: registro.ordemCancelamento ?? null,
+            ultimaOrdemAntesCancelamento: registro.ultimaOrdemAntesCancelamento ?? null
         };
+    },
+
+    NOMES_MES_COMPLETO: [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ],
+
+    /**
+     * Quantidade de OS abertas por mês, dentro do mesmo conjunto que já
+     * aparece na ficha do cliente (ordensDetalhes) — mais informativo
+     * que só o total, mostra em quais meses a recorrência se concentrou.
+     * Mais recente primeiro.
+     */
+    contarOSPorMes(ordensDetalhes) {
+        const porMes = new Map();
+
+        for (const d of ordensDetalhes) {
+            if (!d.dataAbertura) continue;
+
+            const chave = `${d.dataAbertura.getFullYear()}-${String(d.dataAbertura.getMonth()).padStart(2, "0")}`;
+            if (!porMes.has(chave)) {
+                porMes.set(chave, {
+                    rotulo: this.NOMES_MES_COMPLETO[d.dataAbertura.getMonth()],
+                    ano: d.dataAbertura.getFullYear(),
+                    quantidade: 0
+                });
+            }
+            porMes.get(chave).quantidade++;
+        }
+
+        return [...porMes.entries()]
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([, valor]) => valor);
     },
 
     /**
@@ -199,6 +282,27 @@ const IndicatorEngine = {
         for (const ordem of ordens.values()) {
             if (!ordem.login) continue;
             if (!ordem.assunto || !assuntosIncluidos.has(normalizarTexto(ordem.assunto))) continue;
+
+            if (!porLogin.has(ordem.login)) {
+                porLogin.set(ordem.login, []);
+            }
+            porLogin.get(ordem.login).push(ordem);
+        }
+
+        return porLogin;
+    },
+
+    /**
+     * Igual agruparPorLogin, mas SEM o filtro de assunto — usado só pra
+     * achar a OS de cancelamento de um cliente (encontrarCancelamentoCliente),
+     * já que "CANCELAMENTO (350)" nunca vai estar na lista branca de
+     * assuntos recorrentes.
+     */
+    agruparTodasPorLogin(ordens) {
+        const porLogin = new Map();
+
+        for (const ordem of ordens.values()) {
+            if (!ordem.login) continue;
 
             if (!porLogin.has(ordem.login)) {
                 porLogin.set(ordem.login, []);

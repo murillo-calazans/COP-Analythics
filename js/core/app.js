@@ -34,6 +34,7 @@ async function iniciarSistema() {
     registrarBuscaTecnicos();
     registrarLogin();
     registrarAbasLogs();
+    registrarAbasAlertas();
     registrarModal("modalImportar");
     registrarModal("modalOS");
     registrarModal("modalFiltro");

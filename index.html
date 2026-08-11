@@ -205,7 +205,19 @@
         <div class="placeholder-card">
             <h2>⚠ Alertas de Recorrência</h2>
             <p>Clientes (identificados pelo login) com muitas OS abertas em pouco tempo.</p>
-            <div id="listaAlertas"></div>
+
+            <div class="abas">
+                <button type="button" id="abaAlertasAtivos" class="botao-aba ativo">Clientes Ativos</button>
+                <button type="button" id="abaAlertasCancelados" class="botao-aba">Clientes Cancelados</button>
+            </div>
+
+            <div id="painelAlertasAtivos" class="painel-aba">
+                <div id="listaAlertasAtivos"></div>
+            </div>
+
+            <div id="painelAlertasCancelados" class="painel-aba" hidden>
+                <div id="listaAlertasCancelados"></div>
+            </div>
         </div>
     </section>
 
@@ -365,16 +377,16 @@
             <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
         </div>
 
-        <div class="abas-logs">
+        <div class="abas">
             <button type="button" id="abaLogsLogins" class="botao-aba ativo">Logins</button>
             <button type="button" id="abaLogsArquivos" class="botao-aba">Arquivos</button>
         </div>
 
-        <div id="painelLogsLogins" class="painel-logs">
+        <div id="painelLogsLogins" class="painel-aba">
             <div id="listaLogsLogin"><p class="alerta-vazio">Carregando...</p></div>
         </div>
 
-        <div id="painelLogsArquivos" class="painel-logs" hidden>
+        <div id="painelLogsArquivos" class="painel-aba" hidden>
             <div id="listaLogsArquivosModal"><p class="alerta-vazio">Carregando...</p></div>
         </div>
 

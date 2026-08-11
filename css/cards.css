@@ -43,7 +43,7 @@
 
 }
 
-.abas-logs {
+.abas {
 
     display: flex;
     gap: 4px;
@@ -82,7 +82,7 @@
 
 }
 
-.painel-logs {
+.painel-aba {
 
     max-height: 50vh;
     overflow-y: auto;
