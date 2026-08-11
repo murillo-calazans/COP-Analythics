@@ -28,7 +28,13 @@
  *   menores e reporta progresso.
  */
 
-const TAMANHO_PAGINA_LEITURA = 1000;
+// Pedido por página — quanto maior, menos ida-e-voltas de rede (que é o
+// gargalo real numa tabela com dezenas de milhares de linhas). O Supabase
+// pode silenciosamente cortar isso num teto menor (config "Max Rows" do
+// projeto, 1000 por padrão) — buscarTodasLinhas abaixo não depende desse
+// número bater com o que realmente volta, então aumentar aqui é seguro
+// mesmo que o projeto ainda não tenha esse teto elevado.
+const TAMANHO_PAGINA_LEITURA = 5000;
 const TAMANHO_LOTE_ESCRITA = 500;
 
 /**
@@ -40,8 +46,12 @@ const TAMANHO_LOTE_ESCRITA = 500;
  * é lento o bastante pra estourar o tempo limite da consulta. Keyset usa
  * o índice da chave direto, então toda página é igualmente rápida,
  * não importa o tamanho da tabela.
+ * Para quando uma página vem VAZIA — não quando vem menor que
+ * TAMANHO_PAGINA_LEITURA — porque o Supabase pode entregar menos do que
+ * foi pedido (teto "Max Rows" do projeto) sem avisar; comparar com o
+ * pedido faria a leitura parar cedo demais e perder o resto silenciosamente.
  */
-async function buscarTodasLinhas(tabela, colunas, colunaOrdem) {
+async function buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir) {
     const linhas = [];
     let ultimoValor = null;
 
@@ -52,8 +62,10 @@ async function buscarTodasLinhas(tabela, colunas, colunaOrdem) {
         const { data, error } = await consulta;
         if (error) throw error;
 
+        if (data.length === 0) break;
+
         linhas.push(...data);
-        if (data.length < TAMANHO_PAGINA_LEITURA) break;
+        if (aoProgredir) aoProgredir(linhas.length);
 
         ultimoValor = data[data.length - 1][colunaOrdem];
     }
@@ -77,11 +89,11 @@ async function enviarEmLotes(linhas, operacao, aoProgredir) {
     }
 }
 
-async function buscarReferencias() {
+async function buscarReferencias(aoProgredir) {
     const [operadores, eventos, diagnosticos] = await Promise.all([
-        buscarTodasLinhas("ref_operadores", "chave, dados", "chave"),
-        buscarTodasLinhas("ref_eventos", "chave, dados", "chave"),
-        buscarTodasLinhas("ref_diagnosticos", "chave, dados", "chave")
+        buscarTodasLinhas("ref_operadores", "chave, dados", "chave", n => aoProgredir?.(`operadores: ${n}`)),
+        buscarTodasLinhas("ref_eventos", "chave, dados", "chave", n => aoProgredir?.(`eventos: ${n}`)),
+        buscarTodasLinhas("ref_diagnosticos", "chave, dados", "chave", n => aoProgredir?.(`diagnósticos: ${n}`))
     ]);
 
     return {
@@ -91,10 +103,10 @@ async function buscarReferencias() {
     };
 }
 
-async function buscarOrdens() {
+async function buscarOrdens(aoProgredir) {
     const [linhasOrdens, linhasMovimentacoes] = await Promise.all([
-        buscarTodasLinhas("ordens", "*", "id"),
-        buscarTodasLinhas("movimentacoes", "*", "id")
+        buscarTodasLinhas("ordens", "*", "id", n => aoProgredir?.(`ordens: ${n}`)),
+        buscarTodasLinhas("movimentacoes", "*", "id", n => aoProgredir?.(`movimentações: ${n}`))
     ]);
 
     const movimentacoesPorOrdem = new Map();
@@ -347,10 +359,13 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
  * Chamado uma vez ao logar (ver js/ui/login.js), não a cada troca de
  * tela — a partir daí o app trabalha em memória, igual sempre fez.
  */
-async function tentarRestaurarEstado() {
+async function tentarRestaurarEstado(aoProgredir) {
     for (let tentativa = 1; tentativa <= 2; tentativa++) {
         try {
-            const [referencias, ordens] = await Promise.all([buscarReferencias(), buscarOrdens()]);
+            const [referencias, ordens] = await Promise.all([
+                buscarReferencias(aoProgredir),
+                buscarOrdens(aoProgredir)
+            ]);
 
             const vazio = ordens.size === 0 && referencias.operadores.size === 0 &&
                 referencias.eventos.size === 0 && referencias.diagnosticos.size === 0;

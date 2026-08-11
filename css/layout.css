@@ -190,9 +190,46 @@ header{
  * ficam escondidos até autenticar (ver js/core/app.js).
  */
 body.nao-autenticado header,
-body.nao-autenticado main{
+body.nao-autenticado main,
+body.nao-autenticado #carregandoDados{
 
     display: none;
+
+}
+
+.carregando-dados-overlay:not([hidden]){
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+
+    padding: 80px 20px;
+
+}
+
+.carregando-dados-spinner{
+
+    width: 36px;
+    height: 36px;
+
+    border: 3px solid var(--cor-borda);
+    border-top-color: var(--cor-primaria);
+    border-radius: 50%;
+
+    animation: girar-spinner .8s linear infinite;
+
+}
+
+@keyframes girar-spinner{
+    to{ transform: rotate(360deg); }
+}
+
+#carregandoDadosTexto{
+
+    color: var(--cor-texto-suave);
+    font-size: 14px;
 
 }
 

@@ -78,7 +78,13 @@ async function iniciarSistema() {
  * quanto logo depois de um login bem-sucedido (js/ui/login.js).
  */
 async function inicializarDadosAutenticado() {
-    const carregado = await tentarRestaurarEstado();
+    mostrarCarregandoDados();
+
+    const carregado = await tentarRestaurarEstado(
+        mensagem => atualizarTextoCarregando(`Carregando ${mensagem}...`)
+    );
+
+    esconderCarregandoDados();
 
     const status = document.getElementById("status");
 
@@ -115,4 +121,26 @@ function registrarEventos() {
     if (botaoLimparDados) botaoLimparDados.addEventListener("click", limparDadosImportados);
     if (botaoAbrirLogs) botaoAbrirLogs.addEventListener("click", abrirModalLogs);
 
+}
+
+/**
+ * Overlay de "Carregando dados..." mostrado enquanto
+ * tentarRestaurarEstado() busca tudo do Supabase — sem isso, a tela
+ * fica em branco (dashboard vazio) durante o tempo que uma base grande
+ * leva pra paginar, parecendo travada/quebrada.
+ */
+function mostrarCarregandoDados() {
+    const overlay = document.getElementById("carregandoDados");
+    if (overlay) overlay.hidden = false;
+    atualizarTextoCarregando("Carregando dados do banco compartilhado...");
+}
+
+function atualizarTextoCarregando(texto) {
+    const elemento = document.getElementById("carregandoDadosTexto");
+    if (elemento) elemento.textContent = texto;
+}
+
+function esconderCarregandoDados() {
+    const overlay = document.getElementById("carregandoDados");
+    if (overlay) overlay.hidden = true;
 }
