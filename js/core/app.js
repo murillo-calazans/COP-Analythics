@@ -78,13 +78,26 @@ async function iniciarSistema() {
  * quanto logo depois de um login bem-sucedido (js/ui/login.js).
  */
 async function inicializarDadosAutenticado() {
-    mostrarCarregandoDados();
+    // Cache-first: se já tem algo salvo deste navegador (ver
+    // js/services/cachelocal.js), mostra na hora, sem esperar rede
+    // nenhuma — só entra o overlay de "Carregando..." quando não há
+    // nada pra mostrar ainda (primeiro acesso, ou depois de "Limpar
+    // dados"). De um jeito ou de outro, a busca no Supabase abaixo
+    // sempre roda e substitui pelo que houver de mais atual.
+    const tinhaCache = await restaurarDoCacheLocal();
 
-    const carregado = await tentarRestaurarEstado(
-        mensagem => atualizarTextoCarregando(`Carregando ${mensagem}...`)
+    if (tinhaCache) {
+        renderizarDashboard();
+    } else {
+        mostrarCarregandoDados();
+    }
+
+    const carregado = await atualizarDoSupabase(
+        mensagem => atualizarTextoCarregando(`Carregando ${mensagem}...`),
+        tinhaCache
     );
 
-    esconderCarregandoDados();
+    if (!tinhaCache) esconderCarregandoDados();
 
     const status = document.getElementById("status");
 
@@ -124,10 +137,11 @@ function registrarEventos() {
 }
 
 /**
- * Overlay de "Carregando dados..." mostrado enquanto
- * tentarRestaurarEstado() busca tudo do Supabase — sem isso, a tela
- * fica em branco (dashboard vazio) durante o tempo que uma base grande
- * leva pra paginar, parecendo travada/quebrada.
+ * Overlay de "Carregando dados..." mostrado só quando não há cache
+ * local pra exibir de cara (ver inicializarDadosAutenticado) enquanto
+ * atualizarDoSupabase() busca tudo do banco compartilhado — sem isso,
+ * a tela fica em branco (dashboard vazio) durante o tempo que uma base
+ * grande leva pra paginar, parecendo travada/quebrada.
  */
 function mostrarCarregandoDados() {
     const overlay = document.getElementById("carregandoDados");

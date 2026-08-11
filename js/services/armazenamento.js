@@ -89,13 +89,19 @@ async function enviarEmLotes(linhas, operacao, aoProgredir) {
     }
 }
 
-async function buscarReferencias(aoProgredir) {
+/** Busca as linhas brutas de referência do Supabase — sem reconstruir nada ainda (ver reconstruirReferencias). */
+async function buscarLinhasReferencias(aoProgredir) {
     const [operadores, eventos, diagnosticos] = await Promise.all([
         buscarTodasLinhas("ref_operadores", "chave, dados", "chave", n => aoProgredir?.(`operadores: ${n}`)),
         buscarTodasLinhas("ref_eventos", "chave, dados", "chave", n => aoProgredir?.(`eventos: ${n}`)),
         buscarTodasLinhas("ref_diagnosticos", "chave, dados", "chave", n => aoProgredir?.(`diagnósticos: ${n}`))
     ]);
 
+    return { operadores, eventos, diagnosticos };
+}
+
+/** Linhas brutas -> Map<chave, dadosBrutos> por referência. Mesmo formato tanto vindo do Supabase quanto do cache local. */
+function reconstruirReferencias({ operadores, eventos, diagnosticos }) {
     return {
         operadores: new Map(operadores.map(linha => [linha.chave, linha.dados])),
         eventos: new Map(eventos.map(linha => [linha.chave, linha.dados])),
@@ -103,12 +109,18 @@ async function buscarReferencias(aoProgredir) {
     };
 }
 
-async function buscarOrdens(aoProgredir) {
+/** Busca as linhas brutas de ordens/movimentações do Supabase — sem reconstruir nada ainda (ver reconstruirOrdens). */
+async function buscarLinhasOrdens(aoProgredir) {
     const [linhasOrdens, linhasMovimentacoes] = await Promise.all([
         buscarTodasLinhas("ordens", "*", "id", n => aoProgredir?.(`ordens: ${n}`)),
         buscarTodasLinhas("movimentacoes", "*", "id", n => aoProgredir?.(`movimentações: ${n}`))
     ]);
 
+    return { linhasOrdens, linhasMovimentacoes };
+}
+
+/** Linhas brutas -> Map<id, OrdemServico>. Mesmo formato tanto vindo do Supabase quanto do cache local. */
+function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
     const movimentacoesPorOrdem = new Map();
     for (const linha of linhasMovimentacoes) {
         if (!movimentacoesPorOrdem.has(linha.ordem_id)) movimentacoesPorOrdem.set(linha.ordem_id, []);
@@ -152,6 +164,17 @@ async function buscarOrdens(aoProgredir) {
     }
 
     return ordens;
+}
+
+/** Reconstrói linhas brutas (Supabase ou cache local) e aplica direto em APP.referencias/APP.dados.ordens. */
+function aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas) {
+    const referencias = reconstruirReferencias(referenciasBrutas);
+    const ordens = reconstruirOrdens(ordensBrutas);
+
+    APP.referencias.operadores = referencias.operadores;
+    APP.referencias.eventos = referencias.eventos;
+    APP.referencias.diagnosticos = referencias.diagnosticos;
+    APP.dados.ordens = ordens;
 }
 
 /**
@@ -355,54 +378,97 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
 }
 
 /**
- * Busca tudo do Supabase e popula APP.referencias/APP.dados.ordens.
- * Chamado uma vez ao logar (ver js/ui/login.js), não a cada troca de
- * tela — a partir daí o app trabalha em memória, igual sempre fez.
+ * Aplica na hora o que estiver salvo no cache local (IndexedDB, ver
+ * js/services/cachelocal.js), sem esperar rede nenhuma — chamado antes
+ * de atualizarDoSupabase() pra a tela já poder desenhar algo
+ * imediatamente (sensação de instantâneo) enquanto a versão atual
+ * continua sendo buscada por trás. Se não houver cache (primeiro
+ * acesso neste navegador, ou depois de limparDadosImportados()),
+ * simplesmente não faz nada e devolve false.
  */
-async function tentarRestaurarEstado(aoProgredir) {
+async function restaurarDoCacheLocal() {
+    const cache = await carregarCacheLocal();
+    if (!cache) return false;
+
+    try {
+        aplicarLinhasAoEstado(
+            { operadores: cache.operadores, eventos: cache.eventos, diagnosticos: cache.diagnosticos },
+            { linhasOrdens: cache.linhasOrdens, linhasMovimentacoes: cache.linhasMovimentacoes }
+        );
+        APP.status.baseCarregada = APP.dados.ordens.size > 0 || APP.referencias.operadores.size > 0;
+
+        console.log(
+            `Restaurado do cache local (salvo em ${cache.salvoEm}): ${APP.dados.ordens.size} ordens, ` +
+            `${APP.referencias.operadores.size} operadores, ${APP.referencias.eventos.size} eventos, ` +
+            `${APP.referencias.diagnosticos.size} diagnósticos.`
+        );
+
+        return APP.status.baseCarregada;
+    } catch (erro) {
+        console.error("Falha ao restaurar cache local:", erro);
+        return false;
+    }
+}
+
+/**
+ * Busca tudo do Supabase, aplica em APP.referencias/APP.dados.ordens e
+ * atualiza o cache local pra próxima vez. Chamado uma vez ao logar/F5
+ * (ver js/core/app.js) — a partir daí o app trabalha em memória, igual
+ * sempre fez. "tinhaCache" é o retorno de restaurarDoCacheLocal(),
+ * chamado logo antes disso por quem orquestra o carregamento: se já
+ * havia algo na tela vindo do cache, uma resposta vazia do Supabase é
+ * tratada como uma corrida/instabilidade passageira (mantém o que já
+ * está mostrado) em vez de apagar tudo; sem cache nenhum, tenta de novo
+ * uma vez antes de concluir que realmente não há nada no banco.
+ */
+async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
     for (let tentativa = 1; tentativa <= 2; tentativa++) {
         try {
-            const [referencias, ordens] = await Promise.all([
-                buscarReferencias(aoProgredir),
-                buscarOrdens(aoProgredir)
+            const [referenciasBrutas, ordensBrutas] = await Promise.all([
+                buscarLinhasReferencias(aoProgredir),
+                buscarLinhasOrdens(aoProgredir)
             ]);
 
-            const vazio = ordens.size === 0 && referencias.operadores.size === 0 &&
-                referencias.eventos.size === 0 && referencias.diagnosticos.size === 0;
+            const vazio = ordensBrutas.linhasOrdens.length === 0 && referenciasBrutas.operadores.length === 0 &&
+                referenciasBrutas.eventos.length === 0 && referenciasBrutas.diagnosticos.length === 0;
 
             console.log(
-                `tentarRestaurarEstado (tentativa ${tentativa}): ${ordens.size} ordens, ` +
-                `${referencias.operadores.size} operadores, ${referencias.eventos.size} eventos, ` +
-                `${referencias.diagnosticos.size} diagnósticos.`
+                `atualizarDoSupabase (tentativa ${tentativa}): ${ordensBrutas.linhasOrdens.length} ordens, ` +
+                `${ordensBrutas.linhasMovimentacoes.length} movimentações, ${referenciasBrutas.operadores.length} operadores, ` +
+                `${referenciasBrutas.eventos.length} eventos, ${referenciasBrutas.diagnosticos.length} diagnósticos.`
             );
 
-            // Se veio tudo vazio na primeira tentativa, pode ser uma corrida
-            // entre a sessão recém-restaurada (F5) e o token de autenticação
-            // ainda não anexado às consultas — nesse caso a RLS filtra tudo
+            if (vazio && tinhaCache) {
+                console.warn("Atualização do Supabase veio vazia — mantendo o que já estava no cache local.");
+                return true;
+            }
+
+            // Sem cache pra cair de volta: pode ser uma corrida entre a
+            // sessão recém-restaurada (F5) e o token de autenticação ainda
+            // não anexado às consultas — nesse caso a RLS filtra tudo
             // silenciosamente (sem erro nenhum) e pareceria "os dados
-            // sumiram". Espera um instante e tenta de novo antes de concluir
-            // que realmente não há nada no banco.
+            // sumiram". Espera um instante e tenta de novo antes de
+            // concluir que realmente não há nada no banco.
             if (vazio && tentativa === 1) {
                 console.warn("Leitura veio vazia na primeira tentativa — tentando de novo em 500ms...");
                 await new Promise(resolve => setTimeout(resolve, 500));
                 continue;
             }
 
-            APP.referencias.operadores = referencias.operadores;
-            APP.referencias.eventos = referencias.eventos;
-            APP.referencias.diagnosticos = referencias.diagnosticos;
-            APP.dados.ordens = ordens;
+            aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas);
             APP.status.baseCarregada = !vazio;
+
+            salvarCacheLocal(referenciasBrutas, ordensBrutas); // best-effort, não bloqueia o retorno
 
             return APP.status.baseCarregada;
 
         } catch (erro) {
             console.error(`Falha ao buscar dados do Supabase (tentativa ${tentativa}):`, erro);
-            if (tentativa === 2) return false;
+            if (tentativa === 2) return tinhaCache;
         }
     }
 
-    return false;
+    return tinhaCache;
 }
 
 /**
@@ -449,6 +515,9 @@ async function limparDadosImportados() {
     APP.referencias.diagnosticos = new Map();
     APP.indicadores = {};
     APP.status.baseCarregada = false;
+
+    // Senão o cache local ressuscitaria tudo isso no próximo F5/login.
+    limparCacheLocal();
 
     atualizarBadgeAlertas();
     renderizarDashboard();
