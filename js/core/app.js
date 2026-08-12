@@ -134,6 +134,7 @@ function registrarEventos() {
     const botaoAbrirLogs = document.getElementById("btnAbrirLogs");
     const botaoRelatorioGeral = document.getElementById("btnRelatorioGeral");
     const botaoRelatorioTecnicos = document.getElementById("btnRelatorioTecnicos");
+    const botaoBaixarPlanilhaOS = document.getElementById("btnBaixarPlanilhaOS");
 
     if (botaoAbrirImportar) botaoAbrirImportar.addEventListener("click", abrirModalImportar);
     if (botaoGerarRelatorio) botaoGerarRelatorio.addEventListener("click", gerarRelatorio);
@@ -141,6 +142,7 @@ function registrarEventos() {
     if (botaoAbrirLogs) botaoAbrirLogs.addEventListener("click", abrirModalLogs);
     if (botaoRelatorioGeral) botaoRelatorioGeral.addEventListener("click", gerarRelatorioGeral);
     if (botaoRelatorioTecnicos) botaoRelatorioTecnicos.addEventListener("click", gerarRelatorioTecnicos);
+    if (botaoBaixarPlanilhaOS) botaoBaixarPlanilhaOS.addEventListener("click", gerarPlanilhaDetalheOS);
 
 }
 

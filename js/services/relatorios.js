@@ -21,6 +21,31 @@ function baixarHtml(nomeArquivo, html) {
     URL.revokeObjectURL(url);
 }
 
+/**
+ * ";" como separador (não ","): planilhas brasileiras usam vírgula como
+ * separador decimal, então é o "," que confunde o Excel em pt-BR — ";"
+ * é o que abre certinho, cada valor na própria coluna, sem configurar nada.
+ */
+function celulaCsv(valor) {
+    const texto = valor === null || valor === undefined ? "" : String(valor);
+    return /[;"\n\r]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
+}
+
+/** linhas: array de arrays (cada array é uma linha, primeira linha = cabeçalho). */
+function baixarCsv(nomeArquivo, linhas) {
+    const conteudo = linhas.map(linha => linha.map(celulaCsv).join(";")).join("\r\n");
+    const BOM = String.fromCharCode(0xFEFF); // força o Excel a ler como UTF-8 — sem isso, acento vira caractere estranho.
+    const blob = new Blob([BOM + conteudo], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nomeArquivo;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 function carimboDataHora() {
     const d = new Date();
     const p = n => String(n).padStart(2, "0");
@@ -125,11 +150,15 @@ function tabelaTecnicosPorLinha(ordens) {
     `;
 }
 
-/** Uma linha por OS: assunto, técnico e diagnóstico do fechamento, datas, status. */
-function tabelaDetalheOS(ordens) {
+/**
+ * Uma OS -> um registro plano (id, cliente, login, cidade, bairro, assunto,
+ * técnico e diagnóstico do fechamento, datas, status) — reaproveitado tanto
+ * pela tabela HTML (tabelaDetalheOS) quanto pelo CSV (gerarPlanilhaDetalheOS).
+ */
+function coletarLinhasDetalheOS(ordens) {
     const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
 
-    const linhas = [...ordens.values()].map(ordem => {
+    return [...ordens.values()].map(ordem => {
         const info = analise.get(ordem.id);
         const tecnico = info?.ultimoFechamento?.operador !== null && info?.ultimoFechamento?.operador !== undefined
             ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome)
@@ -138,22 +167,39 @@ function tabelaDetalheOS(ordens) {
             ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, info.ultimoFechamento.diagnostico, CONFIG_BASE.diagnosticos.nome)
             : null;
 
-        return `
+        return {
+            id: ordem.id,
+            cliente: ordem.cliente,
+            login: ordem.login,
+            cidade: ordem.cidade,
+            bairro: ordem.bairro,
+            assunto: ordem.assunto,
+            tecnico,
+            diagnostico,
+            dataAbertura: ordem.dataAbertura,
+            dataFechamento: ordem.dataFechamento,
+            status: ordem.statusAtual
+        };
+    });
+}
+
+/** Uma linha por OS: assunto, técnico e diagnóstico do fechamento, datas, status. */
+function tabelaDetalheOS(ordens) {
+    const linhas = coletarLinhasDetalheOS(ordens).map(d => `
             <tr>
-                <td>${escaparHtml(String(ordem.id))}</td>
-                <td>${escaparHtml(ordem.cliente ?? "-")}</td>
-                <td>${escaparHtml(ordem.login ?? "-")}</td>
-                <td>${escaparHtml(ordem.cidade ?? "-")}</td>
-                <td>${escaparHtml(ordem.bairro ?? "-")}</td>
-                <td>${escaparHtml(ordem.assunto ?? "-")}</td>
-                <td>${escaparHtml(tecnico ?? "-")}</td>
-                <td>${escaparHtml(diagnostico ?? "-")}</td>
-                <td>${formatarDataHora(ordem.dataAbertura)}</td>
-                <td>${formatarDataHora(ordem.dataFechamento)}</td>
-                <td>${escaparHtml(ordem.statusAtual ?? "-")}</td>
+                <td>${escaparHtml(String(d.id))}</td>
+                <td>${escaparHtml(d.cliente ?? "-")}</td>
+                <td>${escaparHtml(d.login ?? "-")}</td>
+                <td>${escaparHtml(d.cidade ?? "-")}</td>
+                <td>${escaparHtml(d.bairro ?? "-")}</td>
+                <td>${escaparHtml(d.assunto ?? "-")}</td>
+                <td>${escaparHtml(d.tecnico ?? "-")}</td>
+                <td>${escaparHtml(d.diagnostico ?? "-")}</td>
+                <td>${formatarDataHora(d.dataAbertura)}</td>
+                <td>${formatarDataHora(d.dataFechamento)}</td>
+                <td>${escaparHtml(d.status ?? "-")}</td>
             </tr>
-        `;
-    }).join("");
+        `).join("");
 
     return `
         <h2>Detalhamento por OS (${ordens.size})</h2>
@@ -184,6 +230,28 @@ function tabelaDetalheOS(ordens) {
         })();
         <\/script>
     `;
+}
+
+/** Botão "Baixar planilha (.csv)" (Dashboard) — só o detalhamento por OS, sem passar pelo relatório em HTML. */
+function gerarPlanilhaDetalheOS() {
+    const ordens = FiltroEngine.ordensFiltradas();
+    const cabecalho = ["ID OS", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Técnico", "Diagnóstico", "Abertura", "Fechamento", "Status"];
+
+    const linhas = coletarLinhasDetalheOS(ordens).map(d => [
+        d.id,
+        d.cliente ?? "",
+        d.login ?? "",
+        d.cidade ?? "",
+        d.bairro ?? "",
+        d.assunto ?? "",
+        d.tecnico ?? "",
+        d.diagnostico ?? "",
+        formatarDataHora(d.dataAbertura),
+        formatarDataHora(d.dataFechamento),
+        d.status ?? ""
+    ]);
+
+    baixarCsv(`detalhamento-os-${carimboDataHora()}.csv`, [cabecalho, ...linhas]);
 }
 
 /** Botão "Relatório geral" (Dashboard). */
