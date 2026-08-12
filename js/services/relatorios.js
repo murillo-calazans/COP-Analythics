@@ -73,6 +73,11 @@ const ESTILO_RELATORIO = `
     .duas-colunas { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     @media (max-width: 700px) { .duas-colunas { grid-template-columns: 1fr; } }
     .input-filtro-relatorio { width: 100%; padding: 9px 12px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; }
+    section.bloco-atencao { background: #fff8f0; border-color: #f5c26b; }
+    section.bloco-atencao h2 { border-bottom-color: #f0d5a8; }
+    section.bloco-atencao ul { margin: 0; padding-left: 20px; }
+    section.bloco-atencao li { margin-bottom: 8px; font-size: 13px; line-height: 1.5; }
+    section.bloco-atencao li:last-child { margin-bottom: 0; }
     footer.relatorio-rodape { text-align: center; color: #999; font-size: 12px; margin-top: 24px; }
     @media print { body { background: #fff; padding: 0; } section.bloco { border: none; box-shadow: none; break-inside: avoid; } }
 `;
@@ -118,9 +123,88 @@ function tabelaRotuloValor(titulo, itens, rotuloColuna = "Item", valorColuna = "
     `;
 }
 
+// Limiares que definem o que vira "Ponto de Atenção" no Relatório Geral —
+// arbitrários (sem benchmark oficial do setor), ajustáveis aqui se a
+// realidade operacional pedir outro corte.
+const LIMIAR_REABERTURA_PERCENTUAL = 10;
+const LIMIAR_REAGENDAMENTO_PERCENTUAL = 15;
+const FATOR_TMS_TECNICO_ATENCAO = 1.5; // técnico "lento" = TMS acima de 1,5x a média geral
+const MINIMO_FINALIZADAS_TECNICO_ATENCAO = 3; // ignora quem tem poucas OS (amostra pequena demais pra significar algo)
+
+/**
+ * Achados automáticos a partir dos mesmos números já calculados pro
+ * resto do relatório — nenhuma OS é lida de novo aqui, só aplica
+ * limiares (ver constantes acima) em cima do que "painel"/"fichas" já
+ * trazem. Sempre um texto pronto, pra não exigir que quem lê saiba o
+ * que é "normal" pra cada indicador.
+ */
+function calcularPontosDeAtencao(ordens, painel, fichas, totalCancelados) {
+    const pontos = [];
+
+    if (painel.indiceReabertura.percentual > LIMIAR_REABERTURA_PERCENTUAL) {
+        pontos.push(
+            `Reabertura em ${painel.indiceReabertura.percentual.toFixed(1)}% das OS finalizadas ` +
+            `(${painel.indiceReabertura.totalReabertas} de ${painel.indiceReabertura.totalFinalizadas}) — ` +
+            `acima do limite de referência (${LIMIAR_REABERTURA_PERCENTUAL}%).`
+        );
+    }
+
+    if (painel.indiceReagendamento.percentual > LIMIAR_REAGENDAMENTO_PERCENTUAL) {
+        pontos.push(
+            `Reagendamento em ${painel.indiceReagendamento.percentual.toFixed(1)}% das OS — ` +
+            `acima do limite de referência (${LIMIAR_REAGENDAMENTO_PERCENTUAL}%).`
+        );
+    }
+
+    if (painel.deslocamentosAbandonados.total > 0) {
+        const piores = painel.deslocamentosAbandonados.porTecnico
+            .slice(0, 3)
+            .map(t => `${t.rotulo} (${t.valor})`)
+            .join(", ");
+        pontos.push(
+            `${painel.deslocamentosAbandonados.total} deslocamento(s)/execução(ões) abandonados — o técnico ` +
+            `começou o atendimento mas outro operador reagendou por cima antes dele concluir. Mais frequente: ${piores}.`
+        );
+    }
+
+    if (totalCancelados > 0) {
+        pontos.push(
+            `${totalCancelados} cliente(s) recorrente(s) cancelaram após várias OS em pouco tempo — ` +
+            `ver aba "Clientes Cancelados" em Alertas pra identificar quem e o que motivou.`
+        );
+    }
+
+    if (painel.tmsHoras) {
+        const lentos = fichas.filter(f =>
+            f.totalFinalizadas >= MINIMO_FINALIZADAS_TECNICO_ATENCAO &&
+            f.tmsHoras !== null &&
+            f.tmsHoras > painel.tmsHoras * FATOR_TMS_TECNICO_ATENCAO
+        );
+        if (lentos.length > 0) {
+            const lista = lentos.slice(0, 5).map(f => `${f.nome} (${formatarDuracaoHoras(f.tmsHoras)})`).join(", ");
+            pontos.push(
+                `${lentos.length} técnico(s) com TMS bem acima da média geral (${formatarDuracaoHoras(painel.tmsHoras)}): ${lista}.`
+            );
+        }
+    }
+
+    const tmrCidadePior = IndicatorEngine.calcularTmrPorCidade(ordens, 3, true);
+    if (tmrCidadePior.length > 0) {
+        const lista = tmrCidadePior.map(c => `${c.rotulo} (${formatarDuracaoHoras(c.valor)})`).join(", ");
+        pontos.push(`Cidades com o pior TMR (mais demora até o 1º agendamento): ${lista}.`);
+    }
+
+    const tmsSetorPior = IndicatorEngine.calcularTmsPorSetor(ordens, 3, true);
+    if (tmsSetorPior.length > 0) {
+        const lista = tmsSetorPior.map(s => `${s.rotulo} (${formatarDuracaoHoras(s.valor)})`).join(", ");
+        pontos.push(`Setores com o pior TMS (mais tempo de solução em campo): ${lista}.`);
+    }
+
+    return pontos;
+}
+
 /** Uma linha por técnico: Nome, Finalizadas, Reagendadas, TMS, Deslocamento abandonado, Reabertura, Recorrência gerada. */
-function tabelaTecnicosPorLinha(ordens) {
-    const fichas = IndicatorEngine.calcularFichasTecnicos(ordens);
+function tabelaTecnicosPorLinha(fichas) {
     if (fichas.length === 0) return "<h2>Técnicos</h2><p>Sem dados.</p>";
 
     return `
@@ -270,6 +354,9 @@ function gerarRelatorioGeral() {
     const cancelados = recorrentes.filter(r => r.cancelado).length;
     const ativos = recorrentes.length - cancelados;
 
+    const fichas = IndicatorEngine.calcularFichasTecnicos(ordens);
+    const pontosDeAtencao = calcularPontosDeAtencao(ordens, painel, fichas, cancelados);
+
     const horas = v => formatarDuracaoHoras(v);
 
     const html = `<!doctype html>
@@ -299,6 +386,13 @@ function gerarRelatorioGeral() {
             <div class="kpi"><span>Clientes recorrentes ativos</span><strong>${ativos}</strong></div>
             <div class="kpi"><span>Clientes recorrentes cancelados</span><strong>${cancelados}</strong></div>
         </div>
+    </section>
+
+    <section class="bloco bloco-atencao">
+        <h2>⚠ Pontos de Atenção</h2>
+        ${pontosDeAtencao.length > 0
+            ? `<ul>${pontosDeAtencao.map(p => `<li>${escaparHtml(p)}</li>`).join("")}</ul>`
+            : "<p>Nenhum ponto fora dos limites de referência configurados — operação dentro do esperado.</p>"}
     </section>
 
     ${tendencia.meses.length > 0 ? `
@@ -356,7 +450,7 @@ function gerarRelatorioGeral() {
             técnico — mede a empresa como um todo em agendar, não a atuação de um técnico específico
             (ver TMR geral e por cidade/setor acima).
         </p>
-        ${tabelaTecnicosPorLinha(ordens)}
+        ${tabelaTecnicosPorLinha(fichas)}
     </section>
 
     <section class="bloco">
