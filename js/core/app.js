@@ -129,11 +129,15 @@ function registrarEventos() {
     const botaoGerarRelatorio = document.getElementById("btnGerarRelatorio");
     const botaoLimparDados = document.getElementById("btnLimparDados");
     const botaoAbrirLogs = document.getElementById("btnAbrirLogs");
+    const botaoRelatorioGeral = document.getElementById("btnRelatorioGeral");
+    const botaoRelatorioTecnicos = document.getElementById("btnRelatorioTecnicos");
 
     if (botaoAbrirImportar) botaoAbrirImportar.addEventListener("click", abrirModalImportar);
     if (botaoGerarRelatorio) botaoGerarRelatorio.addEventListener("click", gerarRelatorio);
     if (botaoLimparDados) botaoLimparDados.addEventListener("click", limparDadosImportados);
     if (botaoAbrirLogs) botaoAbrirLogs.addEventListener("click", abrirModalLogs);
+    if (botaoRelatorioGeral) botaoRelatorioGeral.addEventListener("click", gerarRelatorioGeral);
+    if (botaoRelatorioTecnicos) botaoRelatorioTecnicos.addEventListener("click", gerarRelatorioTecnicos);
 
 }
 

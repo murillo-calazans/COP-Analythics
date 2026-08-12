@@ -134,6 +134,10 @@
                 <p>Visão geral operacional</p>
             </div>
             <div class="dashboard-cabecalho-acoes">
+                <button type="button" id="btnRelatorioGeral" class="botao-secundario">
+                    <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    Relatório geral
+                </button>
                 <button type="button" id="btnLimparDados" class="botao-secundario">
                     <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     Limpar dados
@@ -165,8 +169,16 @@
 
     <section id="secao-tecnicos" class="secao">
         <div class="placeholder-card auditoria-card">
-            <h2>👤 Técnicos</h2>
-            <p>OS finalizadas, TMS, reabertura e recorrência gerada por técnico. Clique num nome pra ver a ficha completa.</p>
+            <div class="dashboard-cabecalho">
+                <div>
+                    <h2>👤 Técnicos</h2>
+                    <p>OS finalizadas, TMS, reabertura e recorrência gerada por técnico. Clique num nome pra ver a ficha completa.</p>
+                </div>
+                <button type="button" id="btnRelatorioTecnicos" class="botao-secundario">
+                    <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    Relatório de técnicos
+                </button>
+            </div>
 
             <form id="formBuscaTecnicos" class="form-busca">
                 <input type="text" id="buscaTecnicos" placeholder="Buscar técnico pelo nome...">
@@ -606,6 +618,7 @@
 <script src="js/services/cachelocal.js"></script>
 <script src="js/services/armazenamento.js"></script>
 <script src="js/services/importador.js"></script>
+<script src="js/services/relatorios.js"></script>
 
 <script src="js/ui/navegacao.js"></script>
 <script src="js/ui/login.js"></script>
