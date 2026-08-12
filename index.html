@@ -343,6 +343,19 @@
             <div id="resumoDiagnosticosExcluidos"></div>
             <button type="button" id="btnAbrirDiagnosticosExcluidos">Gerenciar diagnósticos excluídos</button>
         </div>
+
+        <div class="placeholder-card">
+            <h2>⛔ Assuntos Excluídos do TMR</h2>
+            <p>
+                Assuntos administrativos/logísticos (ex.: "Retirada de Equipamentos", "Mudança de
+                Tecnologia") não têm urgência de resposta a cliente e demoram semanas pra agendar
+                naturalmente — marcá-los aqui tira da conta do TMR (geral, por mês, por cidade e por
+                setor), sem misturar com o tempo de resposta de atendimento de verdade. Por padrão
+                nada é excluído; a OS continua contando normalmente nos outros indicadores.
+            </p>
+            <div id="resumoAssuntosExcluidosTMR"></div>
+            <button type="button" id="btnAbrirAssuntosExcluidosTMR">Gerenciar assuntos excluídos</button>
+        </div>
     </section>
 
 </main>
@@ -542,6 +555,21 @@
     </div>
 </div>
 
+<div id="modalAssuntosExcluidosTMR" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2>Assuntos Excluídos do TMR</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <input type="text" id="buscaAssuntoExcluidoTMR" class="input-busca-modal" placeholder="Digite para filtrar os assuntos...">
+
+        <div id="listaAssuntosExcluidosTMRModal" class="lista-assuntos-modal"></div>
+
+    </div>
+</div>
+
 <div id="modalFunilAssuntos" class="modal">
     <div class="modal-conteudo">
 
@@ -613,6 +641,7 @@
 <script src="js/services/filtroglobal.js"></script>
 <script src="js/services/funilassuntos.js"></script>
 <script src="js/services/diagnosticosexcluidos.js"></script>
+<script src="js/services/assuntosexcluidostmr.js"></script>
 <script src="js/services/auth.js"></script>
 <script src="js/services/auditoriaia.js"></script>
 <script src="js/services/cachelocal.js"></script>
@@ -632,6 +661,7 @@
 <script src="js/ui/filtroperiodo.js"></script>
 <script src="js/ui/funilassuntos.js"></script>
 <script src="js/ui/diagnosticosexcluidos.js"></script>
+<script src="js/ui/assuntosexcluidostmr.js"></script>
 <script src="js/ui/tabela.js"></script>
 <script src="js/ui/timeline.js"></script>
 <script src="js/ui/logsimportacao.js"></script>

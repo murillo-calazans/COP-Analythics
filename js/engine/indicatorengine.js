@@ -596,10 +596,27 @@ const IndicatorEngine = {
     },
 
     /**
+     * Assuntos administrativos/logísticos (ex.: "Retirada de
+     * Equipamentos", "Mudança de Tecnologia") não têm urgência de
+     * resposta a cliente e demoram semanas pra agendar naturalmente —
+     * configurável em Configurações > Assuntos Excluídos do TMR (ver
+     * js/ui/assuntosexcluidostmr.js). Lista vazia = nada é excluído
+     * (comportamento padrão, sem configuração nenhuma).
+     */
+    assuntoExcluidoDoTMR(ordem) {
+        const excluidos = APP.configuracoes.assuntosExcluidosTMR;
+        if (!excluidos || excluidos.size === 0) return false;
+        if (!ordem.assunto) return false;
+
+        return excluidos.has(normalizarTexto(ordem.assunto));
+    },
+
+    /**
      * TMR — Tempo Médio de Resposta, em horas: da abertura da OS até o
      * 1º Agendamento. Mede a velocidade da empresa em agendar uma visita,
      * não a atuação do técnico em campo (por isso não entra na ficha
-     * individual dele). OS sem Agendamento algum fica fora da conta.
+     * individual dele). OS sem Agendamento algum fica fora da conta,
+     * assim como OS de assunto excluído do TMR (ver assuntoExcluidoDoTMR).
      */
     calcularTMR(ordens, analise) {
         let somaHoras = 0;
@@ -608,6 +625,7 @@ const IndicatorEngine = {
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
             if (!ordem.dataAbertura || !info?.primeiroAgendamento?.data) continue;
+            if (this.assuntoExcluidoDoTMR(ordem)) continue;
 
             const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
             if (horas < 0) continue;
@@ -1194,7 +1212,7 @@ const IndicatorEngine = {
                 if (tma !== null) { bucket.somaTma += tma; bucket.contagemTma++; }
             }
 
-            if (ordem.dataAbertura && info.primeiroAgendamento?.data) {
+            if (ordem.dataAbertura && info.primeiroAgendamento?.data && !this.assuntoExcluidoDoTMR(ordem)) {
                 const horasTmr = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
                 if (horasTmr >= 0) { bucket.somaTmr += horasTmr; bucket.contagemTmr++; }
             }
@@ -1313,6 +1331,7 @@ const IndicatorEngine = {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
             if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) return null;
+            if (this.assuntoExcluidoDoTMR(ordem)) return null;
             const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top);
@@ -1341,6 +1360,7 @@ const IndicatorEngine = {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorSetor(ordens, analise, (ordem, info) => {
             if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) return null;
+            if (this.assuntoExcluidoDoTMR(ordem)) return null;
             const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top);
