@@ -47,6 +47,7 @@ const ESTILO_RELATORIO = `
     tr:last-child td { border-bottom: none; }
     .duas-colunas { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     @media (max-width: 700px) { .duas-colunas { grid-template-columns: 1fr; } }
+    .input-filtro-relatorio { width: 100%; padding: 9px 12px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; }
     footer.relatorio-rodape { text-align: center; color: #999; font-size: 12px; margin-top: 24px; }
     @media print { body { background: #fff; padding: 0; } section.bloco { border: none; box-shadow: none; break-inside: avoid; } }
 `;
@@ -92,12 +93,104 @@ function tabelaRotuloValor(titulo, itens, rotuloColuna = "Item", valorColuna = "
     `;
 }
 
+/** Uma linha por técnico: Nome, Finalizadas, Reagendadas, TMS, Deslocamento abandonado, Reabertura, Recorrência gerada. */
+function tabelaTecnicosPorLinha(ordens) {
+    const fichas = IndicatorEngine.calcularFichasTecnicos(ordens);
+    if (fichas.length === 0) return "<h2>Técnicos</h2><p>Sem dados.</p>";
+
+    return `
+        <h2>Técnicos</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th><th>Nome</th><th>Finalizadas</th><th>Reagendadas</th><th>TMS</th>
+                    <th>Deslocamento abandonado</th><th>Reabertura</th><th>Recorrência gerada</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${fichas.map(f => `
+                    <tr>
+                        <td>${f.ranking}</td>
+                        <td>${escaparHtml(f.nome)}</td>
+                        <td>${f.totalFinalizadas}</td>
+                        <td>${f.reagendamentosAcertos + f.reagendamentosErros} (${f.reagendamentosAcertos} ok / ${f.reagendamentosErros} errado)</td>
+                        <td>${formatarDuracaoHoras(f.tmsHoras)}</td>
+                        <td>${f.deslocamentosAbandonados}</td>
+                        <td>${f.reaberturas} (${f.indiceReaberturaPercentual.toFixed(1)}%)</td>
+                        <td>${f.recorrenciasGeradas} (${f.percentualRecorrenciaSobreFinalizadas.toFixed(1)}%)</td>
+                    </tr>
+                `).join("")}
+            </tbody>
+        </table>
+    `;
+}
+
+/** Uma linha por OS: assunto, técnico e diagnóstico do fechamento, datas, status. */
+function tabelaDetalheOS(ordens) {
+    const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
+
+    const linhas = [...ordens.values()].map(ordem => {
+        const info = analise.get(ordem.id);
+        const tecnico = info?.ultimoFechamento?.operador !== null && info?.ultimoFechamento?.operador !== undefined
+            ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome)
+            : null;
+        const diagnostico = info?.ultimoFechamento?.diagnostico
+            ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, info.ultimoFechamento.diagnostico, CONFIG_BASE.diagnosticos.nome)
+            : null;
+
+        return `
+            <tr>
+                <td>${escaparHtml(String(ordem.id))}</td>
+                <td>${escaparHtml(ordem.cliente ?? "-")}</td>
+                <td>${escaparHtml(ordem.login ?? "-")}</td>
+                <td>${escaparHtml(ordem.cidade ?? "-")}</td>
+                <td>${escaparHtml(ordem.bairro ?? "-")}</td>
+                <td>${escaparHtml(ordem.assunto ?? "-")}</td>
+                <td>${escaparHtml(tecnico ?? "-")}</td>
+                <td>${escaparHtml(diagnostico ?? "-")}</td>
+                <td>${formatarDataHora(ordem.dataAbertura)}</td>
+                <td>${formatarDataHora(ordem.dataFechamento)}</td>
+                <td>${escaparHtml(ordem.statusAtual ?? "-")}</td>
+            </tr>
+        `;
+    }).join("");
+
+    return `
+        <h2>Detalhamento por OS (${ordens.size})</h2>
+        <input type="text" id="filtroDetalheOS" class="input-filtro-relatorio" placeholder="Filtrar por qualquer coluna (cliente, assunto, técnico, diagnóstico...)">
+        <div style="overflow-x:auto;">
+            <table id="tabelaDetalheOS">
+                <thead>
+                    <tr>
+                        <th>ID OS</th><th>Cliente</th><th>Login</th><th>Cidade</th><th>Bairro</th>
+                        <th>Assunto</th><th>Técnico</th><th>Diagnóstico</th><th>Abertura</th><th>Fechamento</th><th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        </div>
+        <script>
+        (function() {
+            var input = document.getElementById("filtroDetalheOS");
+            var tbody = document.querySelector("#tabelaDetalheOS tbody");
+            if (!input || !tbody) return;
+            var linhas = Array.prototype.slice.call(tbody.rows);
+            input.addEventListener("input", function() {
+                var termo = input.value.toLowerCase();
+                linhas.forEach(function(tr) {
+                    tr.style.display = tr.textContent.toLowerCase().indexOf(termo) === -1 ? "none" : "";
+                });
+            });
+        })();
+        <\/script>
+    `;
+}
+
 /** Botão "Relatório geral" (Dashboard). */
 function gerarRelatorioGeral() {
     const ordens = FiltroEngine.ordensFiltradas();
     const painel = IndicatorEngine.calcularPainelDashboard(ordens);
     const tendencia = IndicatorEngine.calcularTendenciaMensal(ordens);
-    const reagendamentosPorTecnico = IndicatorEngine.calcularReagendamentosPorTecnico(ordens);
     const tmsCidade = IndicatorEngine.calcularTmsPorCidade(ordens);
     const tmaCidade = IndicatorEngine.calcularTmaPorCidade(ordens);
     const tmrCidade = IndicatorEngine.calcularTmrPorCidade(ordens);
@@ -170,20 +263,7 @@ function gerarRelatorioGeral() {
     </section>
 
     <section class="bloco">
-        <div class="duas-colunas">
-            <div>${tabelaRotuloValor("Diagnósticos mais usados", painel.diagnosticosMaisUsados)}</div>
-            <div>${tabelaRotuloValor("Ranking de técnicos (finalizadas)", painel.rankingTecnicos, "Técnico", "Finalizadas")}</div>
-        </div>
-    </section>
-
-    <section class="bloco">
-        <div class="duas-colunas">
-            <div>${tabelaRotuloValor("Recorrência gerada por técnico", painel.recorrenciaPorTecnico, "Técnico", "Recorrências")}</div>
-            <div>${tabelaRotuloValor("Reagendamentos por técnico", reagendamentosPorTecnico, "Técnico", "Reagendamentos")}</div>
-        </div>
-        <div class="duas-colunas" style="margin-top:20px;">
-            <div>${tabelaRotuloValor("Deslocamentos abandonados por técnico", painel.deslocamentosAbandonados.porTecnico, "Técnico", "Ocorrências")}</div>
-        </div>
+        ${tabelaRotuloValor("Diagnósticos mais usados", painel.diagnosticosMaisUsados)}
     </section>
 
     <section class="bloco">
@@ -200,6 +280,19 @@ function gerarRelatorioGeral() {
                 ${tabelaRotuloValor("Top 5 setores — melhor TMR", tmrSetor, "Setor", "TMR", horas)}
             </div>
         </div>
+    </section>
+
+    <section class="bloco">
+        <p style="margin-top:0;color:#666;font-size:12px;">
+            TMS aqui é segmentado (só o tempo em que o técnico esteve de fato atuando). TMR não entra por
+            técnico — mede a empresa como um todo em agendar, não a atuação de um técnico específico
+            (ver TMR geral e por cidade/setor acima).
+        </p>
+        ${tabelaTecnicosPorLinha(ordens)}
+    </section>
+
+    <section class="bloco">
+        ${tabelaDetalheOS(ordens)}
     </section>
 
     <footer class="relatorio-rodape">COP Analytics · Inteligência Operacional</footer>
