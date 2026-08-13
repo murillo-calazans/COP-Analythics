@@ -9,9 +9,9 @@
  * A chave secreta (service_role) NUNCA deve entrar aqui.
  */
 
-const SUPABASE_URL = "https://suryzzoaymoukbnryall.supabase.co";
+const SUPABASE_URL = "https://ldpiitymhvdhemdrntlx.supabase.co";
 const SUPABASE_ANON_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cnl6em9heW1vdWtibnJ5YWxsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDMyNTgsImV4cCI6MjEwMTYxOTI1OH0.I8as5Po9KaEde3OQMOCzaHPUN9J4D74YT_7mL5SDOTI";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkcGlpdHltaHZkaGVtZHJudGx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NDY3ODUsImV4cCI6MjEwMjIyMjc4NX0.M0_0vZicw_y-WOqJuDHL5NodyRS11JgxmEA3TGDGB9I";
 
 // window.supabase vem do script CDN (@supabase/supabase-js, carregado
 // no index.html antes deste arquivo) — createClient é a função de fábrica.
