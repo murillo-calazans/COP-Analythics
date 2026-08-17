@@ -39,7 +39,7 @@ async function sair() {
 async function carregarUsuarioAtual(sessao) {
     const { data, error } = await supabaseClient
         .from("perfis")
-        .select("papel")
+        .select("papel, setor")
         .eq("id", sessao.user.id)
         .maybeSingle();
 
@@ -53,7 +53,8 @@ async function carregarUsuarioAtual(sessao) {
     return {
         id: sessao.user.id,
         email: sessao.user.email,
-        papel: data.papel
+        papel: data.papel,
+        setor: data.setor
     };
 }
 

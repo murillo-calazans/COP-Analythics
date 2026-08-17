@@ -46,9 +46,15 @@ create table if not exists ordens (
     data_fechamento timestamptz,
     status_atual text,
     tecnico_responsavel text,
+    -- Setor do técnico responsável ATUAL (não do fechamento) — usado
+    -- só pra restringir leitura de usuário "terceiro" por RLS (ver
+    -- perfis.setor abaixo e database/patch-06-terceiros-por-setor.sql).
+    setor text,
     atualizado_em timestamptz not null default now(),
     auditoria_ia jsonb
 );
+
+create index if not exists ordens_setor_idx on ordens (setor);
 
 create table if not exists movimentacoes (
     id bigint generated always as identity primary key,
@@ -73,6 +79,10 @@ create index if not exists movimentacoes_ordem_id_idx on movimentacoes (ordem_id
 create table if not exists perfis (
     id uuid primary key references auth.users(id) on delete cascade,
     papel text not null check (papel in ('admin', 'leitor')),
+    -- Setor: null (padrão) = vê tudo. Preenchido = restringe leitura
+    -- de ordens/movimentacoes só ao que tiver esse setor (usuário
+    -- "terceiro" — LGPD, ver database/patch-06-terceiros-por-setor.sql).
+    setor text,
     criado_em timestamptz not null default now()
 );
 
@@ -119,10 +129,23 @@ create policy "leitura autenticada" on ref_eventos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 create policy "leitura autenticada" on ref_diagnosticos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+-- ordens/movimentacoes: além de estar em "perfis", o setor do usuário
+-- (se tiver algum) precisa bater com o setor da OS — null em
+-- perfis.setor = sem restrição, vê tudo (comportamento de sempre).
+-- Ver database/patch-06-terceiros-por-setor.sql pro motivo/detalhe.
 create policy "leitura autenticada" on ordens for select to authenticated
-    using (exists (select 1 from perfis where id = auth.uid()));
+    using (exists (
+        select 1 from perfis p
+        where p.id = auth.uid()
+          and (p.setor is null or upper(p.setor) = upper(ordens.setor))
+    ));
 create policy "leitura autenticada" on movimentacoes for select to authenticated
-    using (exists (select 1 from perfis where id = auth.uid()));
+    using (exists (
+        select 1 from perfis p
+        join ordens o on o.id = movimentacoes.ordem_id
+        where p.id = auth.uid()
+          and (p.setor is null or upper(p.setor) = upper(o.setor))
+    ));
 
 -- Perfis: cada usuário só enxerga o próprio papel.
 create policy "leitura do proprio perfil" on perfis for select to authenticated using (id = auth.uid());
@@ -186,4 +209,12 @@ create policy "exclusao admin" on movimentacoes for delete to authenticated
 --
 -- 4. Pra criar um usuário "leitor" depois, repita os passos 1-3 com
 --    papel = 'leitor' em vez de 'admin'.
+-- 5. Pra criar um usuário "terceiro" (leitor restrito a 1 setor —
+--    LGPD, só enxerga as OS desse setor), repita os passos 1-2 e rode:
+--
+--    insert into perfis (id, papel, setor)
+--    values ('COLE-O-UUID-AQUI', 'leitor', 'NOME EXATO DO SETOR');
+--
+--    O nome do setor tem que bater com o que aparece no Filtro Global
+--    > Setor do app (copie de lá pra evitar erro de acentuação).
 -- ==========================================================

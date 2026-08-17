@@ -82,7 +82,9 @@ function mostrarAppAutenticado() {
 
     const rotulo = document.getElementById("usuarioLogado");
     if (rotulo) {
-        rotulo.textContent = `${APP.usuario.email} · ${APP.usuario.papel === "admin" ? "admin" : "leitor"}`;
+        const papel = APP.usuario.papel === "admin" ? "admin" : "leitor";
+        const setor = APP.usuario.setor ? ` (${APP.usuario.setor})` : "";
+        rotulo.textContent = `${APP.usuario.email} · ${papel}${setor}`;
     }
 
     aplicarGateDePapel();

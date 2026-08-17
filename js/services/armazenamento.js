@@ -324,6 +324,13 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
             data_fechamento: ordem.dataFechamento,
             status_atual: ordem.statusAtual,
             tecnico_responsavel: ordem.tecnicoResponsavel,
+            // Setor de acesso (RLS — ver database/patch-06-terceiros-por-setor.sql):
+            // do técnico responsável ATUAL, não do fechamento (diferente do
+            // "Setor" do Filtro Global) — assim uma OS ainda aberta já fica
+            // visível pro setor certo, sem esperar ela fechar.
+            setor: AuditEngine.resolverReferencia(
+                APP.referencias.operadores, ordem.tecnicoResponsavel, CONFIG_BASE.operadores.setor
+            ),
             atualizado_em: new Date()
         };
     });
