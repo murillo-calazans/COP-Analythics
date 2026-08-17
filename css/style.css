@@ -6,6 +6,18 @@
 }
 
 /*
+ * Qualquer elemento com [hidden] (ex.: aplicarGateDePapel em
+ * js/ui/login.js escondendo botão de admin pra leitor) tem que
+ * desaparecer de verdade — sem isso, um seletor de classe qualquer
+ * (ex.: .botao-primario{display:flex}) empata em especificidade com o
+ * [hidden] do navegador e, por vir depois no cascade, vence e mostra
+ * o elemento mesmo assim.
+ */
+[hidden]{
+    display:none !important;
+}
+
+/*
  * Tema claro/escuro via variáveis CSS. O cabeçalho NÃO usa essas
  * variáveis — a marca (fundo navy) é fixa nos dois temas, só o
  * conteúdo (main/cards/tabelas/modal) alterna. Alternado em
