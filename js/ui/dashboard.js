@@ -51,6 +51,10 @@ function renderizarDashboard() {
                 <div class="stat-valor">${formatarDuracaoHoras(painel.tmsHoras)}</div>
             </div>
             <div class="stat-tile">
+                <div class="stat-label">TMA (tempo médio de atendimento)</div>
+                <div class="stat-valor">${formatarDuracaoHoras(painel.tmaHoras)}</div>
+            </div>
+            <div class="stat-tile">
                 <div class="stat-label">TMR (tempo médio de resposta)</div>
                 <div class="stat-valor">${formatarDuracaoHoras(painel.tmrHoras)}</div>
             </div>

@@ -716,6 +716,7 @@ function gerarRelatorioGeral() {
             <h3 class="kpi-group-title">Tempos médios</h3>
             <div class="kpi-grid">
                 <div class="kpi-tile"><span class="kpi-label">TMS</span><strong class="kpi-value">${horas(painel.tmsHoras)}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">TMA</span><strong class="kpi-value">${horas(painel.tmaHoras)}</strong></div>
                 <div class="kpi-tile"><span class="kpi-label">TMR</span><strong class="kpi-value">${horas(painel.tmrHoras)}</strong></div>
                 <div class="kpi-tile"><span class="kpi-label">TME</span><strong class="kpi-value">${horas(painel.tmeHoras)}</strong></div>
             </div>

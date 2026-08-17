@@ -7,31 +7,43 @@
  * texto livre e pode variar na digitação) como chave, já que um
  * cliente pode ter vários logins mas cada login é único.
  *
- * Quatro métricas de tempo, todas em horas, todas baseadas no
- * EVENTO da movimentação (não no STATUS):
- *   TMR — Tempo Médio de Resposta: abertura da OS até o 1º Agendamento.
- *   TMS — Tempo Médio de Solução: deslocamento até a finalização.
- *   TMA — Tempo Médio de Atendimento: "Em Execução" até a finalização
- *         (só o trabalho em si, sem contar o deslocamento até o local).
- *   TME — Tempo Médio de Espera: abertura da OS até a finalização —
- *         visão do cliente, quanto tempo ele ficou esperando no total.
+ * Quatro métricas de tempo, todas em horas, medindo a equipe técnica —
+ * todas baseadas no STATUS da movimentação (coluna STATUS da planilha),
+ * não no evento:
  *
- * TMS e TMA têm DOIS cálculos diferentes, de propósito:
- *   - Visão da OS/empresa (calcularTMS): tempo corrido total, do
- *     primeiro deslocamento até o encerramento — inclui qualquer
- *     tempo parado no meio (ex.: esperando o cliente depois de um
- *     reagendamento), porque isso é real pra quem mede SLA.
- *   - Visão do técnico (dentro de calcularFichasTecnicos): soma só
- *     os SEGMENTOS em que o técnico esteve de fato atuando — cada
- *     segmento vai de um início (deslocamento pra TMS, "Em Execução"
- *     pra TMA) até o encerramento daquele ciclo (Fechamento OU
- *     Reagendamento). O intervalo entre um Reagendamento e o próximo
- *     deslocamento/execução NÃO conta pro técnico — não é culpa dele
- *     o cliente não ter recebido a nova visita ainda. Um novo
- *     Agendamento no meio de um início já aberto também descarta esse
- *     início (sem virar segmento) — significa que outro operador
- *     reagendou a visita administrativamente sem o técnico ter
- *     reagendado nem executado nada.
+ *   TMR — Tempo Médio de Resposta: DATA/HORA ABERTURA até a data do
+ *         1º status "Agendada" da OS — sempre o primeiro que aparecer,
+ *         independente de reagendamentos depois (o que importa é a
+ *         velocidade da empresa em organizar a primeira visita).
+ *
+ *   TMS — Tempo Médio de Solução: para cada status "Deslocamento",
+ *         procura o status "Finalizada" seguinte DO MESMO OPERADOR, NO
+ *         MESMO DIA — a diferença entre as duas datas (coluna DATA) é
+ *         um segmento. Uma OS pode gerar mais de um segmento (visitas
+ *         em dias diferentes, inclusive depois de reaberta); o TMS
+ *         da OS é a soma desses segmentos. Deslocamento sem uma
+ *         Finalizada do mesmo operador no mesmo dia depois (abandonado
+ *         — outro operador reorganizou a visita antes de concluir) não
+ *         forma segmento nenhum, fica de fora da conta.
+ *
+ *   TMA — Tempo Médio de Atendimento: igual ao TMS, mas a partir do
+ *         status "Execução" em vez de "Deslocamento" — só o trabalho
+ *         em si, sem contar o deslocamento até o local. OS que nunca
+ *         teve Deslocamento nem Execução (fechada sem passar por
+ *         campo) não entra nem em TMS nem em TMA.
+ *
+ *   TME — Tempo Médio de Espera: DATA/HORA ABERTURA até a data do
+ *         status "Finalizada" — visão do cliente, quanto tempo esperou
+ *         no total. OS que teve Reabertura em algum momento (o técnico
+ *         fechou e reabrimos pra acertar diagnóstico, etc. — não é um
+ *         atendimento "limpo") fica de fora inteira, não só o desconto
+ *         do tempo extra.
+ *
+ * TMS/TMA/TMR/TME não têm filtro próprio de assunto — pra restringir,
+ * use o Filtro Global (ele já corta as OS antes de qualquer cálculo
+ * aqui). Recorrência é a única métrica com filtro de assunto separado
+ * (Configurações > Assuntos que Contam para Recorrência), de propósito
+ * independente do Filtro Global.
  *
  * Uma OS sem nenhuma movimentação de Fechamento é considerada ainda
  * em aberto e fica fora de TMS/TMA/TME.
@@ -53,14 +65,14 @@ const IndicatorEngine = {
     NOME_EVENTO_FECHAMENTO: "Fechamento",
     NOME_EVENTO_REABERTURA: "Reabertura",
     NOME_EVENTO_REAGENDAMENTO: "Reagendar",
-    NOME_EVENTO_ALTERACAO: "Alteração",
-    NOME_EVENTO_EM_EXECUCAO: "Em Execução",
     NOME_EVENTO_AGENDAMENTO: "Agendamento",
 
-    // "Alteração" (evento 2) é genérico — só conta como início de
-    // deslocamento quando o histórico daquela movimentação traz esse
-    // texto (registrado pelo próprio sistema de origem).
-    TEXTO_HISTORICO_DESLOCAMENTO: "iniciou o deslocamento",
+    // TMS/TMA/TMR são baseados no STATUS da movimentação (coluna STATUS
+    // da planilha), não no evento — ver cabeçalho do arquivo.
+    STATUS_DESLOCAMENTO: "Deslocamento",
+    STATUS_EM_EXECUCAO: "Execução",
+    STATUS_FINALIZADA: "Finalizada",
+    STATUS_AGENDADA: "Agendada",
 
     calcularRecorrencia(ordens) {
         // Idempotente: pode ser chamado de novo (ex.: depois de mudar o
@@ -359,6 +371,7 @@ const IndicatorEngine = {
             totalTecnicos: this.contarTecnicosAtivos(ordens),
             totalFinalizadas: this.contarFinalizadas(analise),
             tmsHoras: this.calcularTMS(ordens, analise),
+            tmaHoras: this.calcularTMA(ordens, analise),
             tmrHoras: this.calcularTMR(ordens, analise),
             tmeHoras: this.calcularTME(ordens, analise),
             indiceReabertura: this.calcularIndiceReabertura(analise),
@@ -387,120 +400,119 @@ const IndicatorEngine = {
         return analise;
     },
 
+    /** Mesmo dia de calendário (ano/mês/dia) — ignora hora. */
+    mesmoDia(a, b) {
+        return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    },
+
+    /**
+     * TMS/TMA são baseados no STATUS (não no evento) — ver cabeçalho do
+     * arquivo. Passa pelas movimentações em ordem cronológica guardando,
+     * por OPERADOR, o último status "Deslocamento"/"Execução" ainda sem
+     * uma "Finalizada" correspondente; quando esse mesmo operador finaliza
+     * no MESMO DIA, fecha um segmento. Um novo "Agendamento" com algum
+     * desses ainda pendentes (de qualquer operador) descarta tudo sem
+     * virar segmento — é um deslocamento/execução abandonado, outro
+     * operador reorganizou a visita antes do técnico concluir.
+     */
     analisarEventosOS(ordem) {
         const alvoFechamento = normalizarTexto(this.NOME_EVENTO_FECHAMENTO);
         const alvoReabertura = normalizarTexto(this.NOME_EVENTO_REABERTURA);
         const alvoReagendamento = normalizarTexto(this.NOME_EVENTO_REAGENDAMENTO);
-        const alvoAlteracao = normalizarTexto(this.NOME_EVENTO_ALTERACAO);
-        const alvoEmExecucao = normalizarTexto(this.NOME_EVENTO_EM_EXECUCAO);
-        const alvoAgendamento = normalizarTexto(this.NOME_EVENTO_AGENDAMENTO);
-        const textoDeslocamento = normalizarTexto(this.TEXTO_HISTORICO_DESLOCAMENTO);
+        const alvoAgendamentoEvento = normalizarTexto(this.NOME_EVENTO_AGENDAMENTO);
+
+        const alvoStatusDeslocamento = normalizarTexto(this.STATUS_DESLOCAMENTO);
+        const alvoStatusExecucao = normalizarTexto(this.STATUS_EM_EXECUCAO);
+        const alvoStatusFinalizada = normalizarTexto(this.STATUS_FINALIZADA);
+        const alvoStatusAgendada = normalizarTexto(this.STATUS_AGENDADA);
 
         let ultimoFechamento = null;
-        let ultimoEncerramento = null; // Fechamento OU Reagendar — fim do TMS "visão da empresa"
-        let primeiroInicioAtendimento = null; // deslocamento OU Em Execução — início do TMS "visão da empresa"
-        let primeiroAgendamento = null; // 1º Agendamento — fim do TMR (Tempo Médio de Resposta)
+        let ultimoEncerramento = null; // Fechamento OU Reagendar — usado pro índice de reabertura/reagendamento
+        let primeiroAgendamento = null; // 1º status "Agendada" — fim do TMR
         let temReabertura = false;
         let temReagendamento = false;
 
-        // Segmentos "visão do técnico": cada um vai de um início até o
-        // Fechamento/Reagendamento que o encerra. O intervalo entre um
-        // Reagendamento e o próximo início não vira segmento nenhum —
-        // fica de fora da soma, de propósito (ver cabeçalho do arquivo).
-        const segmentosSolucao = []; // início = deslocamento OU Em Execução
-        const segmentosAtendimento = []; // início = só Em Execução
-        const deslocamentosAbandonados = []; // {operador, data, tipo} — ver Agendamento abaixo
-        let inicioSolucaoAberto = null;
-        let tipoInicioSolucaoAberto = null; // "deslocamento" | "execucao"
-        let inicioAtendimentoAberto = null;
+        const segmentosSolucao = []; // {operador, inicio, fim} — pares Deslocamento -> Finalizada (TMS)
+        const segmentosAtendimento = []; // {operador, inicio, fim} — pares Execução -> Finalizada (TMA)
+        const deslocamentosAbandonados = []; // {operador, data, tipo}
+
+        const deslocamentoAbertoPorOperador = new Map();
+        const execucaoAbertaPorOperador = new Map();
 
         for (const mov of ordem.movimentacoes) {
-            if (mov.evento === null || mov.evento === undefined) continue;
+            const statusNormalizado = normalizarTexto(mov.status ?? "");
+            let nomeEventoNormalizado = "";
 
-            const nomeEvento = AuditEngine.resolverReferencia(
-                APP.referencias.eventos, mov.evento, CONFIG_BASE.eventos.nome
-            );
-            const nomeNormalizado = normalizarTexto(nomeEvento ?? "");
-            const ehFechamento = nomeNormalizado === alvoFechamento;
-            const ehReagendamento = nomeNormalizado === alvoReagendamento;
-            const ehFimSegmento = ehFechamento || ehReagendamento;
+            if (mov.evento !== null && mov.evento !== undefined) {
+                const nomeEvento = AuditEngine.resolverReferencia(
+                    APP.referencias.eventos, mov.evento, CONFIG_BASE.eventos.nome
+                );
+                nomeEventoNormalizado = normalizarTexto(nomeEvento ?? "");
 
-            if (ehFechamento) {
-                if (!ultimoFechamento || (mov.data && ultimoFechamento.data && mov.data > ultimoFechamento.data)) {
-                    ultimoFechamento = mov;
+                const ehFechamento = nomeEventoNormalizado === alvoFechamento;
+                const ehReagendamento = nomeEventoNormalizado === alvoReagendamento;
+
+                if (ehFechamento) {
+                    if (!ultimoFechamento || (mov.data && ultimoFechamento.data && mov.data > ultimoFechamento.data)) {
+                        ultimoFechamento = mov;
+                    }
                 }
-            }
-
-            if (ehFimSegmento) {
-                if (!ultimoEncerramento || (mov.data && ultimoEncerramento.data && mov.data > ultimoEncerramento.data)) {
-                    ultimoEncerramento = mov;
+                if (ehFechamento || ehReagendamento) {
+                    if (!ultimoEncerramento || (mov.data && ultimoEncerramento.data && mov.data > ultimoEncerramento.data)) {
+                        ultimoEncerramento = mov;
+                    }
                 }
+                if (nomeEventoNormalizado === alvoReabertura) temReabertura = true;
+                if (ehReagendamento) temReagendamento = true;
             }
 
-            if (nomeNormalizado === alvoReabertura) {
-                temReabertura = true;
-            }
-
-            if (ehReagendamento) {
-                temReagendamento = true;
-            }
-
-            if (nomeNormalizado === alvoAgendamento) {
+            // TMR — 1º status "Agendada", sempre o primeiro (reagendamentos
+            // depois não mudam isso).
+            if (statusNormalizado === alvoStatusAgendada) {
                 if (!primeiroAgendamento || (mov.data && primeiroAgendamento.data && mov.data < primeiroAgendamento.data)) {
                     primeiroAgendamento = mov;
                 }
 
-                // Um Agendamento depois que um deslocamento/execução já
-                // tinha começado, sem Fechamento/Reagendamento no meio,
-                // significa que aquele atendimento foi substituído/
-                // reagendado administrativamente por outro operador — o
-                // técnico não reagendou nem executou, então esse início
-                // fica descartado (não vira segmento, não soma pro TMS/TMA
-                // dele). Só afeta a visão do técnico — primeiroInicioAtendimento
-                // e ultimoEncerramento (TMS/TMA "visão da OS") não mudam.
-                // Registra o abandono em si — é um problema operacional
-                // por conta própria, vale saber quantas vezes acontece.
-                if (inicioSolucaoAberto) {
-                    deslocamentosAbandonados.push({
-                        operador: inicioSolucaoAberto.operador,
-                        data: inicioSolucaoAberto.data,
-                        tipo: tipoInicioSolucaoAberto
-                    });
-                }
-                inicioSolucaoAberto = null;
-                tipoInicioSolucaoAberto = null;
-                inicioAtendimentoAberto = null;
-            }
-
-            const ehInicioExecucao = nomeNormalizado === alvoEmExecucao;
-            const ehInicioDeslocamento = nomeNormalizado === alvoAlteracao
-                && this.historicoContemTexto(mov, textoDeslocamento);
-            const ehInicioSolucao = ehInicioExecucao || ehInicioDeslocamento;
-
-            if (ehInicioSolucao) {
-                if (!primeiroInicioAtendimento || (mov.data && primeiroInicioAtendimento.data && mov.data < primeiroInicioAtendimento.data)) {
-                    primeiroInicioAtendimento = mov;
-                }
-                if (!inicioSolucaoAberto) {
-                    inicioSolucaoAberto = mov;
-                    tipoInicioSolucaoAberto = ehInicioDeslocamento ? "deslocamento" : "execucao";
+                // Novo Agendamento (não reagendamento do próprio técnico) com
+                // deslocamento/execução pendente = abandono.
+                if (nomeEventoNormalizado === alvoAgendamentoEvento) {
+                    for (const [operadorAberto, movAberto] of deslocamentoAbertoPorOperador) {
+                        deslocamentosAbandonados.push({ operador: operadorAberto, data: movAberto.data, tipo: "deslocamento" });
+                    }
+                    for (const [operadorAberto, movAberto] of execucaoAbertaPorOperador) {
+                        deslocamentosAbandonados.push({ operador: operadorAberto, data: movAberto.data, tipo: "execucao" });
+                    }
+                    deslocamentoAbertoPorOperador.clear();
+                    execucaoAbertaPorOperador.clear();
                 }
             }
 
-            if (ehInicioExecucao && !inicioAtendimentoAberto) {
-                inicioAtendimentoAberto = mov;
+            if (mov.operador !== null && mov.operador !== undefined) {
+                if (statusNormalizado === alvoStatusDeslocamento) {
+                    deslocamentoAbertoPorOperador.set(mov.operador, mov);
+                }
+                if (statusNormalizado === alvoStatusExecucao) {
+                    execucaoAbertaPorOperador.set(mov.operador, mov);
+                }
+
+                if (statusNormalizado === alvoStatusFinalizada) {
+                    const deslocAberto = deslocamentoAbertoPorOperador.get(mov.operador);
+                    if (deslocAberto?.data && mov.data && mov.data >= deslocAberto.data && this.mesmoDia(deslocAberto.data, mov.data)) {
+                        segmentosSolucao.push({ operador: mov.operador, inicio: deslocAberto.data, fim: mov.data });
+                    }
+
+                    const execAberta = execucaoAbertaPorOperador.get(mov.operador);
+                    if (execAberta?.data && mov.data && mov.data >= execAberta.data && this.mesmoDia(execAberta.data, mov.data)) {
+                        segmentosAtendimento.push({ operador: mov.operador, inicio: execAberta.data, fim: mov.data });
+                    }
+                }
             }
 
-            if (ehFimSegmento) {
-                if (inicioSolucaoAberto && mov.data && inicioSolucaoAberto.data && mov.data >= inicioSolucaoAberto.data) {
-                    segmentosSolucao.push({ inicio: inicioSolucaoAberto.data, fim: mov.data });
-                }
-                inicioSolucaoAberto = null;
-
-                if (inicioAtendimentoAberto && mov.data && inicioAtendimentoAberto.data && mov.data >= inicioAtendimentoAberto.data) {
-                    segmentosAtendimento.push({ inicio: inicioAtendimentoAberto.data, fim: mov.data });
-                }
-                inicioAtendimentoAberto = null;
+            if (statusNormalizado === alvoStatusFinalizada) {
+                // OS encerrada nesse ciclo — descarta o que ainda estava
+                // pendente (de qualquer operador que não bateu o par).
+                deslocamentoAbertoPorOperador.clear();
+                execucaoAbertaPorOperador.clear();
             }
         }
 
@@ -512,7 +524,7 @@ const IndicatorEngine = {
         const excluidoDoTempo = this.diagnosticoExcluidoDoTempo(ultimoFechamento);
 
         return {
-            ultimoFechamento, ultimoEncerramento, primeiroInicioAtendimento, primeiroAgendamento,
+            ultimoFechamento, ultimoEncerramento, primeiroAgendamento,
             temReabertura, temReagendamento, segmentosSolucao, segmentosAtendimento,
             deslocamentosAbandonados, excluidoDoTempo
         };
@@ -539,11 +551,6 @@ const IndicatorEngine = {
         return excluidos.has(normalizarTexto(nome));
     },
 
-    historicoContemTexto(mov, textoNormalizadoAlvo) {
-        if (!mov.historico || mov.historico.length === 0) return false;
-        return mov.historico.some(texto => normalizarTexto(String(texto)).includes(textoNormalizadoAlvo));
-    },
-
     /** Soma, em horas, a duração de uma lista de segmentos {inicio, fim} (Date). */
     somarHorasSegmentos(segmentos) {
         if (!segmentos || segmentos.length === 0) return null;
@@ -552,6 +559,23 @@ const IndicatorEngine = {
             total += (seg.fim - seg.inicio) / 3600000;
         }
         return total;
+    },
+
+    /**
+     * Agrupa uma lista de segmentos {operador, inicio, fim} pelo próprio
+     * operador do segmento, somando a duração de cada um — usado na
+     * ficha por técnico (calcularFichasTecnicos), já que dentro de uma
+     * mesma OS segmentos diferentes podem ter operadores diferentes (ver
+     * analisarEventosOS). Retorna Map<código do operador, horas somadas>.
+     */
+    agruparSegmentosPorOperador(segmentos) {
+        const porOperador = new Map();
+        for (const seg of segmentos) {
+            if (seg.operador === null || seg.operador === undefined) continue;
+            const horas = (seg.fim - seg.inicio) / 3600000;
+            porOperador.set(seg.operador, (porOperador.get(seg.operador) ?? 0) + horas);
+        }
+        return porOperador;
     },
 
     contarFinalizadas(analise) {
@@ -563,17 +587,11 @@ const IndicatorEngine = {
     },
 
     /**
-     * TMS — Tempo Médio de Solução, visão da OS/empresa, em horas: média
-     * de (data do encerramento − data do início do atendimento). NÃO
-     * conta a partir da abertura/agendamento — só a partir de quando o
-     * técnico realmente começou a agir (deslocamento ou Em Execução, o
-     * que vier primeiro). "Encerramento" é o Fechamento OU o
-     * Reagendamento, o que for mais recente. Tempo CORRIDO total — inclui
-     * qualquer espera no meio do caminho (ex.: entre um reagendamento e a
-     * próxima visita), porque essa é a visão que importa pra SLA da
-     * empresa. Pra a visão "sem culpa do técnico", ver tmsHoras dentro de
-     * calcularFichasTecnicos. OS sem os dois marcos (início E fim) não
-     * entram na conta — nem OS cancelada/aberta errada (diagnóstico na
+     * TMS — Tempo Médio de Solução, em horas: média da soma dos segmentos
+     * Deslocamento → Finalizada de cada OS (mesmo operador, mesmo dia —
+     * ver analisarEventosOS). OS sem nenhum segmento válido (nunca teve
+     * Deslocamento, ou teve mas ninguém finalizou no mesmo dia) fica fora
+     * da conta — assim como OS cancelada/aberta errada (diagnóstico na
      * lista configurável de exclusão, ver diagnosticoExcluidoDoTempo).
      */
     calcularTMS(ordens, analise) {
@@ -582,11 +600,33 @@ const IndicatorEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!info?.ultimoEncerramento?.data || !info?.primeiroInicioAtendimento?.data) continue;
-            if (info.excluidoDoTempo) continue;
+            if (!info || info.excluidoDoTempo) continue;
 
-            const horas = (info.ultimoEncerramento.data - info.primeiroInicioAtendimento.data) / 3600000;
-            if (horas < 0) continue; // dado inconsistente — não deixa puxar a média pra baixo
+            const horas = this.somarHorasSegmentos(info.segmentosSolucao);
+            if (horas === null) continue;
+
+            somaHoras += horas;
+            contagem++;
+        }
+
+        return contagem > 0 ? somaHoras / contagem : null;
+    },
+
+    /**
+     * TMA — Tempo Médio de Atendimento, em horas: igual ao TMS, mas com
+     * segmentos Execução → Finalizada (mesmo operador, mesmo dia) — só o
+     * trabalho em si, sem contar o deslocamento até o local.
+     */
+    calcularTMA(ordens, analise) {
+        let somaHoras = 0;
+        let contagem = 0;
+
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!info || info.excluidoDoTempo) continue;
+
+            const horas = this.somarHorasSegmentos(info.segmentosAtendimento);
+            if (horas === null) continue;
 
             somaHoras += horas;
             contagem++;
@@ -626,7 +666,9 @@ const IndicatorEngine = {
      * TME — Tempo Médio de Espera, em horas: da abertura da OS até o
      * Fechamento. Visão do cliente — quanto tempo ele esperou no total,
      * do pedido até a solução, sem descontar nada (fila, reagendamentos,
-     * tudo conta, porque tudo isso é tempo real de espera do cliente).
+     * tudo conta, porque tudo isso é tempo real de espera do cliente). OS
+     * com Reabertura em algum momento fica de fora inteira — não é um
+     * atendimento "limpo" (fechado, reaberto pra acertar diagnóstico etc.).
      */
     calcularTME(ordens, analise) {
         let somaHoras = 0;
@@ -635,6 +677,7 @@ const IndicatorEngine = {
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
             if (!ordem.dataAbertura || !info?.ultimoFechamento?.data) continue;
+            if (info.temReabertura) continue;
 
             const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
             if (horas < 0) continue;
@@ -1012,17 +1055,7 @@ const IndicatorEngine = {
 
         const acumulado = new Map();
 
-        for (const ordem of ordens.values()) {
-            const info = analise.get(ordem.id);
-            if (!info?.ultimoFechamento) continue;
-
-            const codigoTecnico = info.ultimoFechamento.operador;
-            if (codigoTecnico === null || codigoTecnico === undefined) continue;
-
-            const nome = AuditEngine.resolverReferencia(
-                APP.referencias.operadores, codigoTecnico, CONFIG_BASE.operadores.nome
-            );
-
+        const obterFicha = nome => {
             if (!acumulado.has(nome)) {
                 acumulado.set(nome, {
                     nome,
@@ -1042,30 +1075,25 @@ const IndicatorEngine = {
                     tmaDetalhes: []
                 });
             }
+            return acumulado.get(nome);
+        };
 
-            const ficha = acumulado.get(nome);
+        // Passo 1: finalizadas/reabertura/diagnóstico/solo-dupla ficam com
+        // quem de fato FECHOU a OS — isso não depende de segmento algum.
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!info?.ultimoFechamento) continue;
+
+            const codigoTecnico = info.ultimoFechamento.operador;
+            if (codigoTecnico === null || codigoTecnico === undefined) continue;
+
+            const nome = AuditEngine.resolverReferencia(
+                APP.referencias.operadores, codigoTecnico, CONFIG_BASE.operadores.nome
+            );
+
+            const ficha = obterFicha(nome);
             ficha.totalFinalizadas++;
             ficha.ordensFinalizadas.push(ordem.id);
-
-            // Segmentado: soma só os intervalos em que o técnico esteve de
-            // fato atuando, excluindo a espera parada entre um
-            // Reagendamento e o próximo início (ver analisarEventosOS). OS
-            // cancelada/aberta errada (excluidoDoTempo) não vira tempo
-            // nenhum — nem pra soma nem pro detalhe, é como se não tivesse
-            // segmento algum.
-            const horasTms = info.excluidoDoTempo ? null : this.somarHorasSegmentos(info.segmentosSolucao);
-            if (horasTms !== null) {
-                ficha.somaHorasTms += horasTms;
-                ficha.contagemHorasTms++;
-            }
-            ficha.tmsDetalhes.push({ ordemId: ordem.id, assunto: ordem.assunto, horas: horasTms });
-
-            const horasTma = info.excluidoDoTempo ? null : this.somarHorasSegmentos(info.segmentosAtendimento);
-            if (horasTma !== null) {
-                ficha.somaHorasTma += horasTma;
-                ficha.contagemHorasTma++;
-            }
-            ficha.tmaDetalhes.push({ ordemId: ordem.id, assunto: ordem.assunto, horas: horasTma });
 
             if (info.temReabertura) {
                 ficha.reaberturas++;
@@ -1083,6 +1111,38 @@ const IndicatorEngine = {
                 ficha.trabalhosSolo++;
             } else {
                 ficha.trabalhosDupla++;
+            }
+        }
+
+        // Passo 2: TMS/TMA ficam com quem de fato fez CADA segmento
+        // (Deslocamento->Finalizada / Execução->Finalizada) — dentro da
+        // mesma OS, segmentos diferentes podem ter operadores diferentes
+        // (ver analisarEventosOS), então um técnico que nunca fechou uma
+        // OS mas contribuiu um segmento válido ainda aparece aqui, com
+        // totalFinalizadas: 0. OS cancelada/aberta errada (excluidoDoTempo)
+        // não vira tempo nenhum pra ninguém — nem soma nem detalhe.
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!info || info.excluidoDoTempo) continue;
+
+            for (const [codigoOperador, horas] of this.agruparSegmentosPorOperador(info.segmentosSolucao)) {
+                const nome = AuditEngine.resolverReferencia(
+                    APP.referencias.operadores, codigoOperador, CONFIG_BASE.operadores.nome
+                );
+                const ficha = obterFicha(nome);
+                ficha.somaHorasTms += horas;
+                ficha.contagemHorasTms++;
+                ficha.tmsDetalhes.push({ ordemId: ordem.id, assunto: ordem.assunto, horas });
+            }
+
+            for (const [codigoOperador, horas] of this.agruparSegmentosPorOperador(info.segmentosAtendimento)) {
+                const nome = AuditEngine.resolverReferencia(
+                    APP.referencias.operadores, codigoOperador, CONFIG_BASE.operadores.nome
+                );
+                const ficha = obterFicha(nome);
+                ficha.somaHorasTma += horas;
+                ficha.contagemHorasTma++;
+                ficha.tmaDetalhes.push({ ordemId: ordem.id, assunto: ordem.assunto, horas });
             }
         }
 
@@ -1202,7 +1262,8 @@ const IndicatorEngine = {
                 if (horasTmr >= 0) { bucket.somaTmr += horasTmr; bucket.contagemTmr++; }
             }
 
-            if (ordem.dataAbertura) {
+            // TME ignora OS com Reabertura em algum momento — mesma regra de calcularTME.
+            if (ordem.dataAbertura && !info.temReabertura) {
                 const horasTme = (dataFechamento - ordem.dataAbertura) / 3600000;
                 if (horasTme >= 0) { bucket.somaTme += horasTme; bucket.contagemTme++; }
             }
