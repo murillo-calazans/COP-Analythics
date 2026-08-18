@@ -73,6 +73,9 @@ const IndicatorEngine = {
     STATUS_EM_EXECUCAO: "Execução",
     STATUS_FINALIZADA: "Finalizada",
     STATUS_AGENDADA: "Agendada",
+    // Sinal explícito do técnico de que não vai concluir aquele
+    // deslocamento/execução (pediu reagendamento) — ver analisarEventosOS.
+    STATUS_AGUARDANDO_AGENDAMENTO: "Aguardando agendamento",
 
     calcularRecorrencia(ordens) {
         // Idempotente: pode ser chamado de novo (ex.: depois de mudar o
@@ -413,7 +416,10 @@ const IndicatorEngine = {
      * no MESMO DIA, fecha um segmento. Um novo "Agendamento" com algum
      * desses ainda pendentes (de qualquer operador) descarta tudo sem
      * virar segmento — é um deslocamento/execução abandonado, outro
-     * operador reorganizou a visita antes do técnico concluir.
+     * operador reorganizou a visita antes do técnico concluir. EXCETO se
+     * o técnico avisou primeiro (status "Aguardando agendamento") — aí é
+     * fluxo normal, não abandono: mesmo tratamento de limpar sem contar
+     * que a "Finalizada" já recebe.
      */
     analisarEventosOS(ordem) {
         const alvoFechamento = normalizarTexto(this.NOME_EVENTO_FECHAMENTO);
@@ -425,6 +431,7 @@ const IndicatorEngine = {
         const alvoStatusExecucao = normalizarTexto(this.STATUS_EM_EXECUCAO);
         const alvoStatusFinalizada = normalizarTexto(this.STATUS_FINALIZADA);
         const alvoStatusAgendada = normalizarTexto(this.STATUS_AGENDADA);
+        const alvoStatusAguardandoAgendamento = normalizarTexto(this.STATUS_AGUARDANDO_AGENDAMENTO);
 
         let ultimoFechamento = null;
         let ultimoEncerramento = null; // Fechamento OU Reagendar — usado pro índice de reabertura/reagendamento
@@ -511,6 +518,17 @@ const IndicatorEngine = {
             if (statusNormalizado === alvoStatusFinalizada) {
                 // OS encerrada nesse ciclo — descarta o que ainda estava
                 // pendente (de qualquer operador que não bateu o par).
+                deslocamentoAbertoPorOperador.clear();
+                execucaoAbertaPorOperador.clear();
+            }
+
+            // Técnico sinalizou que não vai concluir agora (pediu
+            // reagendamento) ANTES de outro operador reorganizar a visita
+            // — não é abandono, é fluxo normal. Limpa sem registrar em
+            // deslocamentosAbandonados (diferente do que acontece lá
+            // embaixo quando um novo Agendamento pega algo AINDA pendente,
+            // sem ter passado por aqui).
+            if (statusNormalizado === alvoStatusAguardandoAgendamento) {
                 deslocamentoAbertoPorOperador.clear();
                 execucaoAbertaPorOperador.clear();
             }

@@ -275,10 +275,19 @@ async function persistirReferenciasNoSupabase(referencias, aoProgredir) {
  * é uma "impressão digital" dos campos que identificam um evento real
  * (reimportar o mesmo arquivo, ou um arquivo com linhas sobrepostas,
  * gera a mesma chave e cai fora).
+ *
+ * Data arredondada pro segundo (não getTime() exato): a origem nunca
+ * grava fração de segundo, mas dois caminhos de importação diferentes
+ * (Excel binário real via SheetJS x planilha HTML disfarçada de xlsx,
+ * usada por importações grandes divididas em partes — ver
+ * js/utils/planilha.js) calculam a mesma data por fórmulas distintas,
+ * e erro de arredondamento de ponto flutuante de 1ms entre elas já é
+ * suficiente pra essa chave achar que são duas movimentações diferentes
+ * e duplicar a OS inteira.
  */
 function chaveMovimentacao(mov) {
     return [
-        mov.data instanceof Date ? mov.data.getTime() : mov.data,
+        mov.data instanceof Date ? Math.round(mov.data.getTime() / 1000) : mov.data,
         mov.evento,
         mov.operador,
         mov.status,
