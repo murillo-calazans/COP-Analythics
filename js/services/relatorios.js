@@ -554,8 +554,10 @@ function tabelaTecnicosPorLinha(fichas) {
 
 /**
  * Uma OS -> um registro plano (id, cliente, login, cidade, bairro, assunto,
- * técnico e diagnóstico do fechamento, datas, status) — reaproveitado tanto
- * pela tabela HTML (tabelaDetalheOS) quanto pelo CSV (gerarPlanilhaDetalheOS).
+ * técnico e diagnóstico do fechamento, datas, status) — usado pelo botão
+ * "Baixar planilha (.csv)" do Dashboard (gerarPlanilhaDetalheOS). O
+ * relatório HTML não tem mais uma tabela com todas as OS (trocada por
+ * tabelaOsTempoAlto, só as com TMS/TMA fora do padrão).
  */
 function coletarLinhasDetalheOS(ordens) {
     const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
@@ -585,47 +587,85 @@ function coletarLinhasDetalheOS(ordens) {
     });
 }
 
-/** Uma linha por OS: assunto, técnico e diagnóstico do fechamento, datas, status — ordenável e com busca, igual ao resto do relatório. */
-function tabelaDetalheOS(ordens) {
-    const registros = coletarLinhasDetalheOS(ordens);
+// Limiares do relatório "OS com tempo alto" (ver tabelaOsTempoAlto) —
+// acima disso o atendimento saiu do padrão e vale olhar caso a caso.
+const LIMIAR_TMS_HORAS_TEMPO_ALTO = 1.5; // 1h30
+const LIMIAR_TMA_HORAS_TEMPO_ALTO = 1; // 1h
+
+/**
+ * OS com TMS acima de 1h30 e/ou TMA acima de 1h — mesma regra
+ * segmentada de calcularTMS/calcularTMA (IndicatorEngine), só que
+ * aqui reportando cada OS individualmente em vez da média geral.
+ * OS excluída do tempo (diagnóstico configurado) fica de fora, igual
+ * ao resto do sistema.
+ */
+function coletarOsTempoAlto(ordens) {
+    const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
+    const registros = [];
+
+    for (const ordem of ordens.values()) {
+        const info = analise.get(ordem.id);
+        if (!info || info.excluidoDoTempo) continue;
+
+        const tmsHoras = IndicatorEngine.somarHorasSegmentos(info.segmentosSolucao);
+        const tmaHoras = IndicatorEngine.somarHorasSegmentos(info.segmentosAtendimento);
+
+        const tmsAlto = tmsHoras !== null && tmsHoras > LIMIAR_TMS_HORAS_TEMPO_ALTO;
+        const tmaAlto = tmaHoras !== null && tmaHoras > LIMIAR_TMA_HORAS_TEMPO_ALTO;
+        if (!tmsAlto && !tmaAlto) continue;
+
+        const tecnico = info.ultimoFechamento?.operador !== null && info.ultimoFechamento?.operador !== undefined
+            ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome)
+            : null;
+
+        registros.push({
+            id: ordem.id,
+            cliente: ordem.cliente,
+            cidade: ordem.cidade,
+            assunto: ordem.assunto,
+            tecnico,
+            tmsHoras,
+            tmaHoras
+        });
+    }
+
+    return registros;
+}
+
+/** Uma linha por OS com TMS/TMA fora do padrão — ordenável e com busca, igual ao resto do relatório. */
+function tabelaOsTempoAlto(ordens) {
+    const registros = coletarOsTempoAlto(ordens)
+        .sort((a, b) => (b.tmsHoras ?? 0) + (b.tmaHoras ?? 0) - ((a.tmsHoras ?? 0) + (a.tmaHoras ?? 0)));
 
     const linhas = registros.map(d => `
         <tr>
             <td data-sort="${Number(d.id) || 0}">${escaparHtml(String(d.id))}</td>
             <td data-sort="${escaparHtml(normalizarTexto(d.cliente ?? ""))}">${escaparHtml(d.cliente ?? "-")}</td>
-            <td data-sort="${escaparHtml(normalizarTexto(d.login ?? ""))}">${escaparHtml(d.login ?? "-")}</td>
             <td data-sort="${escaparHtml(normalizarTexto(d.cidade ?? ""))}">${escaparHtml(d.cidade ?? "-")}</td>
-            <td data-sort="${escaparHtml(normalizarTexto(d.bairro ?? ""))}">${escaparHtml(d.bairro ?? "-")}</td>
             <td data-sort="${escaparHtml(normalizarTexto(d.assunto ?? ""))}">${escaparHtml(d.assunto ?? "-")}</td>
             <td data-sort="${escaparHtml(normalizarTexto(d.tecnico ?? ""))}">${escaparHtml(d.tecnico ?? "-")}</td>
-            <td data-sort="${escaparHtml(normalizarTexto(d.diagnostico ?? ""))}">${escaparHtml(d.diagnostico ?? "-")}</td>
-            <td data-sort="${d.dataAbertura ? d.dataAbertura.getTime() : 0}">${formatarDataHora(d.dataAbertura)}</td>
-            <td data-sort="${d.dataFechamento ? d.dataFechamento.getTime() : 0}">${formatarDataHora(d.dataFechamento)}</td>
-            <td data-sort="${escaparHtml(normalizarTexto(d.status ?? ""))}">${escaparHtml(d.status ?? "-")}</td>
+            <td class="qty-cell" data-sort="${d.tmsHoras ?? -1}"><span class="qty-val">${formatarDuracaoHoras(d.tmsHoras)}</span></td>
+            <td class="qty-cell" data-sort="${d.tmaHoras ?? -1}"><span class="qty-val">${formatarDuracaoHoras(d.tmaHoras)}</span></td>
         </tr>
     `).join("");
 
     return `
-        <p class="subtable-title">Detalhamento por OS (${registros.length})</p>
+        <p class="subtable-title">OS com TMS acima de 1h30 ou TMA acima de 1h (${registros.length})</p>
         <div class="table-tools">
-            <input type="search" class="table-search" placeholder="Buscar em ${registros.length} OS (cliente, assunto, técnico, diagnóstico...)" aria-label="Buscar em tbl-detalhe-os">
+            <input type="search" class="table-search" placeholder="Buscar em ${registros.length} OS (cliente, assunto, técnico...)" aria-label="Buscar em tbl-tempo-alto">
             <span class="table-count">${registros.length} itens · clique no cabeçalho para ordenar</span>
         </div>
         <div class="table-scroll">
-            <table class="data-table" id="tbl-detalhe-os">
+            <table class="data-table" id="tbl-tempo-alto">
                 <thead>
                     <tr>
                         <th data-col="0">ID OS<span class="sort-ind"></span></th>
                         <th data-col="1">Cliente<span class="sort-ind"></span></th>
-                        <th data-col="2">Login<span class="sort-ind"></span></th>
-                        <th data-col="3">Cidade<span class="sort-ind"></span></th>
-                        <th data-col="4">Bairro<span class="sort-ind"></span></th>
-                        <th data-col="5">Assunto<span class="sort-ind"></span></th>
-                        <th data-col="6">Técnico<span class="sort-ind"></span></th>
-                        <th data-col="7">Diagnóstico<span class="sort-ind"></span></th>
-                        <th data-col="8">Abertura<span class="sort-ind"></span></th>
-                        <th data-col="9">Fechamento<span class="sort-ind"></span></th>
-                        <th data-col="10">Status<span class="sort-ind"></span></th>
+                        <th data-col="2">Cidade<span class="sort-ind"></span></th>
+                        <th data-col="3">Assunto<span class="sort-ind"></span></th>
+                        <th data-col="4">Técnico<span class="sort-ind"></span></th>
+                        <th data-col="5">TMS<span class="sort-ind"></span></th>
+                        <th data-col="6">TMA<span class="sort-ind"></span></th>
                     </tr>
                 </thead>
                 <tbody>${linhas}</tbody>
@@ -685,7 +725,7 @@ function gerarRelatorioGeral() {
         ["diagnosticos", "Diagnósticos"],
         ["tecnicos", "Técnicos"],
         ["melhores-tempos", "Melhores tempos"],
-        ["detalhe-os", "Detalhamento por OS"]
+        ["tempo-alto", "OS com tempo alto"]
     ]);
 
     const html = `<!doctype html>
@@ -800,9 +840,9 @@ function gerarRelatorioGeral() {
         </div>
     </section>
 
-    <section class="bloco" id="detalhe-os">
-        <div class="section-head"><h2>Detalhamento por OS</h2><a class="back-top" href="#top">↑ topo</a></div>
-        ${tabelaDetalheOS(ordens)}
+    <section class="bloco" id="tempo-alto">
+        <div class="section-head"><h2>OS com tempo alto</h2><a class="back-top" href="#top">↑ topo</a></div>
+        ${tabelaOsTempoAlto(ordens)}
     </section>
 
     <footer class="relatorio-rodape">COP Analytics · Inteligência Operacional</footer>
