@@ -674,6 +674,93 @@ function tabelaOsTempoAlto(ordens) {
     `;
 }
 
+// Limiar do relatório "OS com tempo baixo" (ver tabelaOsTempoBaixo) —
+// abaixo disso o atendimento foi rápido demais pro tipo de tarefa, vale
+// desconfiar (ex.: técnico marcou Finalizada sem executar de verdade).
+const LIMIAR_TMS_HORAS_TEMPO_BAIXO = 0.25; // 15 min
+const LIMIAR_TMA_HORAS_TEMPO_BAIXO = 0.25; // 15 min
+
+/**
+ * OS com TMS e/ou TMA abaixo de 15 min — mesma base de
+ * coletarOsTempoAlto, só que no extremo oposto: segmento existiu (não
+ * é OS sem Deslocamento/Execução) mas durou pouco demais pra ser um
+ * atendimento real. OS excluída do tempo fica de fora, igual ao resto.
+ */
+function coletarOsTempoBaixo(ordens) {
+    const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
+    const registros = [];
+
+    for (const ordem of ordens.values()) {
+        const info = analise.get(ordem.id);
+        if (!info || info.excluidoDoTempo) continue;
+
+        const tmsHoras = IndicatorEngine.somarHorasSegmentos(info.segmentosSolucao);
+        const tmaHoras = IndicatorEngine.somarHorasSegmentos(info.segmentosAtendimento);
+
+        const tmsBaixo = tmsHoras !== null && tmsHoras < LIMIAR_TMS_HORAS_TEMPO_BAIXO;
+        const tmaBaixo = tmaHoras !== null && tmaHoras < LIMIAR_TMA_HORAS_TEMPO_BAIXO;
+        if (!tmsBaixo && !tmaBaixo) continue;
+
+        const tecnico = info.ultimoFechamento?.operador !== null && info.ultimoFechamento?.operador !== undefined
+            ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome)
+            : null;
+
+        registros.push({
+            id: ordem.id,
+            cliente: ordem.cliente,
+            cidade: ordem.cidade,
+            assunto: ordem.assunto,
+            tecnico,
+            tmsHoras,
+            tmaHoras
+        });
+    }
+
+    return registros;
+}
+
+/** Uma linha por OS com TMS/TMA suspeito de rápido demais — ordenável e com busca, igual ao resto do relatório. As mais rápidas (mais suspeitas) primeiro. */
+function tabelaOsTempoBaixo(ordens) {
+    const somaPositiva = r => (r.tmsHoras ?? Infinity) + (r.tmaHoras ?? Infinity);
+    const registros = coletarOsTempoBaixo(ordens).sort((a, b) => somaPositiva(a) - somaPositiva(b));
+
+    const linhas = registros.map(d => `
+        <tr>
+            <td data-sort="${Number(d.id) || 0}">${escaparHtml(String(d.id))}</td>
+            <td data-sort="${escaparHtml(normalizarTexto(d.cliente ?? ""))}">${escaparHtml(d.cliente ?? "-")}</td>
+            <td data-sort="${escaparHtml(normalizarTexto(d.cidade ?? ""))}">${escaparHtml(d.cidade ?? "-")}</td>
+            <td data-sort="${escaparHtml(normalizarTexto(d.assunto ?? ""))}">${escaparHtml(d.assunto ?? "-")}</td>
+            <td data-sort="${escaparHtml(normalizarTexto(d.tecnico ?? ""))}">${escaparHtml(d.tecnico ?? "-")}</td>
+            <td class="qty-cell" data-sort="${d.tmsHoras ?? -1}"><span class="qty-val">${formatarDuracaoHoras(d.tmsHoras)}</span></td>
+            <td class="qty-cell" data-sort="${d.tmaHoras ?? -1}"><span class="qty-val">${formatarDuracaoHoras(d.tmaHoras)}</span></td>
+        </tr>
+    `).join("");
+
+    return `
+        <p class="subtable-title">OS com TMS ou TMA abaixo de 15 min (${registros.length})</p>
+        <div class="table-tools">
+            <input type="search" class="table-search" placeholder="Buscar em ${registros.length} OS (cliente, assunto, técnico...)" aria-label="Buscar em tbl-tempo-baixo">
+            <span class="table-count">${registros.length} itens · clique no cabeçalho para ordenar</span>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table" id="tbl-tempo-baixo">
+                <thead>
+                    <tr>
+                        <th data-col="0">ID OS<span class="sort-ind"></span></th>
+                        <th data-col="1">Cliente<span class="sort-ind"></span></th>
+                        <th data-col="2">Cidade<span class="sort-ind"></span></th>
+                        <th data-col="3">Assunto<span class="sort-ind"></span></th>
+                        <th data-col="4">Técnico<span class="sort-ind"></span></th>
+                        <th data-col="5">TMS<span class="sort-ind"></span></th>
+                        <th data-col="6">TMA<span class="sort-ind"></span></th>
+                    </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        </div>
+    `;
+}
+
 /** Botão "Baixar planilha (.csv)" (Dashboard) — só o detalhamento por OS, sem passar pelo relatório em HTML. */
 function gerarPlanilhaDetalheOS() {
     const ordens = FiltroEngine.ordensFiltradas();
@@ -725,7 +812,8 @@ function gerarRelatorioGeral() {
         ["diagnosticos", "Diagnósticos"],
         ["tecnicos", "Técnicos"],
         ["melhores-tempos", "Melhores tempos"],
-        ["tempo-alto", "OS com tempo alto"]
+        ["tempo-alto", "OS com tempo alto"],
+        ["tempo-baixo", "OS com tempo baixo"]
     ]);
 
     const html = `<!doctype html>
@@ -843,6 +931,11 @@ function gerarRelatorioGeral() {
     <section class="bloco" id="tempo-alto">
         <div class="section-head"><h2>OS com tempo alto</h2><a class="back-top" href="#top">↑ topo</a></div>
         ${tabelaOsTempoAlto(ordens)}
+    </section>
+
+    <section class="bloco" id="tempo-baixo">
+        <div class="section-head"><h2>OS com tempo baixo</h2><a class="back-top" href="#top">↑ topo</a></div>
+        ${tabelaOsTempoBaixo(ordens)}
     </section>
 
     <footer class="relatorio-rodape">COP Analytics · Inteligência Operacional</footer>
