@@ -431,11 +431,16 @@ async function restaurarDoCacheLocal() {
  * atualiza o cache local pra próxima vez. Chamado uma vez ao logar/F5
  * (ver js/core/app.js) — a partir daí o app trabalha em memória, igual
  * sempre fez. "tinhaCache" é o retorno de restaurarDoCacheLocal(),
- * chamado logo antes disso por quem orquestra o carregamento: se já
- * havia algo na tela vindo do cache, uma resposta vazia do Supabase é
- * tratada como uma corrida/instabilidade passageira (mantém o que já
- * está mostrado) em vez de apagar tudo; sem cache nenhum, tenta de novo
- * uma vez antes de concluir que realmente não há nada no banco.
+ * chamado logo antes disso por quem orquestra o carregamento: só
+ * importa se a busca der ERRO de verdade (rede caiu etc.) — nesse caso
+ * cai de volta pro que já estava mostrado em vez de esvaziar a tela.
+ * Uma resposta vazia BEM-SUCEDIDA (sem erro) nunca fica presa no cache
+ * antigo pra sempre: tenta de novo 1x depois de 500ms (cobre a corrida
+ * entre a sessão recém-restaurada no F5 e o token de autenticação ainda
+ * não anexado às consultas, que faria a RLS filtrar tudo em silêncio) e,
+ * se continuar vazia, aceita como o estado real — inclusive pra refletir
+ * um "Limpar dados" feito por um admin em outro navegador, que sem isso
+ * ficaria escondido atrás do cache local de quem já tinha entrado antes.
  */
 async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
     for (let tentativa = 1; tentativa <= 2; tentativa++) {
@@ -454,17 +459,6 @@ async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
                 `${referenciasBrutas.eventos.length} eventos, ${referenciasBrutas.diagnosticos.length} diagnósticos.`
             );
 
-            if (vazio && tinhaCache) {
-                console.warn("Atualização do Supabase veio vazia — mantendo o que já estava no cache local.");
-                return true;
-            }
-
-            // Sem cache pra cair de volta: pode ser uma corrida entre a
-            // sessão recém-restaurada (F5) e o token de autenticação ainda
-            // não anexado às consultas — nesse caso a RLS filtra tudo
-            // silenciosamente (sem erro nenhum) e pareceria "os dados
-            // sumiram". Espera um instante e tenta de novo antes de
-            // concluir que realmente não há nada no banco.
             if (vazio && tentativa === 1) {
                 console.warn("Leitura veio vazia na primeira tentativa — tentando de novo em 500ms...");
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -533,7 +527,9 @@ async function limparDadosImportados() {
     APP.status.baseCarregada = false;
 
     // Senão o cache local ressuscitaria tudo isso no próximo F5/login.
-    limparCacheLocal();
+    // Aguarda terminar antes de seguir — sem isso, um F5 bem rápido logo
+    // em seguida podia ganhar a corrida da transação do IndexedDB.
+    await limparCacheLocal();
 
     atualizarBadgeAlertas();
     renderizarDashboard();
