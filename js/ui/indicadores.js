@@ -5,7 +5,126 @@
  * Tendências ao longo do tempo + comparativos que complementam
  * o Dashboard (que só mostra fotos estáticas, sem histórico).
  * Não calcula nada aqui — tudo vem pronto do IndicatorEngine.
+ *
+ * Duas partes:
+ * - "Indicadores gerais": volume, reabertura, motivos de
+ *   reagendamento, assuntos/diagnósticos mais usados, solo x dupla,
+ *   abandono/reagendamento por técnico — tudo que não é um tempo
+ *   médio (TMS/TMA/TMR/TME).
+ * - "Indicadores de Tempo": uma coluna por métrica (TMS/TMA/TMR/TME),
+ *   cada uma com a mesma bateria de quebras (mês, cidade, setor,
+ *   técnico, assunto, diagnóstico) — ver METRICAS_TEMPO/
+ *   FUNCOES_POR_DIMENSAO abaixo. TMR não tem quebra por técnico de
+ *   propósito: mede a velocidade da empresa em agendar, não o
+ *   trabalho do técnico em campo (por isso também nunca entrou na
+ *   ficha individual dele — ver IndicatorEngine.calcularTMR).
  */
+
+const ROTULOS_DIMENSAO_TEMPO = {
+    mes: "por Mês",
+    cidade: "por Cidade",
+    setor: "por Setor",
+    tecnico: "por Técnico",
+    assunto: "por Assunto",
+    diagnostico: "por Diagnóstico"
+};
+
+const SUBTITULOS_DIMENSAO_TEMPO = {
+    mes: "Tendência mês a mês",
+    cidade: `Top 5 — cidades com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS`,
+    setor: `Top 5 — setores com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS`,
+    tecnico: "Todos os técnicos com pelo menos 1 OS válida",
+    assunto: `Top 5 — assuntos com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS`,
+    diagnostico: `Top 5 — diagnósticos do fechamento com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS`
+};
+
+const METRICAS_TEMPO = [
+    { chave: "tms", nome: "TMS", serie: "serie-1", descricao: "Deslocamento até finalização", temTecnico: true },
+    { chave: "tma", nome: "TMA", serie: "serie-1", descricao: '"Em Execução" até finalização', temTecnico: true },
+    { chave: "tmr", nome: "TMR", serie: "serie-2", descricao: "Abertura até 1º agendamento", temTecnico: false },
+    { chave: "tme", nome: "TME", serie: "serie-2", descricao: "Abertura até fechamento, sem OS reaberta", temTecnico: true }
+];
+
+const FUNCOES_TEMPO_POR_DIMENSAO = {
+    tms: {
+        cidade: ordens => IndicatorEngine.calcularTmsPorCidade(ordens),
+        setor: ordens => IndicatorEngine.calcularTmsPorSetor(ordens),
+        tecnico: ordens => IndicatorEngine.calcularTmsPorTecnico(ordens),
+        assunto: ordens => IndicatorEngine.calcularTmsPorAssunto(ordens),
+        diagnostico: ordens => IndicatorEngine.calcularTmsPorDiagnostico(ordens)
+    },
+    tma: {
+        cidade: ordens => IndicatorEngine.calcularTmaPorCidade(ordens),
+        setor: ordens => IndicatorEngine.calcularTmaPorSetor(ordens),
+        tecnico: ordens => IndicatorEngine.calcularTmaPorTecnico(ordens),
+        assunto: ordens => IndicatorEngine.calcularTmaPorAssunto(ordens),
+        diagnostico: ordens => IndicatorEngine.calcularTmaPorDiagnostico(ordens)
+    },
+    tmr: {
+        cidade: ordens => IndicatorEngine.calcularTmrPorCidade(ordens),
+        setor: ordens => IndicatorEngine.calcularTmrPorSetor(ordens),
+        assunto: ordens => IndicatorEngine.calcularTmrPorAssunto(ordens),
+        diagnostico: ordens => IndicatorEngine.calcularTmrPorDiagnostico(ordens)
+    },
+    tme: {
+        cidade: ordens => IndicatorEngine.calcularTmePorCidade(ordens),
+        setor: ordens => IndicatorEngine.calcularTmePorSetor(ordens),
+        tecnico: ordens => IndicatorEngine.calcularTmePorTecnico(ordens),
+        assunto: ordens => IndicatorEngine.calcularTmePorAssunto(ordens),
+        diagnostico: ordens => IndicatorEngine.calcularTmePorDiagnostico(ordens)
+    }
+};
+
+/** HTML de uma coluna (TMS/TMA/TMR/TME): título + um grafico-card por dimensão (mês + o que a métrica tiver). */
+function construirColunaTempo(metrica) {
+    const dimensoes = ["mes", "cidade", "setor", ...(metrica.temTecnico ? ["tecnico"] : []), "assunto", "diagnostico"];
+
+    const cards = dimensoes.map(dim => `
+        <div class="grafico-card">
+            <div class="grafico-cabecalho">
+                <div>
+                    <div class="grafico-titulo">${metrica.nome} ${ROTULOS_DIMENSAO_TEMPO[dim]}</div>
+                    <div class="grafico-subtitulo">${SUBTITULOS_DIMENSAO_TEMPO[dim]}</div>
+                </div>
+            </div>
+            <div id="tempo-${metrica.chave}-${dim}"></div>
+        </div>
+    `).join("");
+
+    return `
+        <div class="indicadores-tempo-coluna">
+            <div class="indicadores-tempo-coluna-titulo">
+                ${metrica.nome}
+                <span class="indicadores-tempo-coluna-desc">${metrica.descricao}</span>
+            </div>
+            ${cards}
+        </div>
+    `;
+}
+
+/** Desenha os gráficos de uma coluna depois do HTML já estar no DOM (mês vem de "meses", o resto do IndicatorEngine). */
+function renderizarColunaTempo(metrica, ordensFiltradas, meses) {
+    const dadosMes = meses
+        .filter(m => m[`${metrica.chave}Horas`] !== null)
+        .map(m => ({ rotulo: m.rotulo, valor: Math.round(m[`${metrica.chave}Horas`] * 10) / 10 }));
+
+    renderizarGraficoBarras(`tempo-${metrica.chave}-mes`, dadosMes, {
+        serie: metrica.serie,
+        limite: meses.length,
+        formatoValor: formatarDuracaoHoras,
+        titulo: `${metrica.nome} por mês`
+    });
+
+    for (const [dimensao, obterDados] of Object.entries(FUNCOES_TEMPO_POR_DIMENSAO[metrica.chave])) {
+        const dados = obterDados(ordensFiltradas);
+        renderizarGraficoBarras(`tempo-${metrica.chave}-${dimensao}`, dados, {
+            serie: metrica.serie,
+            limite: dimensao === "tecnico" ? 5 : dados.length,
+            formatoValor: formatarDuracaoHoras,
+            titulo: `${metrica.nome} ${ROTULOS_DIMENSAO_TEMPO[dimensao]}`
+        });
+    }
+}
 
 function renderizarSecaoIndicadores() {
     const container = document.getElementById("indicadoresConteudo");
@@ -25,21 +144,14 @@ function renderizarSecaoIndicadores() {
 
     const tendenciaMensal = IndicatorEngine.calcularTendenciaMensal(ordensFiltradas);
     const painel = IndicatorEngine.calcularPainelDashboard(ordensFiltradas);
-    const tmsPorTecnico = IndicatorEngine.calcularTmsPorTecnico(ordensFiltradas);
-    const tmaPorTecnico = IndicatorEngine.calcularTmaPorTecnico(ordensFiltradas);
-    const tmsPorCidade = IndicatorEngine.calcularTmsPorCidade(ordensFiltradas);
-    const tmaPorCidade = IndicatorEngine.calcularTmaPorCidade(ordensFiltradas);
-    const tmrPorCidade = IndicatorEngine.calcularTmrPorCidade(ordensFiltradas);
-    const tmsPorSetor = IndicatorEngine.calcularTmsPorSetor(ordensFiltradas);
-    const tmaPorSetor = IndicatorEngine.calcularTmaPorSetor(ordensFiltradas);
-    const tmrPorSetor = IndicatorEngine.calcularTmrPorSetor(ordensFiltradas);
+    const meses = tendenciaMensal.meses;
 
     const periodoMensal = tendenciaMensal.ano
-        ? `Jan–${tendenciaMensal.meses[tendenciaMensal.meses.length - 1].rotulo}/${tendenciaMensal.ano}`
+        ? `Jan–${meses[meses.length - 1].rotulo}/${tendenciaMensal.ano}`
         : "";
 
     container.innerHTML = `
-        <div class="indicadores-secao-titulo">Visão mensal ${periodoMensal ? `(${periodoMensal})` : ""}</div>
+        <div class="indicadores-secao-titulo">Indicadores gerais ${periodoMensal ? `(${periodoMensal})` : ""}</div>
 
         <div class="graficos-grid">
 
@@ -51,46 +163,6 @@ function renderizarSecaoIndicadores() {
                     </div>
                 </div>
                 <div id="mensalVolume"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">TMS por mês</div>
-                        <div class="grafico-subtitulo">Tempo médio de solução (visão da OS, tempo corrido)</div>
-                    </div>
-                </div>
-                <div id="mensalTms"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">TMA por mês</div>
-                        <div class="grafico-subtitulo">"Em Execução" até finalização, sem espera de reagendamento</div>
-                    </div>
-                </div>
-                <div id="mensalTma"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">TMR por mês</div>
-                        <div class="grafico-subtitulo">Tempo médio de resposta (abertura até 1º agendamento)</div>
-                    </div>
-                </div>
-                <div id="mensalTmr"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">TME por mês</div>
-                        <div class="grafico-subtitulo">Tempo médio de espera do cliente (abertura até fechamento)</div>
-                    </div>
-                </div>
-                <div id="mensalTme"></div>
             </div>
 
             <div class="grafico-card">
@@ -111,92 +183,6 @@ function renderizarSecaoIndicadores() {
                     </div>
                 </div>
                 <div id="mensalTecnicosAtivos"></div>
-            </div>
-
-        </div>
-
-        <div class="indicadores-secao-titulo">Comparativos</div>
-
-        <div class="graficos-grid">
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">TMS por técnico</div>
-                        <div class="grafico-subtitulo">Deslocamento até finalização, sem contar espera de reagendamento — do mais rápido pro mais lento</div>
-                    </div>
-                </div>
-                <div id="graficoTmsTecnico"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">TMA por técnico</div>
-                        <div class="grafico-subtitulo">Só "Em Execução" até finalização, sem contar deslocamento nem espera de reagendamento</div>
-                    </div>
-                </div>
-                <div id="graficoTmaTecnico"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Top 5 cidades — melhor TMS</div>
-                        <div class="grafico-subtitulo">Deslocamento até finalização, sem espera de reagendamento — cidades com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
-                    </div>
-                </div>
-                <div id="graficoTmsCidade"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Top 5 cidades — melhor TMA</div>
-                        <div class="grafico-subtitulo">Só "Em Execução" até finalização — cidades com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
-                    </div>
-                </div>
-                <div id="graficoTmaCidade"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Top 5 cidades — melhor TMR</div>
-                        <div class="grafico-subtitulo">Abertura até 1º agendamento — cidades com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
-                    </div>
-                </div>
-                <div id="graficoTmrCidade"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Top 5 setores — melhor TMS</div>
-                        <div class="grafico-subtitulo">Deslocamento até finalização, sem espera de reagendamento — setores com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
-                    </div>
-                </div>
-                <div id="graficoTmsSetor"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Top 5 setores — melhor TMA</div>
-                        <div class="grafico-subtitulo">Só "Em Execução" até finalização — setores com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
-                    </div>
-                </div>
-                <div id="graficoTmaSetor"></div>
-            </div>
-
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Top 5 setores — melhor TMR</div>
-                        <div class="grafico-subtitulo">Abertura até 1º agendamento — setores com pelo menos ${IndicatorEngine.MINIMO_OS_RANKING_CIDADE} OS finalizadas</div>
-                    </div>
-                </div>
-                <div id="graficoTmrSetor"></div>
             </div>
 
             <div class="grafico-card">
@@ -243,7 +229,7 @@ function renderizarSecaoIndicadores() {
                 <div class="grafico-cabecalho">
                     <div>
                         <div class="grafico-titulo">Deslocamentos abandonados por técnico</div>
-                        <div class="grafico-subtitulo">Início de atendimento substituído por um Agendamento de outro operador, sem reagendar nem executar</div>
+                        <div class="grafico-subtitulo">Deslocamento/execução sem aviso, substituído por um Agendamento de outro operador</div>
                     </div>
                 </div>
                 <div id="graficoAbandonosTecnico"></div>
@@ -261,6 +247,12 @@ function renderizarSecaoIndicadores() {
 
         </div>
 
+        <div class="indicadores-secao-titulo">Indicadores de Tempo</div>
+
+        <div class="indicadores-tempo-colunas">
+            ${METRICAS_TEMPO.map(construirColunaTempo).join("")}
+        </div>
+
         <div class="indicadores-secao-titulo">Funil de Assuntos</div>
 
         <div class="grafico-card">
@@ -275,31 +267,9 @@ function renderizarSecaoIndicadores() {
         </div>
     `;
 
-    const meses = tendenciaMensal.meses;
-
     renderizarGraficoBarras("mensalVolume",
         meses.map(m => ({ rotulo: m.rotulo, valor: m.totalFinalizadas })),
         { serie: "serie-1", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
-    );
-
-    renderizarGraficoBarras("mensalTms",
-        meses.filter(m => m.tmsHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmsHoras * 10) / 10 })),
-        { serie: "serie-1", limite: meses.length, formatoValor: formatarDuracaoHoras }
-    );
-
-    renderizarGraficoBarras("mensalTma",
-        meses.filter(m => m.tmaHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmaHoras * 10) / 10 })),
-        { serie: "serie-1", limite: meses.length, formatoValor: formatarDuracaoHoras }
-    );
-
-    renderizarGraficoBarras("mensalTmr",
-        meses.filter(m => m.tmrHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmrHoras * 10) / 10 })),
-        { serie: "serie-2", limite: meses.length, formatoValor: formatarDuracaoHoras }
-    );
-
-    renderizarGraficoBarras("mensalTme",
-        meses.filter(m => m.tmeHoras !== null).map(m => ({ rotulo: m.rotulo, valor: Math.round(m.tmeHoras * 10) / 10 })),
-        { serie: "serie-2", limite: meses.length, formatoValor: formatarDuracaoHoras }
     );
 
     renderizarGraficoBarras("mensalReaberturas",
@@ -311,56 +281,6 @@ function renderizarSecaoIndicadores() {
         meses.map(m => ({ rotulo: m.rotulo, valor: m.tecnicosAtivos })),
         { serie: "serie-1", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
     );
-
-    renderizarGraficoBarras("graficoTmsTecnico", tmsPorTecnico, {
-        serie: "serie-1",
-        limite: 5,
-        formatoValor: formatarDuracaoHoras,
-        titulo: "TMS por técnico"
-    });
-
-    renderizarGraficoBarras("graficoTmaTecnico", tmaPorTecnico, {
-        serie: "serie-1",
-        limite: 5,
-        formatoValor: formatarDuracaoHoras,
-        titulo: "TMA por técnico"
-    });
-
-    renderizarGraficoBarras("graficoTmsCidade", tmsPorCidade, {
-        serie: "serie-1",
-        limite: tmsPorCidade.length,
-        formatoValor: formatarDuracaoHoras
-    });
-
-    renderizarGraficoBarras("graficoTmaCidade", tmaPorCidade, {
-        serie: "serie-1",
-        limite: tmaPorCidade.length,
-        formatoValor: formatarDuracaoHoras
-    });
-
-    renderizarGraficoBarras("graficoTmrCidade", tmrPorCidade, {
-        serie: "serie-2",
-        limite: tmrPorCidade.length,
-        formatoValor: formatarDuracaoHoras
-    });
-
-    renderizarGraficoBarras("graficoTmsSetor", tmsPorSetor, {
-        serie: "serie-1",
-        limite: tmsPorSetor.length,
-        formatoValor: formatarDuracaoHoras
-    });
-
-    renderizarGraficoBarras("graficoTmaSetor", tmaPorSetor, {
-        serie: "serie-1",
-        limite: tmaPorSetor.length,
-        formatoValor: formatarDuracaoHoras
-    });
-
-    renderizarGraficoBarras("graficoTmrSetor", tmrPorSetor, {
-        serie: "serie-2",
-        limite: tmrPorSetor.length,
-        formatoValor: formatarDuracaoHoras
-    });
 
     renderizarGraficoBarras("graficoMotivosReagendamento", painel.motivosReagendamento, {
         serie: "serie-2",
@@ -399,6 +319,10 @@ function renderizarSecaoIndicadores() {
         limite: 5,
         titulo: "Reagendamentos por técnico"
     });
+
+    for (const metrica of METRICAS_TEMPO) {
+        renderizarColunaTempo(metrica, ordensFiltradas, meses);
+    }
 
     const botaoConfigurarFunil = document.getElementById("btnConfigurarFunilAssuntos");
     if (botaoConfigurarFunil) botaoConfigurarFunil.addEventListener("click", abrirModalFunilAssuntos);

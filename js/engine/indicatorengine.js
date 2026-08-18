@@ -1428,6 +1428,153 @@ const IndicatorEngine = {
             const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
+    },
+
+    agregarPorAssunto(ordens, analise, calcularHorasDaOS, top, piores = false) {
+        return this.agregarPorGrupo(ordens, analise, ordem => ordem.assunto, calcularHorasDaOS, top, piores);
+    },
+
+    // Diagnóstico só existe de verdade no FECHAMENTO da OS (mesma regra
+    // usada em calcularDiagnosticosMaisUsados/coletarLinhasDetalheOS).
+    agregarPorDiagnostico(ordens, analise, calcularHorasDaOS, top, piores = false) {
+        const calcularGrupo = (ordem, info) => {
+            if (info.ultimoFechamento.diagnostico === null || info.ultimoFechamento.diagnostico === undefined) return null;
+            return AuditEngine.resolverReferencia(
+                APP.referencias.diagnosticos, info.ultimoFechamento.diagnostico, CONFIG_BASE.diagnosticos.nome
+            );
+        };
+        return this.agregarPorGrupo(ordens, analise, calcularGrupo, calcularHorasDaOS, top, piores);
+    },
+
+    /** Assuntos com o melhor (ou, com piores=true, o pior) TMS médio (segmentado, visão do técnico). */
+    calcularTmsPorAssunto(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosSolucao);
+        }, top, piores);
+    },
+
+    /** Assuntos com o melhor (ou, com piores=true, o pior) TMA médio (segmentado, visão do técnico). */
+    calcularTmaPorAssunto(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosAtendimento);
+        }, top, piores);
+    },
+
+    /** Assuntos com o melhor (ou, com piores=true, o pior) TMR médio (abertura até 1º agendamento). */
+    calcularTmrPorAssunto(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) return null;
+            const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top, piores);
+    },
+
+    /** Assuntos com o melhor (ou, com piores=true, o pior) TME médio (abertura até fechamento, sem OS reaberta). */
+    calcularTmePorAssunto(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
+            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top, piores);
+    },
+
+    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TMS médio. */
+    calcularTmsPorDiagnostico(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosSolucao);
+        }, top, piores);
+    },
+
+    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TMA médio. */
+    calcularTmaPorDiagnostico(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
+            if (info.excluidoDoTempo) return null;
+            return this.somarHorasSegmentos(info.segmentosAtendimento);
+        }, top, piores);
+    },
+
+    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TMR médio. */
+    calcularTmrPorDiagnostico(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) return null;
+            const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top, piores);
+    },
+
+    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TME médio. */
+    calcularTmePorDiagnostico(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
+            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top, piores);
+    },
+
+    /** Cidades com o melhor (ou, com piores=true, o pior) TME médio (abertura até fechamento, sem OS reaberta). */
+    calcularTmePorCidade(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorCidade(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
+            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top, piores);
+    },
+
+    /** Setores com o melhor (ou, com piores=true, o pior) TME médio (abertura até fechamento, sem OS reaberta). */
+    calcularTmePorSetor(ordens, top = 5, piores = false) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        return this.agregarPorSetor(ordens, analise, (ordem, info) => {
+            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
+            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            return horas >= 0 ? horas : null;
+        }, top, piores);
+    },
+
+    /**
+     * TME médio por técnico — diferente de TMS/TMA por técnico
+     * (calcularFichasTecnicos), aqui não tem segmento por operador pra
+     * dividir: TME é a OS inteira (abertura até fechamento), então
+     * atribui pra quem fechou, igual cidade/setor já fazem. Mostra
+     * todos os técnicos com pelo menos 1 OS válida (sem corte de top N
+     * nem mínimo de OS), igual TMS/TMA por técnico já fazem.
+     */
+    calcularTmePorTecnico(ordens) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        const acumulado = new Map();
+
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!ordem.dataAbertura || !info?.ultimoFechamento?.data || info.temReabertura) continue;
+            if (info.ultimoFechamento.operador === null || info.ultimoFechamento.operador === undefined) continue;
+
+            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            if (horas < 0) continue;
+
+            const nome = AuditEngine.resolverReferencia(
+                APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome
+            );
+
+            if (!acumulado.has(nome)) acumulado.set(nome, { soma: 0, contagem: 0 });
+            const registro = acumulado.get(nome);
+            registro.soma += horas;
+            registro.contagem++;
+        }
+
+        return [...acumulado.entries()]
+            .map(([rotulo, r]) => ({ rotulo, valor: Math.round((r.soma / r.contagem) * 10) / 10 }))
+            .sort((a, b) => a.valor - b.valor);
     }
 
 };
