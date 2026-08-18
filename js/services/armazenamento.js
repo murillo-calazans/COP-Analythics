@@ -89,6 +89,40 @@ async function enviarEmLotes(linhas, operacao, aoProgredir) {
     }
 }
 
+/**
+ * Apaga TODAS as linhas de uma tabela, em lotes — usado por
+ * limparDadosImportados() pras tabelas grandes (ordens/movimentacoes).
+ * Um único "delete tudo" nelas (o que o código fazia antes) pode
+ * estourar o tempo limite de execução do Supabase numa tabela com
+ * centenas de milhares de linhas — e um delete que falha por timeout
+ * NÃO lança erro pro cliente, só devolve 0 linhas afetadas, então o
+ * código antigo "funcionava" sem avisar nada e não apagava nada. Aqui,
+ * cada lote é pequeno o bastante pra não estourar, e o erro de
+ * qualquer lote é verificado e relançado de verdade.
+ */
+async function apagarTodasLinhas(tabela, colunaId, aoProgredir) {
+    let totalApagado = 0;
+
+    while (true) {
+        const { data: lote, error: erroSelect } = await supabaseClient
+            .from(tabela)
+            .select(colunaId)
+            .limit(TAMANHO_LOTE_ESCRITA);
+
+        if (erroSelect) throw erroSelect;
+        if (!lote || lote.length === 0) break;
+
+        const ids = lote.map(linha => linha[colunaId]);
+        const { error: erroDelete } = await supabaseClient.from(tabela).delete().in(colunaId, ids);
+        if (erroDelete) throw erroDelete;
+
+        totalApagado += ids.length;
+        if (aoProgredir) aoProgredir(totalApagado);
+    }
+
+    return totalApagado;
+}
+
 /** Busca as linhas brutas de referência do Supabase — sem reconstruir nada ainda (ver reconstruirReferencias). */
 async function buscarLinhasReferencias(aoProgredir) {
     const [operadores, eventos, diagnosticos] = await Promise.all([
@@ -504,20 +538,37 @@ async function limparDadosImportados() {
 
     if (!confirmado) return;
 
+    mostrarCarregandoDados();
+
     try {
-        await supabaseClient.from("movimentacoes").delete().neq("id", 0);
-        await Promise.all([
-            supabaseClient.from("ordens").delete().neq("id", ""),
+        // movimentacoes/ordens em lotes — tabela grande de mais pra um
+        // "delete tudo" só (ver apagarTodasLinhas). As demais são
+        // pequenas (centenas de linhas), um delete só de cada resolve,
+        // mas com o erro checado de verdade (não dava antes).
+        await apagarTodasLinhas("movimentacoes", "id", n =>
+            atualizarTextoCarregando(`Apagando movimentações: ${n}...`)
+        );
+        await apagarTodasLinhas("ordens", "id", n =>
+            atualizarTextoCarregando(`Apagando ordens: ${n}...`)
+        );
+
+        atualizarTextoCarregando("Apagando base de referência...");
+        const resultados = await Promise.all([
             supabaseClient.from("ref_operadores").delete().neq("chave", ""),
             supabaseClient.from("ref_eventos").delete().neq("chave", ""),
             supabaseClient.from("ref_diagnosticos").delete().neq("chave", ""),
             supabaseClient.from("logs_importacao").delete().neq("id", 0)
         ]);
+        const falha = resultados.find(r => r.error);
+        if (falha) throw falha.error;
     } catch (erro) {
         console.error("Falha ao apagar dados no Supabase:", erro);
         alert("Não foi possível apagar os dados compartilhados. Veja o console pra detalhes.");
+        esconderCarregandoDados();
         return;
     }
+
+    esconderCarregandoDados();
 
     APP.dados.ordens = new Map();
     APP.referencias.operadores = new Map();
