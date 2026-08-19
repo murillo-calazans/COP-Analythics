@@ -155,14 +155,16 @@ const IndicatorEngine = {
      * recorrência — ver ASSUNTO_CANCELAMENTO), acha a OS de cancelamento
      * mais recente (se houver) e a última OS de verdade aberta antes
      * dela, pra dar contexto do que motivou o cliente a cancelar.
-     * "De verdade" respeita Configurações > Assuntos Excluídos da
-     * Última OS Antes do Cancelamento (lista negra, por padrão nada
-     * excluído) — assunto administrativo (ex.: "Conferência de
-     * Contrato") não deveria aparecer como o motivo do cancelamento.
+     * "De verdade" respeita Configurações > Assuntos Incluídos na
+     * Última OS Antes do Cancelamento — lista BRANCA (mesmo padrão de
+     * Assuntos que Contam para Recorrência): por padrão nenhum assunto
+     * conta, marque só os que são visita técnica de verdade. Assunto
+     * administrativo (ex.: "Conferência de Contrato") não deve ser
+     * marcado, pra não aparecer como o motivo do cancelamento.
      */
     encontrarCancelamentoCliente(todasOrdensCliente) {
         const alvo = normalizarTexto(this.ASSUNTO_CANCELAMENTO);
-        const excluidos = APP.configuracoes.assuntosExcluidosCancelamento ?? new Set();
+        const incluidos = APP.configuracoes.assuntosIncluidosCancelamento ?? new Set();
 
         const cancelamentos = todasOrdensCliente
             .filter(ordem => ordem.assunto && normalizarTexto(ordem.assunto) === alvo && ordem.dataAbertura)
@@ -176,7 +178,7 @@ const IndicatorEngine = {
                 ordem.id !== ordemCancelamento.id &&
                 ordem.dataAbertura &&
                 ordem.dataAbertura < ordemCancelamento.dataAbertura &&
-                (!ordem.assunto || !excluidos.has(normalizarTexto(ordem.assunto)))
+                ordem.assunto && incluidos.has(normalizarTexto(ordem.assunto))
             )
             .sort((a, b) => b.dataAbertura - a.dataAbertura);
 
