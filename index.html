@@ -360,6 +360,18 @@
         </div>
 
         <div class="placeholder-card">
+            <h2>⛔ Assuntos Excluídos da Última OS Antes do Cancelamento</h2>
+            <p>
+                Na aba Alertas, o cliente cancelado mostra a última OS de verdade antes do
+                cancelamento — marque aqui assuntos administrativos (ex.: "Conferência de
+                Contrato") que não deveriam aparecer como esse motivo; a busca pula pra próxima
+                OS anterior de verdade. Por padrão nada é excluído.
+            </p>
+            <div id="resumoAssuntosExcluidosCancelamento"></div>
+            <button type="button" id="btnAbrirAssuntosExcluidosCancelamento">Gerenciar assuntos excluídos</button>
+        </div>
+
+        <div class="placeholder-card">
             <h2>⛔ Diagnósticos Excluídos do TMS/TMA</h2>
             <p>
                 OS cancelada pelo cliente, aberta errada, etc. não representam trabalho real de
@@ -524,9 +536,10 @@
         </div>
 
         <p class="modal-descricao">
-            Aplica em Dashboard, Auditoria, Técnicos e Alertas ao mesmo tempo. Assunto, cidade,
-            bairro, evento, operador e setor aceitam mais de uma opção. Diagnóstico funciona ao
-            contrário dos demais: começa tudo visível — desmarque só os que você NÃO quer ver.
+            Aplica em Dashboard, Auditoria, Técnicos e Indicadores ao mesmo tempo (Alertas é
+            independente — tem o próprio período, na aba). Assunto, cidade, bairro, evento,
+            operador e setor aceitam mais de uma opção. Diagnóstico funciona ao contrário dos
+            demais: começa tudo visível — desmarque só os que você NÃO quer ver.
         </p>
 
         <div class="filtro-periodo-grid">
@@ -563,6 +576,21 @@
         <input type="text" id="buscaFiltroAssunto" class="input-busca-modal" placeholder="Digite para filtrar os assuntos...">
 
         <div id="listaAssuntosModal" class="lista-assuntos-modal"></div>
+
+    </div>
+</div>
+
+<div id="modalAssuntosExcluidosCancelamento" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2>Assuntos Excluídos da Última OS Antes do Cancelamento</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <input type="text" id="buscaAssuntoExcluidoCancelamento" class="input-busca-modal" placeholder="Digite para filtrar os assuntos...">
+
+        <div id="listaAssuntosExcluidosCancelamentoModal" class="lista-assuntos-modal"></div>
 
     </div>
 </div>
@@ -668,7 +696,7 @@
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
 <script src="js/services/funilassuntos.js"></script>
-<script src="js/services/diagnosticosexcluidos.js"></script><script src="js/services/diagnosticosexcluidosrecorrencia.js"></script><script src="js/services/auth.js"></script>
+<script src="js/services/diagnosticosexcluidos.js"></script><script src="js/services/diagnosticosexcluidosrecorrencia.js"></script><script src="js/services/assuntosexcluidoscancelamento.js"></script><script src="js/services/auth.js"></script>
 <script src="js/services/auditoriaia.js"></script>
 <script src="js/services/cachelocal.js"></script>
 <script src="js/services/armazenamento.js"></script>
@@ -683,7 +711,7 @@
 <script src="js/ui/indicadores.js"></script>
 <script src="js/ui/alertas.js"></script>
 <script src="js/ui/configuracoes.js"></script>
-<script src="js/ui/filtroglobal.js"></script>
+<script src="js/ui/filtroglobal.js"></script><script src="js/ui/assuntosexcluidoscancelamento.js"></script>
 <script src="js/ui/filtroperiodo.js"></script>
 <script src="js/ui/funilassuntos.js"></script>
 <script src="js/ui/diagnosticosexcluidos.js"></script><script src="js/ui/diagnosticosexcluidosrecorrencia.js"></script><script src="js/ui/tabela.js"></script>
