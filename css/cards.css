@@ -359,6 +359,16 @@
 
 }
 
+.alertas-acoes {
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+
+    margin: 16px 0;
+
+}
+
 .alertas-periodo {
 
     display: flex;

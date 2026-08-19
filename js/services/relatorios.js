@@ -783,6 +783,35 @@ function gerarPlanilhaDetalheOS() {
     baixarCsv(`detalhamento-os-${carimboDataHora()}.csv`, [cabecalho, ...linhas]);
 }
 
+/**
+ * Botão "Baixar planilha (.csv)" (Alertas) — só os dados de recorrência
+ * (clientes ativos + cancelados), nada mais. Recalcula na hora com
+ * ordensParaAlertas() (independente do Filtro Global, respeita só o
+ * período próprio da aba — ver js/ui/alertas.js) pra refletir
+ * exatamente o que está sendo mostrado ali.
+ */
+function gerarPlanilhaRecorrencia() {
+    const recorrentes = IndicatorEngine.calcularRecorrencia(ordensParaAlertas());
+    const lista = [...recorrentes.values()].sort((a, b) => b.totalOS - a.totalOS);
+
+    const cabecalho = ["Status", "Cliente", "Login", "Cidade", "OS no período", "IDs das OS", "OS de cancelamento", "Última OS antes do cancelamento"];
+
+    const linhas = lista.map(item => [
+        item.cancelado ? "Cancelado" : "Ativo",
+        item.cliente ?? "",
+        item.login ?? "",
+        item.cidade ?? "",
+        item.totalOS,
+        item.ordens.join(", "),
+        item.ordemCancelamento?.id ?? "",
+        item.ultimaOrdemAntesCancelamento
+            ? `OS ${item.ultimaOrdemAntesCancelamento.id} — ${item.ultimaOrdemAntesCancelamento.assunto ?? ""}`
+            : ""
+    ]);
+
+    baixarCsv(`relatorio-recorrencia-${carimboDataHora()}.csv`, [cabecalho, ...linhas]);
+}
+
 /** Botão "Relatório geral" (Dashboard). */
 function gerarRelatorioGeral() {
     const ordens = FiltroEngine.ordensFiltradas();
@@ -945,6 +974,123 @@ function gerarRelatorioGeral() {
 </html>`;
 
     baixarHtml(`relatorio-geral-${carimboDataHora()}.html`, html);
+}
+
+/** Uma linha por cliente (Ativos ou Cancelados) — ordenável e com busca, igual ao resto do relatório. */
+function tabelaClientesAlertas(idTabela, itens, ehCancelados) {
+    const linhas = itens.map(item => `
+        <tr>
+            <td data-sort="${escaparHtml(normalizarTexto(item.cliente ?? ""))}">${escaparHtml(item.cliente ?? "(sem nome)")}</td>
+            <td data-sort="${escaparHtml(normalizarTexto(item.login ?? ""))}">${escaparHtml(item.login)}</td>
+            <td data-sort="${escaparHtml(normalizarTexto(item.cidade ?? ""))}">${escaparHtml(item.cidade ?? "-")}</td>
+            <td class="qty-cell" data-sort="${item.totalOS}"><span class="qty-val">${item.totalOS}</span></td>
+            <td>${escaparHtml(item.ordens.join(", "))}</td>
+            ${ehCancelados ? `<td>${resumoUltimaOrdemAntesCancelamento(item.ultimaOrdemAntesCancelamento)}</td>` : ""}
+        </tr>
+    `).join("");
+
+    return `
+        <p class="subtable-title">${itens.length} cliente(s)</p>
+        <div class="table-tools">
+            <input type="search" class="table-search" placeholder="Buscar em ${itens.length} clientes (nome, login, cidade...)" aria-label="Buscar em ${idTabela}">
+            <span class="table-count">${itens.length} itens · clique no cabeçalho para ordenar</span>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table" id="${idTabela}">
+                <thead>
+                    <tr>
+                        <th data-col="0">Cliente<span class="sort-ind"></span></th>
+                        <th data-col="1">Login<span class="sort-ind"></span></th>
+                        <th data-col="2">Cidade<span class="sort-ind"></span></th>
+                        <th data-col="3">OS no período<span class="sort-ind"></span></th>
+                        <th data-col="4">IDs das OS</th>
+                        ${ehCancelados ? '<th data-col="5">Última OS antes do cancelamento</th>' : ""}
+                    </tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+/**
+ * Botão "Relatório de recorrência" (Alertas) — só os dados de
+ * recorrência, nada mais (sem TMS/TMA/diagnósticos/etc. do Relatório
+ * Geral). De propósito independente do Filtro Global — mesma fonte de
+ * dados (ordensParaAlertas) que a própria aba usa, então o relatório
+ * bate exatamente com o que está na tela no momento do clique.
+ */
+function gerarRelatorioRecorrencia() {
+    const recorrentes = IndicatorEngine.calcularRecorrencia(ordensParaAlertas());
+    const lista = [...recorrentes.values()];
+    const indicadores = calcularIndicadoresAlertas(lista);
+
+    const ativos = lista.filter(item => !item.cancelado).sort((a, b) => b.totalOS - a.totalOS);
+    const cancelados = lista.filter(item => item.cancelado).sort((a, b) => b.totalOS - a.totalOS);
+
+    const { dataInicio, dataFim } = APP.filtrosAlertas;
+    const periodoTexto = (dataInicio || dataFim)
+        ? `Período: ${dataInicio ? formatarDataParaInput(dataInicio) : "início"} até ${dataFim ? formatarDataParaInput(dataFim) : "hoje"}.`
+        : "Histórico inteiro (sem período aplicado).";
+
+    const nav = navRelatorio([
+        ["visao-geral", "Visão geral"],
+        ["por-cidade", "Por cidade"],
+        ["ativos", "Clientes ativos"],
+        ["cancelados", "Clientes cancelados"]
+    ]);
+
+    const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório de Recorrência — COP Analytics</title>
+<style>${ESTILO_RELATORIO}</style>
+</head>
+<body>
+<div class="relatorio">
+    <header class="relatorio-cabecalho" id="top">
+        <h1>Relatório de Recorrência</h1>
+        <p>COP Analytics · Gerado em ${formatarDataHora(new Date())} por ${escaparHtml(APP.usuario?.email ?? "-")}</p>
+        <p>${lista.length} cliente(s) considerado(s) — independente do Filtro Global. ${escaparHtml(periodoTexto)}</p>
+    </header>
+    ${nav}
+
+    <section class="bloco" id="visao-geral">
+        <div class="section-head"><h2>Visão geral</h2></div>
+        <div class="kpi-group">
+            <div class="kpi-grid">
+                <div class="kpi-tile"><span class="kpi-label">Clientes ativos</span><strong class="kpi-value">${indicadores.totalAtivos}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Clientes cancelados</span><strong class="kpi-value">${indicadores.totalCancelados}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Ordens abertas</span><strong class="kpi-value">${indicadores.totalOS}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Cidades atingidas</span><strong class="kpi-value">${indicadores.cidadesAtingidas}</strong></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="bloco" id="por-cidade">
+        <div class="section-head"><h2>Recorrência por cidade</h2><a class="back-top" href="#top">↑ topo</a></div>
+        <div class="subtable">${tabelaOrdenavel("tbl-alertas-cidade", "Clientes por cidade", indicadores.porCidade, "Cidade", "Clientes")}</div>
+    </section>
+
+    <section class="bloco" id="ativos">
+        <div class="section-head"><h2>Clientes ativos</h2><a class="back-top" href="#top">↑ topo</a></div>
+        ${tabelaClientesAlertas("tbl-alertas-ativos", ativos, false)}
+    </section>
+
+    <section class="bloco" id="cancelados">
+        <div class="section-head"><h2>Clientes cancelados</h2><a class="back-top" href="#top">↑ topo</a></div>
+        ${tabelaClientesAlertas("tbl-alertas-cancelados", cancelados, true)}
+    </section>
+
+    <footer class="relatorio-rodape">COP Analytics · Inteligência Operacional</footer>
+</div>
+<script>${SCRIPT_RELATORIO}<\/script>
+</body>
+</html>`;
+
+    baixarHtml(`relatorio-recorrencia-${carimboDataHora()}.html`, html);
 }
 
 /** Botão "Relatório de técnicos" (seção Técnicos). */

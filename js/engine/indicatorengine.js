@@ -101,6 +101,7 @@ const IndicatorEngine = {
             recorrentes.set(login, {
                 login,
                 cliente: listaOrdens[0].cliente,
+                cidade: listaOrdens[0].cidade,
                 totalOS: recentes.length,
                 ordens: recentes.map(ordem => ordem.id),
                 cancelado: false,
@@ -131,6 +132,7 @@ const IndicatorEngine = {
             recorrentes.set(login, {
                 login,
                 cliente: todasOrdensCliente[0]?.cliente ?? null,
+                cidade: todasOrdensCliente[0]?.cidade ?? null,
                 totalOS: recentes.length,
                 ordens: recentes.map(ordem => ordem.id),
                 cancelado: true,

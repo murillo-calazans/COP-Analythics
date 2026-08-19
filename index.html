@@ -226,6 +226,11 @@
                 da recorrência e o período abaixo valem aqui.
             </p>
 
+            <div class="alertas-acoes">
+                <button type="button" id="btnRelatorioRecorrencia" class="botao-secundario">Relatório de recorrência</button>
+                <button type="button" id="btnBaixarPlanilhaRecorrencia" class="botao-secundario">Baixar planilha (.csv)</button>
+            </div>
+
             <div class="alertas-periodo">
                 <label>De
                     <input type="date" id="alertasDataInicio">
@@ -237,6 +242,8 @@
                 <button type="button" id="btnLimparPeriodoAlertas" class="alertas-periodo-limpar">Limpar período</button>
             </div>
             <div id="resumoPeriodoAlertas"></div>
+
+            <div id="indicadoresAlertas"></div>
 
             <div class="abas">
                 <button type="button" id="abaAlertasAtivos" class="botao-aba ativo">Clientes Ativos</button>

@@ -135,6 +135,8 @@ function registrarEventos() {
     const botaoRelatorioGeral = document.getElementById("btnRelatorioGeral");
     const botaoRelatorioTecnicos = document.getElementById("btnRelatorioTecnicos");
     const botaoBaixarPlanilhaOS = document.getElementById("btnBaixarPlanilhaOS");
+    const botaoRelatorioRecorrencia = document.getElementById("btnRelatorioRecorrencia");
+    const botaoBaixarPlanilhaRecorrencia = document.getElementById("btnBaixarPlanilhaRecorrencia");
 
     if (botaoAbrirImportar) botaoAbrirImportar.addEventListener("click", abrirModalImportar);
     if (botaoGerarRelatorio) botaoGerarRelatorio.addEventListener("click", gerarRelatorio);
@@ -143,6 +145,8 @@ function registrarEventos() {
     if (botaoRelatorioGeral) botaoRelatorioGeral.addEventListener("click", gerarRelatorioGeral);
     if (botaoRelatorioTecnicos) botaoRelatorioTecnicos.addEventListener("click", gerarRelatorioTecnicos);
     if (botaoBaixarPlanilhaOS) botaoBaixarPlanilhaOS.addEventListener("click", gerarPlanilhaDetalheOS);
+    if (botaoRelatorioRecorrencia) botaoRelatorioRecorrencia.addEventListener("click", gerarRelatorioRecorrencia);
+    if (botaoBaixarPlanilhaRecorrencia) botaoBaixarPlanilhaRecorrencia.addEventListener("click", gerarPlanilhaRecorrencia);
 
 }
 

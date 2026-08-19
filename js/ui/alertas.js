@@ -128,8 +128,75 @@ function renderizarAlertas() {
     const ativos = lista.filter(item => !item.cancelado).sort((a, b) => b.totalOS - a.totalOS);
     const cancelados = lista.filter(item => item.cancelado).sort((a, b) => b.totalOS - a.totalOS);
 
+    renderizarIndicadoresAlertas(calcularIndicadoresAlertas(lista));
     renderizarTabelaAlertasAtivos(ativos);
     renderizarTabelaAlertasCancelados(cancelados);
+}
+
+/** Resumo numérico da recorrência atual (ativos+cancelados juntos) — usado na própria aba e no relatório baixável. */
+function calcularIndicadoresAlertas(lista) {
+    const ativos = lista.filter(item => !item.cancelado);
+    const cancelados = lista.filter(item => item.cancelado);
+    const totalOS = lista.reduce((soma, item) => soma + item.totalOS, 0);
+
+    const porCidade = new Map();
+    for (const item of lista) {
+        const cidade = item.cidade || "(sem cidade)";
+        porCidade.set(cidade, (porCidade.get(cidade) ?? 0) + 1);
+    }
+
+    const porCidadeLista = [...porCidade.entries()]
+        .map(([rotulo, valor]) => ({ rotulo, valor }))
+        .sort((a, b) => b.valor - a.valor);
+
+    return {
+        totalAtivos: ativos.length,
+        totalCancelados: cancelados.length,
+        totalOS,
+        cidadesAtingidas: porCidade.size,
+        porCidade: porCidadeLista
+    };
+}
+
+function renderizarIndicadoresAlertas(indicadores) {
+    const container = document.getElementById("indicadoresAlertas");
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="kpi-row">
+            <div class="stat-tile">
+                <div class="stat-label">Clientes ativos (recorrentes)</div>
+                <div class="stat-valor">${indicadores.totalAtivos.toLocaleString("pt-BR")}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Clientes cancelados</div>
+                <div class="stat-valor">${indicadores.totalCancelados.toLocaleString("pt-BR")}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Ordens abertas (recorrência)</div>
+                <div class="stat-valor">${indicadores.totalOS.toLocaleString("pt-BR")}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Cidades atingidas</div>
+                <div class="stat-valor">${indicadores.cidadesAtingidas.toLocaleString("pt-BR")}</div>
+            </div>
+        </div>
+        <div class="grafico-card">
+            <div class="grafico-cabecalho">
+                <div>
+                    <div class="grafico-titulo">Recorrência por cidade</div>
+                    <div class="grafico-subtitulo">Clientes ativos + cancelados, por cidade</div>
+                </div>
+            </div>
+            <div id="graficoAlertasCidade"></div>
+        </div>
+    `;
+
+    renderizarGraficoBarras("graficoAlertasCidade", indicadores.porCidade, {
+        serie: "serie-2",
+        limite: 5,
+        titulo: "Recorrência por cidade"
+    });
 }
 
 function renderizarTabelaAlertasAtivos(itens) {
