@@ -71,7 +71,7 @@ header{
     border: none;
 
     padding: 10px 16px;
-    border-radius: 8px;
+    border-radius: var(--raio-botao);
 
     font-size: 14px;
     white-space: nowrap;
@@ -88,8 +88,9 @@ header{
 
 .menu button.ativo{
 
-    background: #2563EB;
+    background: linear-gradient(135deg, #2563EB, var(--cor-neon-2));
     color: white;
+    box-shadow: var(--sombra-neon);
 
 }
 
@@ -145,7 +146,7 @@ header{
 
     background: transparent;
     border: none;
-    border-radius: 8px;
+    border-radius: 50%;
 
     color: #CBD5E1;
     font-size: 17px;
@@ -172,8 +173,9 @@ header{
 
 .botao-icone.ativo{
 
-    background: #2563EB;
+    background: linear-gradient(135deg, #2563EB, var(--cor-neon-2));
     color: white;
+    box-shadow: var(--sombra-neon);
 
 }
 
@@ -270,7 +272,7 @@ body.nao-autenticado .tela-login{
        cabeçalho — sempre a cor de marca (navy). */
     background: #1E293B;
     border: 1px solid #334155;
-    border-radius: 12px;
+    border-radius: var(--raio-card);
 
 }
 

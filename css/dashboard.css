@@ -38,12 +38,12 @@
     align-items: center;
     gap: 8px;
 
-    background: var(--cor-primaria);
+    background: linear-gradient(135deg, var(--cor-primaria), var(--cor-neon-2));
     color: white;
     border: none;
 
-    padding: 10px 18px;
-    border-radius: 8px;
+    padding: 10px 20px;
+    border-radius: var(--raio-botao);
 
     font-size: 14px;
     cursor: pointer;
@@ -61,8 +61,8 @@
     color: var(--cor-texto-suave);
     border: 1px solid var(--cor-borda);
 
-    padding: 10px 18px;
-    border-radius: 8px;
+    padding: 10px 20px;
+    border-radius: var(--raio-botao);
 
     font-size: 14px;
     cursor: pointer;
@@ -80,7 +80,8 @@
 
 .botao-primario:hover {
 
-    background: var(--cor-primaria-hover);
+    filter: brightness(1.08);
+    box-shadow: var(--sombra-neon);
 
 }
 
@@ -95,8 +96,8 @@
 .kpi-row {
 
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 18px;
 
 }
 
@@ -104,10 +105,19 @@
 
     background: var(--cor-fundo-card);
     border: 1px solid var(--cor-borda);
-    border-radius: 12px;
+    border-radius: var(--raio-card);
 
-    padding: 20px;
+    padding: 24px;
     box-shadow: 0 1px 3px var(--cor-sombra);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+
+}
+
+.stat-tile:hover {
+
+    transform: translateY(-3px);
+    box-shadow: 0 10px 28px var(--cor-sombra);
+    border-color: var(--cor-neon-1);
 
 }
 
@@ -121,8 +131,8 @@
 
 .stat-tile .stat-valor {
 
-    font-size: 32px;
-    font-weight: 600;
+    font-size: 34px;
+    font-weight: 700;
     color: var(--cor-texto);
 
 }
@@ -139,10 +149,18 @@
 
     background: var(--cor-fundo-card);
     border: 1px solid var(--cor-borda);
-    border-radius: 12px;
+    border-radius: var(--raio-card);
 
-    padding: 20px;
+    padding: 22px;
     box-shadow: 0 1px 3px var(--cor-sombra);
+    transition: box-shadow .2s ease, border-color .2s ease;
+
+}
+
+.grafico-card:hover {
+
+    box-shadow: 0 8px 22px var(--cor-sombra);
+    border-color: var(--cor-neon-1);
 
 }
 
@@ -176,9 +194,9 @@
 
     background: none;
     border: 1px solid var(--cor-borda);
-    border-radius: 6px;
+    border-radius: var(--raio-botao);
 
-    padding: 4px 10px;
+    padding: 4px 12px;
 
     font-size: 12px;
     color: var(--cor-texto-suave);
@@ -273,7 +291,7 @@
 
     height: 20px;
     background: var(--cor-fundo-elevado);
-    border-radius: 4px;
+    border-radius: 999px;
 
     overflow: hidden;
 
@@ -282,18 +300,26 @@
 .grafico-barra {
 
     height: 100%;
-    border-radius: 0 4px 4px 0;
+    border-radius: 999px;
 
-    transition: width .3s ease;
+    transition: width .3s ease, box-shadow .2s ease;
 
 }
 
+/*
+ * Gradiente (claro -> cor da série) + brilho neon na ponta — dá
+ * sensação de profundidade sem girar nada em 3D (isso distorceria a
+ * leitura do valor pela barra — ver skill dataviz). Cor de base é a
+ * mesma já validada (CVD/contraste), só ganha sombreado por cima.
+ */
 .grafico-barra.serie-1 {
-    background: var(--grafico-serie-1);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--grafico-serie-1) 55%, white 45%), var(--grafico-serie-1));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--grafico-serie-1) 60%, transparent);
 }
 
 .grafico-barra.serie-2 {
-    background: var(--grafico-serie-2);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--grafico-serie-2) 55%, white 45%), var(--grafico-serie-2));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--grafico-serie-2) 60%, transparent);
 }
 
 .grafico-valor {

@@ -31,7 +31,7 @@
 
     background: var(--cor-fundo-card);
     border: 1px solid var(--cor-borda);
-    border-radius: 12px;
+    border-radius: var(--raio-card);
 
     padding: 24px;
 
@@ -81,12 +81,12 @@
     width: 100%;
     margin-top: 8px;
 
-    background: var(--cor-primaria);
+    background: linear-gradient(135deg, var(--cor-primaria), var(--cor-neon-2));
     color: white;
     border: none;
 
     padding: 12px 18px;
-    border-radius: 8px;
+    border-radius: var(--raio-botao);
 
     font-size: 15px;
     font-weight: 600;
@@ -97,7 +97,8 @@
 
 .botao-gerar-relatorio:hover:not(:disabled) {
 
-    background: var(--cor-primaria-hover);
+    filter: brightness(1.08);
+    box-shadow: var(--sombra-neon);
 
 }
 

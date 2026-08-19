@@ -6,7 +6,7 @@
 
     background: var(--cor-fundo-card);
     border: 1px solid var(--cor-borda);
-    border-radius: 12px;
+    border-radius: var(--raio-card);
     box-shadow: 0 1px 3px var(--cor-sombra);
 
 }
@@ -122,7 +122,7 @@
     border: none;
 
     padding: 10px 18px;
-    border-radius: 8px;
+    border-radius: var(--raio-botao);
     cursor: pointer;
 
     transition: .25s;
@@ -164,7 +164,7 @@
 
     background: var(--cor-fundo-card);
     border: 1px solid var(--cor-borda);
-    border-radius: 12px;
+    border-radius: var(--raio-card);
     box-shadow: 0 1px 3px var(--cor-sombra);
 
 }
@@ -218,7 +218,7 @@
     border: none;
 
     padding: 10px 18px;
-    border-radius: 8px;
+    border-radius: var(--raio-botao);
     cursor: pointer;
     transition: .25s;
 
@@ -315,7 +315,7 @@
 .form-config-acoes button {
 
     padding: 10px 18px;
-    border-radius: 8px;
+    border-radius: var(--raio-botao);
     border: none;
     cursor: pointer;
     transition: .25s;
@@ -393,7 +393,7 @@
     border: none;
 
     padding: 10px 18px;
-    border-radius: 8px;
+    border-radius: var(--raio-botao);
     cursor: pointer;
     transition: .25s;
 
