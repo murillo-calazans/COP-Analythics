@@ -315,11 +315,13 @@ function atualizarTodasAsTelas() {
 
     const ordensFiltradas = FiltroEngine.ordensFiltradas();
 
+    // APP.indicadores.recorrencia (Dashboard) respeita o Filtro Global
+    // normalmente. Alertas é independente disso — atualizarAlertas() usa
+    // sua própria fonte de dados (ver js/ui/alertas.js -> ordensParaAlertas).
     APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(ordensFiltradas);
-    atualizarBadgeAlertas();
+    atualizarAlertas();
 
     renderizarDashboard();
-    renderizarAlertas();
     renderizarSecaoTecnicos();
     renderizarSecaoIndicadores();
 

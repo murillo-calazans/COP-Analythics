@@ -152,6 +152,7 @@ async function importarOrdens() {
 
         const recorrentes = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
         APP.indicadores.recorrencia = recorrentes;
+        atualizarAlertas();
 
         status.textContent =
             `Importação concluída: ${estatisticas.linhas} linhas → ` +

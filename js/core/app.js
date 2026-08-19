@@ -109,7 +109,7 @@ async function inicializarDadosAutenticado() {
         fecharModal("modalImportar");
 
         APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
-        atualizarBadgeAlertas();
+        atualizarAlertas();
 
         if (status) {
             status.textContent =

@@ -220,7 +220,23 @@
     <section id="secao-alertas" class="secao">
         <div class="placeholder-card">
             <h2>⚠ Alertas de Recorrência</h2>
-            <p>Clientes (identificados pelo login) com muitas OS abertas em pouco tempo.</p>
+            <p>
+                Clientes (identificados pelo login) com muitas OS abertas em pouco tempo.
+                Independente do Filtro Global — só as configurações de Assuntos/Diagnósticos
+                da recorrência e o período abaixo valem aqui.
+            </p>
+
+            <div class="alertas-periodo">
+                <label>De
+                    <input type="date" id="alertasDataInicio">
+                </label>
+                <label>Até
+                    <input type="date" id="alertasDataFim">
+                </label>
+                <button type="button" id="btnAplicarPeriodoAlertas" class="alertas-periodo-aplicar">Buscar</button>
+                <button type="button" id="btnLimparPeriodoAlertas" class="alertas-periodo-limpar">Limpar período</button>
+            </div>
+            <div id="resumoPeriodoAlertas"></div>
 
             <div class="abas">
                 <button type="button" id="abaAlertasAtivos" class="botao-aba ativo">Clientes Ativos</button>

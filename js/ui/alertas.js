@@ -7,11 +7,44 @@
  * LIMITE_QTD_RECORRENCIA/LIMITE_DIAS_RECORRENCIA) e Cancelados (TODO
  * cliente com uma OS de assunto IndicatorEngine.ASSUNTO_CANCELAMENTO
  * em algum ponto do histórico, independente de ter batido o padrão de
- * recorrência — ver encontrarCancelamentoCliente). Não calcula nada
- * aqui — só exibe o que já está em APP.indicadores.recorrencia.
+ * recorrência — ver encontrarCancelamentoCliente).
+ *
+ * De propósito INDEPENDENTE do Filtro Global: usa APP.dados.ordens
+ * (tudo) em vez de FiltroEngine.ordensFiltradas(), só recortado pelo
+ * período PRÓPRIO desta aba (APP.filtrosAlertas — ver ordensParaAlertas)
+ * — cidade/setor/assunto/etc. do Filtro Global não valem aqui. Quem
+ * decide o que conta pra recorrência são só as configurações dela
+ * (Assuntos que Contam / Diagnósticos Excluídos da Recorrência).
+ * Guardado em APP.indicadores.recorrenciaAlertas — separado do
+ * APP.indicadores.recorrencia usado pelo Dashboard (esse continua
+ * respeitando o Filtro Global normalmente).
+ *
  * Clicar num cliente abre um modal com o detalhe de cada OS e a
  * quantidade por mês.
  */
+
+/** Ordens pra recorrência de Alertas: tudo, só recortado pelo período local (se houver). Ignora Filtro Global. */
+function ordensParaAlertas() {
+    const { dataInicio, dataFim } = APP.filtrosAlertas;
+    if (!dataInicio && !dataFim) return APP.dados.ordens;
+
+    const filtradas = new Map();
+    for (const [id, ordem] of APP.dados.ordens) {
+        if (dataInicio && (!ordem.dataAbertura || ordem.dataAbertura < dataInicio)) continue;
+        if (dataFim && (!ordem.dataAbertura || ordem.dataAbertura > dataFim)) continue;
+        filtradas.set(id, ordem);
+    }
+    return filtradas;
+}
+
+/** Recalcula a recorrência de Alertas (independente do Filtro Global) e redesenha badge + tabelas. */
+function atualizarAlertas() {
+    if (APP.dados.ordens.size === 0) return;
+
+    APP.indicadores.recorrenciaAlertas = IndicatorEngine.calcularRecorrencia(ordensParaAlertas());
+    atualizarBadgeAlertas();
+    renderizarAlertas();
+}
 
 function registrarAbasAlertas() {
     const botaoAtivos = document.getElementById("abaAlertasAtivos");
@@ -19,6 +52,59 @@ function registrarAbasAlertas() {
 
     if (botaoAtivos) botaoAtivos.addEventListener("click", () => alternarAbaAlertas("ativos"));
     if (botaoCancelados) botaoCancelados.addEventListener("click", () => alternarAbaAlertas("cancelados"));
+
+    registrarPeriodoAlertas();
+}
+
+function registrarPeriodoAlertas() {
+    const botaoAplicar = document.getElementById("btnAplicarPeriodoAlertas");
+    const botaoLimpar = document.getElementById("btnLimparPeriodoAlertas");
+
+    if (botaoAplicar) botaoAplicar.addEventListener("click", aplicarPeriodoAlertas);
+    if (botaoLimpar) botaoLimpar.addEventListener("click", limparPeriodoAlertas);
+
+    renderizarResumoPeriodoAlertas();
+}
+
+function aplicarPeriodoAlertas() {
+    const dataInicioBruta = document.getElementById("alertasDataInicio")?.value;
+    const dataFimBruta = document.getElementById("alertasDataFim")?.value;
+
+    APP.filtrosAlertas = {
+        dataInicio: dataInicioBruta ? new Date(`${dataInicioBruta}T00:00:00`) : null,
+        dataFim: dataFimBruta ? new Date(`${dataFimBruta}T23:59:59`) : null
+    };
+
+    renderizarResumoPeriodoAlertas();
+    atualizarAlertas();
+}
+
+function limparPeriodoAlertas() {
+    APP.filtrosAlertas = { dataInicio: null, dataFim: null };
+
+    const inputInicio = document.getElementById("alertasDataInicio");
+    const inputFim = document.getElementById("alertasDataFim");
+    if (inputInicio) inputInicio.value = "";
+    if (inputFim) inputFim.value = "";
+
+    renderizarResumoPeriodoAlertas();
+    atualizarAlertas();
+}
+
+function renderizarResumoPeriodoAlertas() {
+    const container = document.getElementById("resumoPeriodoAlertas");
+    if (!container) return;
+
+    const { dataInicio, dataFim } = APP.filtrosAlertas;
+
+    if (!dataInicio && !dataFim) {
+        container.innerHTML = '<p class="resumo-filtro">Mostrando o histórico inteiro.</p>';
+        return;
+    }
+
+    const de = dataInicio ? formatarDataParaInput(dataInicio) : "início";
+    const ate = dataFim ? formatarDataParaInput(dataFim) : "hoje";
+    container.innerHTML = `<p class="resumo-filtro">Período: ${de} até ${ate}.</p>`;
 }
 
 function alternarAbaAlertas(aba) {
@@ -36,7 +122,7 @@ function alternarAbaAlertas(aba) {
 }
 
 function renderizarAlertas() {
-    const recorrentes = APP.indicadores.recorrencia;
+    const recorrentes = APP.indicadores.recorrenciaAlertas;
     const lista = recorrentes ? [...recorrentes.values()] : [];
 
     const ativos = lista.filter(item => !item.cancelado).sort((a, b) => b.totalOS - a.totalOS);
@@ -129,21 +215,21 @@ function atualizarBadgeAlertas() {
     const badge = document.getElementById("badgeAlertas");
     if (!badge) return;
 
-    const total = APP.indicadores.recorrencia?.size ?? 0;
+    const total = APP.indicadores.recorrenciaAlertas?.size ?? 0;
 
     badge.textContent = total;
     badge.hidden = total === 0;
 }
 
 function abrirModalCliente(login) {
-    const registro = APP.indicadores.recorrencia?.get(login);
+    const registro = APP.indicadores.recorrenciaAlertas?.get(login);
 
     if (!registro) {
         alert("Cliente não encontrado nos dados atuais.");
         return;
     }
 
-    const detalhes = IndicatorEngine.detalharRecorrenciaCliente(registro, FiltroEngine.ordensFiltradas());
+    const detalhes = IndicatorEngine.detalharRecorrenciaCliente(registro, ordensParaAlertas());
     renderizarFichaCliente(detalhes);
     abrirModal("modalCliente");
 }

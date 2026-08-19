@@ -90,10 +90,12 @@ function alternarAssuntoIncluido(chaveAssunto) {
     salvarAssuntosIncluidos(incluidos);
 
     if (APP.dados.ordens.size > 0) {
+        // Assuntos que Contam pra Recorrência afeta os dois cálculos —
+        // o do Dashboard (Filtro Global) e o de Alertas (independente,
+        // ver js/ui/alertas.js -> atualizarAlertas).
         APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
-        renderizarAlertas();
-        atualizarBadgeAlertas();
         renderizarDashboard();
+        atualizarAlertas();
     }
 
     const inputBusca = document.getElementById("buscaFiltroAssunto");

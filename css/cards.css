@@ -359,6 +359,78 @@
 
 }
 
+.alertas-periodo {
+
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    margin: 16px 0 4px;
+
+}
+
+.alertas-periodo label {
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+
+}
+
+.alertas-periodo input[type="date"] {
+
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+
+    padding: 8px 10px;
+
+    color: var(--cor-texto);
+    font-size: 14px;
+
+}
+
+.alertas-periodo button {
+
+    padding: 9px 16px;
+    border-radius: var(--raio-botao);
+    border: none;
+    cursor: pointer;
+    transition: .2s;
+
+}
+
+.alertas-periodo-aplicar {
+
+    background: var(--cor-primaria);
+    color: white;
+
+}
+
+.alertas-periodo-aplicar:hover {
+
+    background: var(--cor-primaria-hover);
+
+}
+
+.alertas-periodo-limpar {
+
+    background: var(--cor-fundo-elevado);
+    color: var(--cor-texto-suave);
+    border: 1px solid var(--cor-borda);
+
+}
+
+.alertas-periodo-limpar:hover {
+
+    background: var(--cor-borda);
+
+}
+
 #btnAplicarFiltroGlobal {
 
     background: var(--cor-primaria);

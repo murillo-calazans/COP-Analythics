@@ -79,6 +79,18 @@ const APP = {
         setores: [],
         diagnosticosOcultos: []
 
+    },
+
+    // Alertas (recorrência) é de propósito INDEPENDENTE do Filtro Global
+    // (cidade/setor/assunto/período/etc. não se aplicam) — só as próprias
+    // configurações da recorrência (Assuntos que Contam / Diagnósticos
+    // Excluídos da Recorrência) e esse período local valem. Sem período
+    // definido, considera o histórico inteiro. Ver js/ui/alertas.js.
+    filtrosAlertas: {
+
+        dataInicio: null,
+        dataFim: null
+
     }
 
 };
