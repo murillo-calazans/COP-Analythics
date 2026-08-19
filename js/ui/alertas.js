@@ -2,12 +2,15 @@
  * ==========================================================
  * UI de Alertas
  * ==========================================================
- * Exibe os clientes recorrentes calculados pelo IndicatorEngine, em
- * duas abas: Ativos e Cancelados (quem tem uma OS de assunto
- * IndicatorEngine.ASSUNTO_CANCELAMENTO em algum ponto do histórico —
- * ver encontrarCancelamentoCliente). Não calcula nada aqui — só exibe
- * o que já está em APP.indicadores.recorrencia. Clicar num cliente
- * abre um modal com o detalhe de cada OS e a quantidade por mês.
+ * Exibe os registros calculados pelo IndicatorEngine (calcularRecorrencia),
+ * em duas abas: Ativos (exige o padrão de recorrência — ver
+ * LIMITE_QTD_RECORRENCIA/LIMITE_DIAS_RECORRENCIA) e Cancelados (TODO
+ * cliente com uma OS de assunto IndicatorEngine.ASSUNTO_CANCELAMENTO
+ * em algum ponto do histórico, independente de ter batido o padrão de
+ * recorrência — ver encontrarCancelamentoCliente). Não calcula nada
+ * aqui — só exibe o que já está em APP.indicadores.recorrencia.
+ * Clicar num cliente abre um modal com o detalhe de cada OS e a
+ * quantidade por mês.
  */
 
 function registrarAbasAlertas() {
@@ -85,7 +88,7 @@ function renderizarTabelaAlertasCancelados(itens) {
     if (!container) return;
 
     if (itens.length === 0) {
-        container.innerHTML = '<p class="alerta-vazio">Nenhum cliente cancelado com recorrência encontrado nos dados importados.</p>';
+        container.innerHTML = '<p class="alerta-vazio">Nenhum cliente cancelado encontrado nos dados importados.</p>';
         return;
     }
 

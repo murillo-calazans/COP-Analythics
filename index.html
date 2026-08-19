@@ -347,6 +347,19 @@
             <div id="resumoDiagnosticosExcluidos"></div>
             <button type="button" id="btnAbrirDiagnosticosExcluidos">Gerenciar diagnósticos excluídos</button>
         </div>
+
+        <div class="placeholder-card">
+            <h2>⛔ Diagnósticos Excluídos da Recorrência</h2>
+            <p>
+                Marque aqui diagnósticos que não devem contar como visita recorrente de verdade
+                (ex.: "Verificação sem problema encontrado") — a OS com esse diagnóstico no
+                fechamento fica de fora da conta de recorrência (aba Alertas), tanto pra virar
+                cliente ativo quanto pro histórico mostrado num cliente cancelado. Por padrão
+                nada é excluído; marque manualmente o que fizer sentido.
+            </p>
+            <div id="resumoDiagnosticosExcluidosRecorrencia"></div>
+            <button type="button" id="btnAbrirDiagnosticosExcluidosRecorrencia">Gerenciar diagnósticos excluídos</button>
+        </div>
     </section>
 
 </main>
@@ -546,6 +559,21 @@
     </div>
 </div>
 
+<div id="modalDiagnosticosExcluidosRecorrencia" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2>Diagnósticos Excluídos da Recorrência</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <input type="text" id="buscaDiagnosticoExcluidoRecorrencia" class="input-busca-modal" placeholder="Digite para filtrar os diagnósticos...">
+
+        <div id="listaDiagnosticosExcluidosRecorrenciaModal" class="lista-assuntos-modal"></div>
+
+    </div>
+</div>
+
 
 <div id="modalFunilAssuntos" class="modal">
     <div class="modal-conteudo">
@@ -617,7 +645,7 @@
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
 <script src="js/services/funilassuntos.js"></script>
-<script src="js/services/diagnosticosexcluidos.js"></script><script src="js/services/auth.js"></script>
+<script src="js/services/diagnosticosexcluidos.js"></script><script src="js/services/diagnosticosexcluidosrecorrencia.js"></script><script src="js/services/auth.js"></script>
 <script src="js/services/auditoriaia.js"></script>
 <script src="js/services/cachelocal.js"></script>
 <script src="js/services/armazenamento.js"></script>
@@ -635,7 +663,7 @@
 <script src="js/ui/filtroglobal.js"></script>
 <script src="js/ui/filtroperiodo.js"></script>
 <script src="js/ui/funilassuntos.js"></script>
-<script src="js/ui/diagnosticosexcluidos.js"></script><script src="js/ui/tabela.js"></script>
+<script src="js/ui/diagnosticosexcluidos.js"></script><script src="js/ui/diagnosticosexcluidosrecorrencia.js"></script><script src="js/ui/tabela.js"></script>
 <script src="js/ui/timeline.js"></script>
 <script src="js/ui/logsimportacao.js"></script>
 <script src="js/ui/modal.js"></script>

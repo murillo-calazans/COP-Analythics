@@ -52,7 +52,7 @@
 const IndicatorEngine = {
 
     LIMITE_DIAS_RECORRENCIA: 90,
-    LIMITE_QTD_RECORRENCIA: 3,
+    LIMITE_QTD_RECORRENCIA: 2,
 
     // Assunto que identifica um cliente como cancelado (ver
     // encontrarCancelamentoCliente) — de propósito FORA da lista branca
@@ -83,11 +83,14 @@ const IndicatorEngine = {
         // não se qualifica mais.
         this.limparAlertasRecorrencia(ordens);
 
+        const analise = this.analisarEventosDeTodas(ordens);
         const dataReferencia = this.encontrarDataMaisRecente(ordens);
-        const porLogin = this.agruparPorLogin(ordens);
+        const porLogin = this.agruparPorLogin(ordens, analise);
         const todasPorLogin = this.agruparTodasPorLogin(ordens);
         const recorrentes = new Map();
 
+        // Ativos: exige o padrão de recorrência (LIMITE_QTD_RECORRENCIA+
+        // OS do mesmo tipo em LIMITE_DIAS_RECORRENCIA dias).
         for (const [login, listaOrdens] of porLogin) {
             const recentes = listaOrdens.filter(ordem =>
                 this.dentroDoLimite(ordem.dataAbertura, dataReferencia)
@@ -95,20 +98,50 @@ const IndicatorEngine = {
 
             if (recentes.length < this.LIMITE_QTD_RECORRENCIA) continue;
 
-            const cancelamento = this.encontrarCancelamentoCliente(todasPorLogin.get(login) ?? []);
-
             recorrentes.set(login, {
                 login,
                 cliente: listaOrdens[0].cliente,
                 totalOS: recentes.length,
                 ordens: recentes.map(ordem => ordem.id),
-                cancelado: cancelamento !== null,
-                ordemCancelamento: cancelamento?.ordemCancelamento ?? null,
-                ultimaOrdemAntesCancelamento: cancelamento?.ultimaOrdemAntes ?? null
+                cancelado: false,
+                ordemCancelamento: null,
+                ultimaOrdemAntesCancelamento: null
             });
 
             for (const ordem of recentes) {
                 this.marcarAlertaRecorrencia(ordem, recentes.length);
+            }
+        }
+
+        // Cancelados: TODO cliente com uma OS de Cancelamento entra aqui,
+        // independente de ter batido o padrão de recorrência acima —
+        // mostra as OS que ele teve (mesmo que sejam menos que o limite),
+        // pra sempre dar pra ver o contexto de quem cancelou. Se o login
+        // também for recorrente (loop de cima), esse registro substitui
+        // o de "ativo" — cliente cancelado não deve aparecer como ativo.
+        for (const [login, todasOrdensCliente] of todasPorLogin) {
+            const cancelamento = this.encontrarCancelamentoCliente(todasOrdensCliente);
+            if (!cancelamento) continue;
+
+            const listaOrdens = porLogin.get(login) ?? [];
+            const recentes = listaOrdens.filter(ordem =>
+                this.dentroDoLimite(ordem.dataAbertura, dataReferencia)
+            );
+
+            recorrentes.set(login, {
+                login,
+                cliente: todasOrdensCliente[0]?.cliente ?? null,
+                totalOS: recentes.length,
+                ordens: recentes.map(ordem => ordem.id),
+                cancelado: true,
+                ordemCancelamento: cancelamento.ordemCancelamento,
+                ultimaOrdemAntesCancelamento: cancelamento.ultimaOrdemAntes
+            });
+
+            if (recentes.length >= this.LIMITE_QTD_RECORRENCIA) {
+                for (const ordem of recentes) {
+                    this.marcarAlertaRecorrencia(ordem, recentes.length);
+                }
             }
         }
 
@@ -284,7 +317,7 @@ const IndicatorEngine = {
         return { totalClientes: clientesAfetados.size, ocorrencias };
     },
 
-    agruparPorLogin(ordens) {
+    agruparPorLogin(ordens, analise) {
         const porLogin = new Map();
 
         // Lista branca: um assunto só entra na recorrência se estiver
@@ -297,6 +330,13 @@ const IndicatorEngine = {
         for (const ordem of ordens.values()) {
             if (!ordem.login) continue;
             if (!ordem.assunto || !assuntosIncluidos.has(normalizarTexto(ordem.assunto))) continue;
+
+            // Diagnóstico excluído da recorrência (Configurações) — ex.:
+            // "Verificação sem problema encontrado" não deveria contar
+            // como visita recorrente de verdade. Lista negra própria,
+            // separada da usada no TMS/TMA (ver diagnosticoExcluidoDoTempo).
+            const info = analise.get(ordem.id);
+            if (this.diagnosticoExcluidoDaRecorrencia(info?.ultimoFechamento)) continue;
 
             if (!porLogin.has(ordem.login)) {
                 porLogin.set(ordem.login, []);
@@ -559,6 +599,27 @@ const IndicatorEngine = {
         if (!movFechamento) return false;
 
         const excluidos = APP.configuracoes.diagnosticosExcluidosTempo;
+        if (!excluidos || excluidos.size === 0) return false;
+
+        const nome = AuditEngine.resolverReferencia(
+            APP.referencias.diagnosticos, movFechamento.diagnostico, CONFIG_BASE.diagnosticos.nome
+        );
+        if (!nome) return false;
+
+        return excluidos.has(normalizarTexto(nome));
+    },
+
+    /**
+     * Igual diagnosticoExcluidoDoTempo, mas pra recorrência (Alertas) —
+     * lista negra própria e independente (Configurações > Diagnósticos
+     * Excluídos da Recorrência). Ex.: "Verificação sem problema
+     * encontrado" no fechamento não deveria contar como uma visita
+     * recorrente de verdade. Lista vazia = nada excluído (padrão).
+     */
+    diagnosticoExcluidoDaRecorrencia(movFechamento) {
+        if (!movFechamento) return false;
+
+        const excluidos = APP.configuracoes.diagnosticosExcluidosRecorrencia;
         if (!excluidos || excluidos.size === 0) return false;
 
         const nome = AuditEngine.resolverReferencia(
@@ -914,7 +975,8 @@ const IndicatorEngine = {
      * técnico — não só o número.
      */
     calcularRecorrenciaPorTecnicoDetalhado(ordens) {
-        const porLogin = this.agruparPorLogin(ordens);
+        const analise = this.analisarEventosDeTodas(ordens);
+        const porLogin = this.agruparPorLogin(ordens, analise);
         const porTecnico = new Map();
 
         for (const listaOrdens of porLogin.values()) {

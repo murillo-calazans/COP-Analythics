@@ -96,8 +96,8 @@
 .kpi-row {
 
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
 
 }
 
@@ -107,7 +107,8 @@
     border: 1px solid var(--cor-borda);
     border-radius: var(--raio-card);
 
-    padding: 24px;
+    padding: 28px 30px;
+    min-height: 128px;
     box-shadow: 0 1px 3px var(--cor-sombra);
     transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 
@@ -123,17 +124,18 @@
 
 .stat-tile .stat-label {
 
-    font-size: 13px;
+    font-size: 14px;
     color: var(--cor-texto-suave);
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 
 }
 
 .stat-tile .stat-valor {
 
-    font-size: 34px;
+    font-size: 42px;
     font-weight: 700;
     color: var(--cor-texto);
+    line-height: 1.1;
 
 }
 

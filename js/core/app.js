@@ -20,6 +20,7 @@ async function iniciarSistema() {
     APP.configuracoes.assuntosIncluidos = carregarAssuntosIncluidos();
     APP.configuracoes.funilAssuntos = carregarFunilAssuntos();
     APP.configuracoes.diagnosticosExcluidosTempo = carregarDiagnosticosExcluidosTempo();
+    APP.configuracoes.diagnosticosExcluidosRecorrencia = carregarDiagnosticosExcluidosRecorrencia();
     aplicarTemaSalvo();
 
     registrarEventos();
@@ -30,6 +31,7 @@ async function iniciarSistema() {
     registrarFiltroGlobal();
     registrarFunilAssuntos();
     registrarDiagnosticosExcluidos();
+    registrarDiagnosticosExcluidosRecorrencia();
     registrarBuscaAuditoria();
     registrarBuscaTecnicos();
     registrarLogin();
@@ -39,6 +41,7 @@ async function iniciarSistema() {
     registrarModal("modalOS");
     registrarModal("modalFiltro");
     registrarModal("modalDiagnosticosExcluidos");
+    registrarModal("modalDiagnosticosExcluidosRecorrencia");
     registrarModal("modalTecnico");
     registrarModal("modalTecnicoDetalhe");
     registrarModal("modalGraficoCompleto");
