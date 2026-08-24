@@ -57,11 +57,14 @@ const APP = {
 
     configuracoes: {},
 
-    // Filtro Global: recorta o que aparece em Dashboard/Auditoria/Técnicos
-    // ao mesmo tempo. dataInicio/dataFim são Date (período único); os
-    // demais são arrays de texto exibido (resolvido, não o código bruto
-    // da planilha) — seleção múltipla, uma OS entra se bater com
-    // QUALQUER valor escolhido dentro do mesmo campo.
+    // Filtro Global: recorta o que aparece em Dashboard/Auditoria/Técnicos/
+    // Indicadores ao mesmo tempo. dataInicio/dataFim são Date e filtram
+    // pela data de FINALIZAÇÃO da OS (não a de abertura); os demais são
+    // arrays de texto exibido (resolvido, não o código bruto da planilha)
+    // — seleção múltipla, uma OS entra se bater com QUALQUER valor
+    // escolhido dentro do mesmo campo. Operador e setor também são
+    // amarrados ao fechamento (quem finalizou a OS, não qualquer um que
+    // só abriu/assumiu/movimentou ela) — ver js/engine/filtroengine.js.
     //
     // "diagnosticosOcultos" é o único campo com lógica invertida (lista
     // negra, não branca): por padrão nada está oculto (mostra tudo);
@@ -74,7 +77,6 @@ const APP = {
         assuntos: [],
         cidades: [],
         bairros: [],
-        eventos: [],
         operadores: [],
         setores: [],
         diagnosticosOcultos: []

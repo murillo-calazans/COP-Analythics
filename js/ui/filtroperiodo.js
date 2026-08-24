@@ -2,12 +2,14 @@
  * ==========================================================
  * UI do Filtro Global
  * ==========================================================
- * Modal com período (único) + assunto/cidade/bairro/evento/
- * operador/setor (seleção múltipla, com busca e chips) +
- * diagnóstico (lista com toggle, lógica invertida — ver mais
- * abaixo). Ao aplicar, recalcula tudo que depende do recorte
- * filtrado — Dashboard, Alertas, Técnicos e a busca de Auditoria
- * (se houver uma ativa). Não decide regra nenhuma aqui — só lê o
+ * Modal com período (único, filtra pela data de FINALIZAÇÃO da OS) +
+ * assunto/cidade/bairro/operador/setor (seleção múltipla, com busca e
+ * chips) + diagnóstico (lista com toggle, lógica invertida — ver mais
+ * abaixo). Operador e setor consideram só quem FECHOU a OS (ver
+ * js/engine/filtroengine.js). Ao aplicar, recalcula tudo que depende do
+ * recorte filtrado — Dashboard, Técnicos, Indicadores e a busca de
+ * Auditoria (se houver uma ativa). Alertas é a única tela independente
+ * disso (ver js/ui/alertas.js). Não decide regra nenhuma aqui — só lê o
  * formulário e chama FiltroEngine/IndicatorEngine.
  */
 
@@ -15,13 +17,12 @@ const CAMPOS_MULTIPLOS_FILTRO = [
     { chave: "assuntos", rotulo: "Assunto" },
     { chave: "cidades", rotulo: "Cidade" },
     { chave: "bairros", rotulo: "Bairro" },
-    { chave: "eventos", rotulo: "Evento" },
     { chave: "operadores", rotulo: "Operador" },
     { chave: "setores", rotulo: "Setor" }
 ];
 
-let _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], eventos: [], operadores: [], setores: [] };
-let _opcoesFiltroGlobal = { assuntos: [], cidades: [], bairros: [], eventos: [], operadores: [], setores: [], diagnosticos: [] };
+let _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], operadores: [], setores: [] };
+let _opcoesFiltroGlobal = { assuntos: [], cidades: [], bairros: [], operadores: [], setores: [], diagnosticos: [] };
 
 // Diagnóstico é o único campo com lógica invertida (lista negra): guarda
 // as CHAVES normalizadas dos diagnósticos ESCONDIDOS, não dos mostrados —
@@ -85,7 +86,6 @@ function abrirFiltroGlobal() {
         assuntos: [...APP.filtrosGlobais.assuntos],
         cidades: [...APP.filtrosGlobais.cidades],
         bairros: [...APP.filtrosGlobais.bairros],
-        eventos: [...APP.filtrosGlobais.eventos],
         operadores: [...APP.filtrosGlobais.operadores],
         setores: [...APP.filtrosGlobais.setores]
     };
@@ -259,7 +259,6 @@ function aplicarFiltroGlobalDaTela() {
         assuntos: [..._filtrosPendentes.assuntos],
         cidades: [..._filtrosPendentes.cidades],
         bairros: [..._filtrosPendentes.bairros],
-        eventos: [..._filtrosPendentes.eventos],
         operadores: [..._filtrosPendentes.operadores],
         setores: [..._filtrosPendentes.setores],
         diagnosticosOcultos: [..._diagnosticosOcultosPendentes]
@@ -277,13 +276,12 @@ function limparFiltroGlobal() {
         assuntos: [],
         cidades: [],
         bairros: [],
-        eventos: [],
         operadores: [],
         setores: [],
         diagnosticosOcultos: []
     };
 
-    _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], eventos: [], operadores: [], setores: [] };
+    _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], operadores: [], setores: [] };
     _diagnosticosOcultosPendentes = [];
 
     const dataInicio = document.getElementById("filtroDataInicio");

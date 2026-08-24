@@ -288,7 +288,6 @@ function resumoFiltroGlobalTexto() {
     if (f.assuntos?.length) partes.push(`assuntos: ${f.assuntos.join(", ")}`);
     if (f.cidades?.length) partes.push(`cidades: ${f.cidades.join(", ")}`);
     if (f.bairros?.length) partes.push(`bairros: ${f.bairros.join(", ")}`);
-    if (f.eventos?.length) partes.push(`eventos: ${f.eventos.join(", ")}`);
     if (f.operadores?.length) partes.push(`operadores: ${f.operadores.join(", ")}`);
     if (f.setores?.length) partes.push(`setores: ${f.setores.join(", ")}`);
     if (f.diagnosticosOcultos?.length) partes.push(`diagnósticos ocultos: ${f.diagnosticosOcultos.join(", ")}`);
