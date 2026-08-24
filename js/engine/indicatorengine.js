@@ -193,10 +193,13 @@ const IndicatorEngine = {
     /**
      * Detalha um registro de recorrência (vindo de calcularRecorrencia)
      * pra tela de Alertas: cada OS envolvida, com assunto e o técnico
-     * responsável (última movimentação) — pra saber quem atendeu o
-     * cliente em cada uma das idas e vindas.
+     * que FECHOU (evento Fechamento, não a última movimentação — uma OS
+     * pode ter sido tocada de novo depois de fechada) — pra saber quem
+     * atendeu o cliente em cada uma das idas e vindas.
      */
     detalharRecorrenciaCliente(registro, ordens) {
+        const analise = this.analisarEventosDeTodas(ordens);
+
         const ordensDetalhes = registro.ordens.map(id => {
             const ordem = ordens.get(id) ?? ordens.get(Number(id)) ?? ordens.get(String(id));
 
@@ -204,8 +207,9 @@ const IndicatorEngine = {
                 return { id, assunto: null, tecnico: null, dataAbertura: null };
             }
 
-            const tecnico = (ordem.tecnicoResponsavel !== null && ordem.tecnicoResponsavel !== undefined)
-                ? AuditEngine.resolverReferencia(APP.referencias.operadores, ordem.tecnicoResponsavel, CONFIG_BASE.operadores.nome)
+            const operadorFechamento = analise.get(ordem.id)?.ultimoFechamento?.operador;
+            const tecnico = (operadorFechamento !== null && operadorFechamento !== undefined)
+                ? AuditEngine.resolverReferencia(APP.referencias.operadores, operadorFechamento, CONFIG_BASE.operadores.nome)
                 : null;
 
             return {
@@ -281,6 +285,7 @@ const IndicatorEngine = {
             return { totalClientes: 0, ocorrencias: [] };
         }
 
+        const analise = this.analisarEventosDeTodas(ordens);
         const origemNormalizada = config.origem.map(normalizarTexto);
         const destinoNormalizado = config.destino.map(normalizarTexto);
 
@@ -301,7 +306,12 @@ const IndicatorEngine = {
                 const origem = ordenadas[i];
                 if (!origem.assunto || !origemNormalizada.includes(normalizarTexto(origem.assunto))) continue;
 
-                const dataBase = origem.dataFechamento ?? origem.dataAbertura;
+                // dataFechamento é a ÚLTIMA movimentação da OS, não
+                // necessariamente o Fechamento (uma OS ainda aberta, só
+                // remexida, teria uma data recente demais aqui) — usa o
+                // Fechamento de verdade (analise), caindo pra abertura só
+                // se a OS nunca fechou.
+                const dataBase = analise.get(origem.id)?.ultimoFechamento?.data ?? origem.dataAbertura;
                 if (!dataBase) continue;
 
                 for (let j = i + 1; j < ordenadas.length; j++) {
@@ -998,12 +1008,18 @@ const IndicatorEngine = {
                 const anterior = ordenadas[i];
                 const seguinte = ordenadas[i + 1];
 
-                if (!anterior.dataFechamento || !seguinte.dataAbertura) continue;
-                if (anterior.tecnicoResponsavel === null || anterior.tecnicoResponsavel === undefined) continue;
-                if (!this.dentroDoLimite(anterior.dataFechamento, seguinte.dataAbertura)) continue;
+                // anterior.dataFechamento/tecnicoResponsavel são a
+                // ÚLTIMA movimentação da OS, não necessariamente o
+                // Fechamento (uma OS nunca fechada também tem esses
+                // campos preenchidos) — usa o Fechamento de verdade
+                // (analise), igual o resto do sistema já faz.
+                const fechamentoAnterior = analise.get(anterior.id)?.ultimoFechamento;
+                if (!fechamentoAnterior?.data || !seguinte.dataAbertura) continue;
+                if (fechamentoAnterior.operador === null || fechamentoAnterior.operador === undefined) continue;
+                if (!this.dentroDoLimite(fechamentoAnterior.data, seguinte.dataAbertura)) continue;
 
                 const nome = AuditEngine.resolverReferencia(
-                    APP.referencias.operadores, anterior.tecnicoResponsavel, CONFIG_BASE.operadores.nome
+                    APP.referencias.operadores, fechamentoAnterior.operador, CONFIG_BASE.operadores.nome
                 );
 
                 if (!porTecnico.has(nome)) {

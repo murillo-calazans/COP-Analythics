@@ -34,7 +34,7 @@ function renderizarDetalhesOS({ ordem, timeline }) {
             <div><span>Assunto</span><strong>${escaparHtml(ordem.assunto ?? "-")}</strong></div>
             <div><span>Status atual</span><strong>${escaparHtml(ordem.statusAtual ?? "-")}</strong></div>
             <div><span>Abertura</span><strong>${formatarDataHora(ordem.dataAbertura)}</strong></div>
-            <div><span>Fechamento</span><strong>${formatarDataHora(ordem.dataFechamento)}</strong></div>
+            <div><span>Fechamento</span><strong>${formatarDataHora(FiltroEngine.ultimoFechamentoDaOrdem(ordem)?.data)}</strong></div>
         </div>
         ${ordem.alertas.length > 0 ? `
             <div class="alertas-os">

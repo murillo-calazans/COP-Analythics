@@ -580,7 +580,7 @@ function coletarLinhasDetalheOS(ordens) {
             tecnico,
             diagnostico,
             dataAbertura: ordem.dataAbertura,
-            dataFechamento: ordem.dataFechamento,
+            dataFechamento: info?.ultimoFechamento?.data ?? null,
             status: ordem.statusAtual
         };
     });
