@@ -135,6 +135,7 @@ function registrarEventos() {
     const botaoGerarRelatorio = document.getElementById("btnGerarRelatorio");
     const botaoLimparDados = document.getElementById("btnLimparDados");
     const botaoAbrirLogs = document.getElementById("btnAbrirLogs");
+    const botaoLimparCache = document.getElementById("btnLimparCache");
     const botaoRelatorioGeral = document.getElementById("btnRelatorioGeral");
     const botaoRelatorioTecnicos = document.getElementById("btnRelatorioTecnicos");
     const botaoBaixarPlanilhaOS = document.getElementById("btnBaixarPlanilhaOS");
@@ -145,6 +146,7 @@ function registrarEventos() {
     if (botaoGerarRelatorio) botaoGerarRelatorio.addEventListener("click", gerarRelatorio);
     if (botaoLimparDados) botaoLimparDados.addEventListener("click", limparDadosImportados);
     if (botaoAbrirLogs) botaoAbrirLogs.addEventListener("click", abrirModalLogs);
+    if (botaoLimparCache) botaoLimparCache.addEventListener("click", limparCacheEAtualizar);
     if (botaoRelatorioGeral) botaoRelatorioGeral.addEventListener("click", gerarRelatorioGeral);
     if (botaoRelatorioTecnicos) botaoRelatorioTecnicos.addEventListener("click", gerarRelatorioTecnicos);
     if (botaoBaixarPlanilhaOS) botaoBaixarPlanilhaOS.addEventListener("click", gerarPlanilhaDetalheOS);
@@ -174,4 +176,48 @@ function atualizarTextoCarregando(texto) {
 function esconderCarregandoDados() {
     const overlay = document.getElementById("carregandoDados");
     if (overlay) overlay.hidden = true;
+}
+
+/**
+ * Botão de debug (🔄 no header): limpa o cache LOCAL deste navegador —
+ * o snapshot do IndexedDB (js/services/cachelocal.js) e qualquer Cache
+ * Storage/Service Worker que porventura exista — e recarrega numa URL
+ * cache-busted, pra forçar o navegador a buscar HTML/JS/CSS na rede em
+ * vez de servir uma versão antiga guardada no cache HTTP. Não mexe em
+ * dado compartilhado nenhum (isso é limparDadosImportados, ação
+ * distinta e restrita a admin) nem em preferências locais (tema,
+ * configurações, filtros salvos).
+ */
+async function limparCacheEAtualizar() {
+    const confirmado = confirm(
+        "Isso vai limpar o cache local deste navegador e recarregar a página, buscando a versão " +
+        "mais recente do site. Use se a tela parecer estar desatualizada. Continuar?"
+    );
+    if (!confirmado) return;
+
+    try {
+        await limparCacheLocal();
+    } catch (erro) {
+        console.warn("Falha ao limpar cache local (IndexedDB):", erro);
+    }
+
+    if (window.caches?.keys) {
+        try {
+            const nomes = await caches.keys();
+            await Promise.all(nomes.map(nome => caches.delete(nome)));
+        } catch (erro) {
+            console.warn("Falha ao limpar Cache Storage:", erro);
+        }
+    }
+
+    if (navigator.serviceWorker?.getRegistrations) {
+        try {
+            const registros = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registros.map(registro => registro.unregister()));
+        } catch (erro) {
+            console.warn("Falha ao remover service workers:", erro);
+        }
+    }
+
+    location.href = location.pathname + "?_cb=" + Date.now();
 }
