@@ -1663,6 +1663,303 @@ const IndicatorEngine = {
         return [...acumulado.entries()]
             .map(([rotulo, r]) => ({ rotulo, valor: Math.round((r.soma / r.contagem) * 10) / 10 }))
             .sort((a, b) => a.valor - b.valor);
+    },
+
+    // ==========================================================
+    // TMR de Agendamento/Reagendamento do COP, por colaborador
+    // ==========================================================
+    // Diferente do TMR de cima (calcularTMR — mede a empresa como um
+    // todo), estes medem especificamente o trabalho de quem está no(s)
+    // setor(es) configurados como "COP" (Configurações > Setor do COP,
+    // ver js/services/setorescop.js). Setor é texto livre na Base.xlsx
+    // (ex.: "Controle de Operações", "COP - B2B" já apareceram como
+    // setores distintos em dados reais) — por isso é configurável em
+    // vez de fixo no código, mesmo padrão de assuntosIncluidos/
+    // funilAssuntos.
+    //
+    // TMR Primeiro Agendamento do COP: abertura da OS até o 1º status
+    // "Agendada" (mesma janela do TMR de cima), mas só entram OS cujo
+    // esse 1º agendamento foi feito por alguém do COP — na prática isso
+    // já separa Manutenção (COP agenda desde a abertura) de Instalação
+    // (Comercial agenda primeiro, fica de fora daqui).
+    //
+    // TMR Reagendamento do COP: mede o tempo entre a OS "precisar" de um
+    // novo agendamento e esse novo agendamento acontecer (um segmento
+    // por ciclo, uma OS pode gerar mais de um). Em dados reais (489 mil
+    // linhas de amostra) só existem 9 status possíveis — não há um
+    // status literal "Reagendamento" — e uma OS "precisa" de novo
+    // agendamento de duas formas:
+    //  - sinalizada: status vira "Aguardando agendamento" (a mesma
+    //    constante que analisarEventosOS já usa pra "técnico avisou
+    //    antes de outro operador reorganizar", ver STATUS_AGUARDANDO_
+    //    AGENDAMENTO) — é o que acontece em 25.445 das 25.451 vezes que
+    //    o evento "Reagendar" aparece nos dados;
+    //  - silenciosa: um Deslocamento/Execução fica pendente (sem
+    //    Finalizada) e é sobrescrito direto por um novo status
+    //    "Agendada", sem passar por "Aguardando agendamento" — hoje já
+    //    é contado como abandono (deslocamentosAbandonados), aqui além
+    //    de contar também vira tempo.
+    // O segmento fecha no próximo status "Agendada" — sem filtrar por
+    // evento: assim como TMS/TMA/TMR (ver cabeçalho do arquivo), o que
+    // importa é o STATUS, não o evento que levou a ele (na prática,
+    // ~7% dos status "Agendada" vêm de um evento de "Alteração", não de
+    // "Agendamento"). Credita quem fez ESSE agendamento — só entra na
+    // conta se esse operador for do COP.
+
+    operadorEhDoCop(codigoOperador) {
+        const setoresCop = APP.configuracoes.setoresCop ?? [];
+        if (setoresCop.length === 0) return false;
+        if (codigoOperador === null || codigoOperador === undefined) return false;
+
+        const setor = AuditEngine.resolverReferencia(
+            APP.referencias.operadores, codigoOperador, CONFIG_BASE.operadores.setor
+        );
+        if (!setor) return false;
+
+        const alvo = normalizarTexto(setor);
+        return setoresCop.some(s => normalizarTexto(s) === alvo);
+    },
+
+    /**
+     * Função irmã de analisarEventosOS (mesmo estilo de varredura
+     * cronológica das movimentações), separada dela de propósito — não
+     * mexe em nada do que já está em produção (TMS/TMA/TME/reabertura/
+     * deslocamentosAbandonados/etc.).
+     */
+    analisarAgendamentosOS(ordem) {
+        const alvoFechamento = normalizarTexto(this.NOME_EVENTO_FECHAMENTO);
+        const alvoStatusAgendada = normalizarTexto(this.STATUS_AGENDADA);
+        const alvoStatusDeslocamento = normalizarTexto(this.STATUS_DESLOCAMENTO);
+        const alvoStatusExecucao = normalizarTexto(this.STATUS_EM_EXECUCAO);
+        const alvoStatusFinalizada = normalizarTexto(this.STATUS_FINALIZADA);
+        const alvoStatusAguardandoAgendamento = normalizarTexto(this.STATUS_AGUARDANDO_AGENDAMENTO);
+
+        let ultimoFechamento = null;
+        let primeiroAgendamento = null;
+        const segmentosReagendamento = []; // {operador, inicio, fim}
+
+        let aguardandoDesde = null;
+        const deslocamentoAbertoPorOperador = new Map();
+        const execucaoAbertaPorOperador = new Map();
+
+        const limparPendencias = () => {
+            aguardandoDesde = null;
+            deslocamentoAbertoPorOperador.clear();
+            execucaoAbertaPorOperador.clear();
+        };
+
+        // Timestamp mais antigo entre todos os sinais de "precisa
+        // reagendar" ainda pendentes — é a partir dele que o tempo de
+        // reagendamento é contado.
+        const inicioMaisAntigo = () => {
+            let inicio = aguardandoDesde;
+            for (const data of deslocamentoAbertoPorOperador.values()) {
+                if (data && (!inicio || data < inicio)) inicio = data;
+            }
+            for (const data of execucaoAbertaPorOperador.values()) {
+                if (data && (!inicio || data < inicio)) inicio = data;
+            }
+            return inicio;
+        };
+
+        for (const mov of ordem.movimentacoes) {
+            const statusNormalizado = normalizarTexto(mov.status ?? "");
+
+            if (mov.evento !== null && mov.evento !== undefined) {
+                const nomeEvento = AuditEngine.resolverReferencia(
+                    APP.referencias.eventos, mov.evento, CONFIG_BASE.eventos.nome
+                );
+                if (normalizarTexto(nomeEvento ?? "") === alvoFechamento) {
+                    if (!ultimoFechamento || (mov.data && ultimoFechamento.data && mov.data > ultimoFechamento.data)) {
+                        ultimoFechamento = mov;
+                    }
+                }
+            }
+
+            if (statusNormalizado === alvoStatusAgendada) {
+                if (!primeiroAgendamento) {
+                    primeiroAgendamento = mov;
+                } else {
+                    const inicio = inicioMaisAntigo();
+                    if (inicio && mov.data && mov.data > inicio && mov.operador !== null && mov.operador !== undefined) {
+                        segmentosReagendamento.push({ operador: mov.operador, inicio, fim: mov.data });
+                    }
+                }
+                limparPendencias();
+                continue;
+            }
+
+            if (mov.operador !== null && mov.operador !== undefined) {
+                if (statusNormalizado === alvoStatusDeslocamento) {
+                    deslocamentoAbertoPorOperador.set(mov.operador, mov.data);
+                }
+                if (statusNormalizado === alvoStatusExecucao) {
+                    execucaoAbertaPorOperador.set(mov.operador, mov.data);
+                }
+            }
+
+            // Sinal explícito ("Aguardando agendamento") resolve/limpa o
+            // que estava pendente de Deslocamento/Execução — mesmo
+            // tratamento de analisarEventosOS: não é abandono, é fluxo
+            // normal do técnico avisando antes.
+            if (statusNormalizado === alvoStatusAguardandoAgendamento) {
+                if (!aguardandoDesde) aguardandoDesde = mov.data ?? null;
+                deslocamentoAbertoPorOperador.clear();
+                execucaoAbertaPorOperador.clear();
+            }
+
+            if (statusNormalizado === alvoStatusFinalizada) {
+                deslocamentoAbertoPorOperador.clear();
+                execucaoAbertaPorOperador.clear();
+            }
+        }
+
+        // Mesma lista negra usada em TMS/TMA (Configurações > Diagnósticos
+        // excluídos do tempo) — OS cancelada/aberta errada não representa
+        // trabalho real, então o tempo gasto agendando/reagendando ela
+        // também não deveria contar nesses TMRs.
+        const excluidoDoTempo = this.diagnosticoExcluidoDoTempo(ultimoFechamento);
+
+        return { primeiroAgendamento, segmentosReagendamento, excluidoDoTempo };
+    },
+
+    analisarAgendamentosDeTodas(ordens) {
+        const analise = new Map();
+        for (const ordem of ordens.values()) {
+            analise.set(ordem.id, this.analisarAgendamentosOS(ordem));
+        }
+        return analise;
+    },
+
+    /**
+     * OS cujo 1º agendamento foi feito por alguém do COP, com o tempo
+     * individual de cada uma (abertura até o agendamento) — agrupado por
+     * quem agendou. Base de calcularTmrPrimeiroAgendamentoCop(PorColaborador)
+     * e do drill-down da tela (clicar no colaborador mostra essas OS, ver
+     * js/ui/setorescop.js). Respeita Configurações > Diagnósticos excluídos
+     * do tempo, igual TMS/TMA (ver analisarAgendamentosOS).
+     */
+    calcularAgendamentosCopDetalhado(ordens) {
+        const analise = this.analisarAgendamentosDeTodas(ordens);
+        const porColaborador = new Map();
+
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!info || info.excluidoDoTempo) continue;
+            if (!ordem.dataAbertura || !info.primeiroAgendamento?.data) continue;
+            if (!this.operadorEhDoCop(info.primeiroAgendamento.operador)) continue;
+
+            const horas = (info.primeiroAgendamento.data - ordem.dataAbertura) / 3600000;
+            if (horas < 0) continue;
+
+            const nome = AuditEngine.resolverReferencia(
+                APP.referencias.operadores, info.primeiroAgendamento.operador, CONFIG_BASE.operadores.nome
+            );
+
+            if (!porColaborador.has(nome)) porColaborador.set(nome, []);
+            porColaborador.get(nome).push({
+                ordemId: ordem.id,
+                assunto: ordem.assunto,
+                horas
+            });
+        }
+
+        return porColaborador;
+    },
+
+    /** TMR médio (horas) + contagem de OS — ver calcularAgendamentosCopDetalhado. */
+    calcularTmrPrimeiroAgendamentoCop(ordens) {
+        const detalhado = this.calcularAgendamentosCopDetalhado(ordens);
+        let somaHoras = 0;
+        let contagem = 0;
+
+        for (const itens of detalhado.values()) {
+            for (const item of itens) {
+                somaHoras += item.horas;
+                contagem++;
+            }
+        }
+
+        return { horas: contagem > 0 ? somaHoras / contagem : null, contagem };
+    },
+
+    /** Igual calcularTmrPrimeiroAgendamentoCop, quebrado por quem agendou. */
+    calcularTmrPrimeiroAgendamentoCopPorColaborador(ordens) {
+        const detalhado = this.calcularAgendamentosCopDetalhado(ordens);
+
+        return [...detalhado.entries()]
+            .map(([rotulo, itens]) => ({
+                rotulo,
+                valor: Math.round((itens.reduce((soma, i) => soma + i.horas, 0) / itens.length) * 10) / 10
+            }))
+            .sort((a, b) => a.valor - b.valor);
+    },
+
+    /**
+     * Segmentos de reagendamento (ver analisarAgendamentosOS) cujo
+     * responsável pelo novo agendamento é do COP, com o tempo individual
+     * de cada um — agrupado por quem reagendou. Base de
+     * calcularTmrReagendamentoCop(PorColaborador) e do drill-down da
+     * tela (ver js/ui/setorescop.js). Uma mesma OS pode aparecer mais de
+     * uma vez aqui (um segmento por ciclo de reagendamento). Respeita
+     * Configurações > Diagnósticos excluídos do tempo, igual TMS/TMA
+     * (ver analisarAgendamentosOS).
+     */
+    calcularReagendamentosCopDetalhado(ordens) {
+        const analise = this.analisarAgendamentosDeTodas(ordens);
+        const porColaborador = new Map();
+
+        for (const [ordemId, info] of analise) {
+            if (info.excluidoDoTempo) continue;
+
+            const ordem = ordens.get(ordemId);
+
+            for (const seg of info.segmentosReagendamento) {
+                if (!this.operadorEhDoCop(seg.operador)) continue;
+
+                const nome = AuditEngine.resolverReferencia(
+                    APP.referencias.operadores, seg.operador, CONFIG_BASE.operadores.nome
+                );
+                const horas = (seg.fim - seg.inicio) / 3600000;
+
+                if (!porColaborador.has(nome)) porColaborador.set(nome, []);
+                porColaborador.get(nome).push({
+                    ordemId,
+                    assunto: ordem?.assunto ?? null,
+                    horas
+                });
+            }
+        }
+
+        return porColaborador;
+    },
+
+    /** TMR médio (horas) + contagem de segmentos — ver calcularReagendamentosCopDetalhado. */
+    calcularTmrReagendamentoCop(ordens) {
+        const detalhado = this.calcularReagendamentosCopDetalhado(ordens);
+        let somaHoras = 0;
+        let contagem = 0;
+
+        for (const itens of detalhado.values()) {
+            for (const item of itens) {
+                somaHoras += item.horas;
+                contagem++;
+            }
+        }
+
+        return { horas: contagem > 0 ? somaHoras / contagem : null, contagem };
+    },
+
+    /** Igual calcularTmrReagendamentoCop, quebrado por quem reagendou. */
+    calcularTmrReagendamentoCopPorColaborador(ordens) {
+        const detalhado = this.calcularReagendamentosCopDetalhado(ordens);
+
+        return [...detalhado.entries()]
+            .map(([rotulo, itens]) => ({
+                rotulo,
+                valor: Math.round((itens.reduce((soma, i) => soma + i.horas, 0) / itens.length) * 10) / 10
+            }))
+            .sort((a, b) => a.valor - b.valor);
     }
 
 };

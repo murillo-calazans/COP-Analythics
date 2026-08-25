@@ -253,6 +253,19 @@ function renderizarSecaoIndicadores() {
             ${METRICAS_TEMPO.map(construirColunaTempo).join("")}
         </div>
 
+        <div class="indicadores-secao-titulo">TMR de Agendamento (Controle de Operações)</div>
+
+        <div class="grafico-card">
+            <div class="grafico-cabecalho">
+                <div>
+                    <div class="grafico-titulo">TMR de agendamento e reagendamento por colaborador do COP</div>
+                    <div class="grafico-subtitulo" id="tmrCopSubtitulo">Configure o(s) setor(es) do COP</div>
+                </div>
+                <button type="button" class="grafico-toggle-tabela" id="btnConfigurarSetoresCop">Configurar</button>
+            </div>
+            <div id="tmrCopConteudo"></div>
+        </div>
+
         <div class="indicadores-secao-titulo">Funil de Assuntos</div>
 
         <div class="grafico-card">
@@ -328,4 +341,9 @@ function renderizarSecaoIndicadores() {
     if (botaoConfigurarFunil) botaoConfigurarFunil.addEventListener("click", abrirModalFunilAssuntos);
 
     renderizarFunilAssuntosResultado();
+
+    const botaoConfigurarSetoresCop = document.getElementById("btnConfigurarSetoresCop");
+    if (botaoConfigurarSetoresCop) botaoConfigurarSetoresCop.addEventListener("click", abrirModalSetoresCop);
+
+    renderizarTmrAgendamentoCop();
 }

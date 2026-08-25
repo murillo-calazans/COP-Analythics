@@ -22,6 +22,7 @@ async function iniciarSistema() {
     APP.configuracoes.diagnosticosExcluidosTempo = carregarDiagnosticosExcluidosTempo();
     APP.configuracoes.diagnosticosExcluidosRecorrencia = carregarDiagnosticosExcluidosRecorrencia();
     APP.configuracoes.assuntosIncluidosCancelamento = carregarAssuntosIncluidosCancelamento();
+    APP.configuracoes.setoresCop = carregarSetoresCop();
     aplicarTemaSalvo();
 
     registrarEventos();
@@ -34,6 +35,7 @@ async function iniciarSistema() {
     registrarDiagnosticosExcluidos();
     registrarDiagnosticosExcluidosRecorrencia();
     registrarAssuntosIncluidosCancelamento();
+    registrarSetoresCop();
     registrarBuscaAuditoria();
     registrarBuscaTecnicos();
     registrarLogin();

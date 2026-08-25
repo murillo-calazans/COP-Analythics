@@ -376,12 +376,13 @@
         </div>
 
         <div class="placeholder-card">
-            <h2>⛔ Diagnósticos Excluídos do TMS/TMA</h2>
+            <h2>⛔ Diagnósticos Excluídos do Tempo</h2>
             <p>
                 OS cancelada pelo cliente, aberta errada, etc. não representam trabalho real de
-                campo — marque os diagnósticos correspondentes aqui pra tirá-los da conta do TMS e
-                do TMA (tanto o geral quanto o de cada técnico). Por padrão nada é excluído; a OS
-                continua contando normalmente como finalizada nos outros indicadores.
+                campo — marque os diagnósticos correspondentes aqui pra tirá-los da conta do TMS,
+                do TMA (tanto o geral quanto o de cada técnico) e dos TMRs de Agendamento/
+                Reagendamento do COP. Por padrão nada é excluído; a OS continua contando
+                normalmente como finalizada nos outros indicadores.
             </p>
             <div id="resumoDiagnosticosExcluidos"></div>
             <button type="button" id="btnAbrirDiagnosticosExcluidos">Gerenciar diagnósticos excluídos</button>
@@ -604,7 +605,7 @@
     <div class="modal-conteudo">
 
         <div class="modal-cabecalho">
-            <h2>Diagnósticos Excluídos do TMS/TMA</h2>
+            <h2>Diagnósticos Excluídos do Tempo</h2>
             <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
         </div>
 
@@ -675,6 +676,51 @@
 </div>
 
 
+<div id="modalSetoresCop" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2>Configurar Setor do COP</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <p class="modal-descricao">
+            Setor(es) da Base.xlsx que representam o <strong>Controle de Operações</strong> —
+            usado pros TMRs de agendamento/reagendamento por colaborador. Setor é um atributo
+            do operador, então nomes variam (ex.: "Controle de Operações", "COP - B2B").
+        </p>
+
+        <div class="seletor-multiplo">
+            <label>Setor(es) do COP</label>
+            <div class="seletor-multiplo-chips" id="chips-setoresCop"></div>
+            <div class="seletor-multiplo-busca-wrap">
+                <input type="text" class="seletor-multiplo-input" id="busca-setoresCop" placeholder="Buscar setor..." autocomplete="off">
+                <div class="seletor-multiplo-dropdown" id="dropdown-setoresCop" hidden></div>
+            </div>
+        </div>
+
+        <div class="form-config-acoes">
+            <button type="button" id="btnSalvarSetoresCop">Salvar</button>
+        </div>
+
+    </div>
+</div>
+
+
+<div id="modalTmrCopDetalhe" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2 id="modalTmrCopDetalheTitulo">Detalhe</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <div id="modalTmrCopDetalheConteudo"></div>
+
+    </div>
+</div>
+
+
 <script src="libs/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.js"
     integrity="sha384-OUpie84zd1LdwNlK9uJJQRwab0BLqo3eKYKFh7hSVL58FSk7wPp2l0kfUMIIoaQd"
@@ -701,6 +747,7 @@
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
 <script src="js/services/funilassuntos.js"></script>
+<script src="js/services/setorescop.js"></script>
 <script src="js/services/diagnosticosexcluidos.js"></script><script src="js/services/diagnosticosexcluidosrecorrencia.js"></script><script src="js/services/assuntosincluidoscancelamento.js"></script><script src="js/services/auth.js"></script>
 <script src="js/services/auditoriaia.js"></script>
 <script src="js/services/cachelocal.js"></script>
@@ -719,6 +766,7 @@
 <script src="js/ui/filtroglobal.js"></script><script src="js/ui/assuntosincluidoscancelamento.js"></script>
 <script src="js/ui/filtroperiodo.js"></script>
 <script src="js/ui/funilassuntos.js"></script>
+<script src="js/ui/setorescop.js"></script>
 <script src="js/ui/diagnosticosexcluidos.js"></script><script src="js/ui/diagnosticosexcluidosrecorrencia.js"></script><script src="js/ui/tabela.js"></script>
 <script src="js/ui/timeline.js"></script>
 <script src="js/ui/logsimportacao.js"></script>

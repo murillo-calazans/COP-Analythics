@@ -1,9 +1,11 @@
 /**
  * ==========================================================
- * UI de Diagnósticos Excluídos do Tempo (TMS/TMA)
+ * UI de Diagnósticos Excluídos do Tempo (TMS/TMA/TMR do COP)
  * ==========================================================
  * Abre num modal com busca: digita pra filtrar a lista, clica
- * num diagnóstico pra alternar (excluir/manter no TMS/TMA).
+ * num diagnóstico pra alternar (excluir/manter no TMS/TMA e nos
+ * TMRs de Agendamento/Reagendamento do COP — ver
+ * IndicatorEngine.diagnosticoExcluidoDoTempo/analisarAgendamentosOS).
  * Lista negra: por padrão nada está excluído. Cada clique já
  * salva e recalcula os indicadores na hora — sem botão "Salvar".
  */
@@ -74,7 +76,7 @@ function renderizarListaDiagnosticosExcluidosModal(termoBusca) {
         return `
             <div class="item-assunto-modal ${excluido ? "incluido" : ""}" data-diagnostico="${escaparHtml(chave)}">
                 <span>${escaparHtml(diagnostico)}</span>
-                <span class="item-assunto-tag">${excluido ? "Excluído do TMS/TMA — clique pra voltar a contar" : "Clique pra excluir do TMS/TMA"}</span>
+                <span class="item-assunto-tag">${excluido ? "Excluído do tempo — clique pra voltar a contar" : "Clique pra excluir do tempo"}</span>
             </div>
         `;
     }).join("");
@@ -110,6 +112,6 @@ function renderizarResumoDiagnosticosExcluidos() {
     const excluidos = APP.configuracoes.diagnosticosExcluidosTempo ?? new Set();
 
     container.innerHTML = excluidos.size === 0
-        ? '<p class="alerta-vazio">Nenhum diagnóstico excluído ainda — tudo conta normalmente no TMS/TMA.</p>'
-        : `<p class="resumo-filtro">${excluidos.size} diagnóstico(s) excluído(s) do TMS/TMA.</p>`;
+        ? '<p class="alerta-vazio">Nenhum diagnóstico excluído ainda — tudo conta normalmente no TMS/TMA/TMR do COP.</p>'
+        : `<p class="resumo-filtro">${excluidos.size} diagnóstico(s) excluído(s) do TMS/TMA/TMR do COP.</p>`;
 }
