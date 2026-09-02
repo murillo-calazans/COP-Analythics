@@ -77,6 +77,11 @@ create table if not exists movimentacoes (
     equipe text,
     evento text,
     diagnostico text,
+    -- Processo a seguir após a OS finalizar (ver
+    -- patch-09-proxima-tarefa.sql) — só relevante na movimentação de
+    -- Fechamento, usado pela Auditoria Operacional pra checar se o
+    -- diagnóstico é coerente com o próximo passo.
+    proxima_tarefa text,
     status text,
     resposta_padrao text,
     mensagem text,

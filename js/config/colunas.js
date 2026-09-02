@@ -53,7 +53,8 @@ const CONFIG_ORDENS = {
     colaboradorResponsavel: "COLABORADOR RESPONSAVEL", // <- AJUSTAR se o cabeçalho real vier diferente — quem de fato atendeu/fechou a OS (ID, resolvido pela aba PRÓPRIA "Coloborador Responsável" da Base.xlsx, NÃO a de Operadores — ver CONFIG_BASE.colaboradoresResponsaveis); só usado no Fechamento
     equipe: "EQUIPE",                  // <- AJUSTAR se o cabeçalho real vier diferente — quem trabalhou junto no fechamento
     evento: "EVENTO",
-    diagnostico: "DIAGNASTICO",        // sic — cabeçalho real da planilha
+    diagnostico: "DIAGNOSTICO",        // <- CONFIRMAR: cabeçalho corrigido (era "DIAGNASTICO" — sic) conforme export real mais recente conferido; hoje já vem como NOME/descrição (não mais ID), ver CONFIG_BASE.diagnosticos
+    proximaTarefa: "PRAXIMA TAREFA",   // sic — cabeçalho real da planilha — processo a seguir após a OS finalizar; só relevante no Fechamento (ver AuditoriaOperacionalEngine)
     status: "STATUS",
     respostaPadrao: "RESPOSTA PADRAO",
     mensagem: "MENSAGEM",

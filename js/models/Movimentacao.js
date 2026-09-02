@@ -5,6 +5,7 @@ class Movimentacao {
         equipe = null,
         evento = null,
         diagnostico = null,
+        proximaTarefa = null,
         status = null,
         respostaPadrao = null,
         mensagem = "",
@@ -16,6 +17,7 @@ class Movimentacao {
         this.equipe = equipe; // quem trabalhou junto — igual ao operador = sozinho, diferente = em dupla
         this.evento = evento;
         this.diagnostico = diagnostico;
+        this.proximaTarefa = proximaTarefa; // processo a seguir após a OS finalizar — só relevante na movimentação de Fechamento (ver AuditoriaOperacionalEngine)
         this.status = status;
         this.respostaPadrao = respostaPadrao;
         this.mensagem = mensagem;

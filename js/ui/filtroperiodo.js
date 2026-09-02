@@ -322,6 +322,7 @@ function atualizarTodasAsTelas() {
     renderizarDashboard();
     renderizarSecaoTecnicos();
     renderizarSecaoIndicadores();
+    renderizarPainelAuditoriaOperacional();
 
     const buscaAuditoria = document.getElementById("buscaAuditoria");
     if (buscaAuditoria && buscaAuditoria.value.trim()) {

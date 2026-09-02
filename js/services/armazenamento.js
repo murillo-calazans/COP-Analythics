@@ -189,6 +189,7 @@ function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
                 equipe: m.equipe,
                 evento: m.evento,
                 diagnostico: m.diagnostico,
+                proximaTarefa: m.proxima_tarefa,
                 status: m.status,
                 respostaPadrao: m.resposta_padrao,
                 mensagem: m.mensagem ?? "",
@@ -451,6 +452,7 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
                 equipe: mov.equipe === null || mov.equipe === undefined ? null : String(mov.equipe),
                 evento: mov.evento === null || mov.evento === undefined ? null : String(mov.evento),
                 diagnostico: mov.diagnostico === null || mov.diagnostico === undefined ? null : String(mov.diagnostico),
+                proxima_tarefa: mov.proximaTarefa === null || mov.proximaTarefa === undefined ? null : String(mov.proximaTarefa),
                 status: mov.status,
                 resposta_padrao: mov.respostaPadrao,
                 mensagem: mov.mensagem,
@@ -636,6 +638,7 @@ async function limparDadosImportados() {
     renderizarAlertas();
     renderizarSecaoTecnicos();
     renderizarSecaoIndicadores();
+    renderizarPainelAuditoriaOperacional();
 
     const inputBase = document.getElementById("arquivoBase");
     const inputOrdens = document.getElementById("arquivoOrdens");

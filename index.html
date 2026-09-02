@@ -163,7 +163,14 @@
 
     <section id="secao-auditoria" class="secao">
         <div class="placeholder-card auditoria-card">
-            <h2>📋 Auditoria</h2>
+            <h2>📋 Auditoria Operacional</h2>
+            <p>Verifica automaticamente se o Diagnóstico do fechamento de cada OS é coerente com a Próxima Tarefa — respeita o Filtro Global.</p>
+
+            <div id="auditoriaOperacionalConteudo"></div>
+        </div>
+
+        <div class="placeholder-card auditoria-card">
+            <h2>🔍 Buscar OS</h2>
             <p>Pesquise por ID da OS, cliente, login, cidade ou bairro.</p>
 
             <form id="formBuscaAuditoria" class="form-busca">
@@ -738,6 +745,7 @@
 
 <script src="js/core/state.js"></script>
 <script src="js/config/colunas.js"></script>
+<script src="js/config/regrasauditoria.js"></script>
 <script src="js/config/supabase.js"></script>
 
 <script src="js/models/Movimentacao.js"></script>
@@ -753,6 +761,7 @@
 <script src="js/engine/auditengine.js"></script>
 <script src="js/engine/indicatorengine.js"></script>
 <script src="js/engine/filtroengine.js"></script>
+<script src="js/engine/auditoriaoperacionalengine.js"></script>
 
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
@@ -783,6 +792,7 @@
 <script src="js/ui/modal.js"></script>
 <script src="js/ui/filtros.js"></script>
 <script src="js/ui/tecnicos.js"></script>
+<script src="js/ui/auditoriaoperacional.js"></script>
 
 <script src="js/core/app.js"></script>
 

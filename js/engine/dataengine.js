@@ -116,6 +116,7 @@ const DataEngine = {
             equipe: this.valor(linha, colunas.equipe),
             evento: this.valor(linha, colunas.evento),
             diagnostico: this.valor(linha, colunas.diagnostico),
+            proximaTarefa: this.valor(linha, colunas.proximaTarefa),
             status: this.valor(linha, colunas.status),
             respostaPadrao: this.valor(linha, colunas.respostaPadrao),
             mensagem: this.valor(linha, colunas.mensagem) ?? "",
