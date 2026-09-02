@@ -29,32 +29,36 @@ async function importarBase() {
         const buffer = await arquivo.arrayBuffer();
         const workbook = XLSX.read(buffer, { cellDates: true });
 
-        const { operadores, eventos, diagnosticos } = ReferenceEngine.carregar(workbook);
+        const { operadores, eventos, diagnosticos, colaboradoresResponsaveis } = ReferenceEngine.carregar(workbook);
 
         APP.referencias.operadores = operadores;
         APP.referencias.eventos = eventos;
         APP.referencias.diagnosticos = diagnosticos;
+        APP.referencias.colaboradoresResponsaveis = colaboradoresResponsaveis;
         APP.status.baseCarregada = true;
 
         status.textContent =
-            `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos. Salvando...`;
+            `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos, ` +
+            `${colaboradoresResponsaveis.size} colaboradores responsáveis. Salvando...`;
 
         console.log("APP.referencias:", APP.referencias);
 
         await persistirReferenciasNoSupabase(
-            { operadores, eventos, diagnosticos },
+            { operadores, eventos, diagnosticos, colaboradoresResponsaveis },
             mensagem => { status.textContent = mensagem; }
         );
 
         await registrarLogImportacao(arquivo.name, "base", {
             operadores: operadores.size,
             eventos: eventos.size,
-            diagnosticos: diagnosticos.size
+            diagnosticos: diagnosticos.size,
+            colaboradoresResponsaveis: colaboradoresResponsaveis.size
         });
         await renderizarLogsImportacao();
 
         status.textContent =
-            `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos.`;
+            `Base carregada: ${operadores.size} operadores, ${eventos.size} eventos, ${diagnosticos.size} diagnósticos, ` +
+            `${colaboradoresResponsaveis.size} colaboradores responsáveis.`;
 
         return true;
 

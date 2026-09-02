@@ -39,7 +39,11 @@ const APP = {
 
         eventos: new Map(),
 
-        diagnosticos: new Map()
+        diagnosticos: new Map(),
+
+        // Cadastro separado do de operadores (aba própria na Base.xlsx,
+        // sem coluna de SETOR) — ver js/config/colunas.js.
+        colaboradoresResponsaveis: new Map()
 
     },
 

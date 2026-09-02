@@ -77,6 +77,46 @@ const IndicatorEngine = {
     // deslocamento/execução (pediu reagendamento) — ver analisarEventosOS.
     STATUS_AGUARDANDO_AGENDAMENTO: "Aguardando agendamento",
 
+    /**
+     * Nome de quem fica com o crédito de ter finalizado a OS: o
+     * Colaborador Responsável informado na movimentação de Fechamento
+     * (quem de fato atendeu/fechou, ver
+     * CONFIG_ORDENS.colaboradorResponsavel) — cai pro Operador só
+     * quando aquela coluna vier vazia (fechamentos antigos, de antes
+     * dela existir na planilha). O Operador sozinho às vezes é só quem
+     * clicou "Fechamento" no sistema em nome de outro colaborador, não
+     * necessariamente quem foi a campo — por isso todo "quem fechou a
+     * OS" do sistema (ranking, TMS/TMA/TMR/TME por técnico, recorrência
+     * por técnico, Filtro Global) usa isto em vez de ler ".operador"
+     * direto do fechamento. Não se aplica a eventos que não são
+     * Fechamento (deslocamento, execução, agendamento, reagendamento)
+     * — nesses o Operador continua sendo a fonte certa de "quem fez
+     * aquela ação".
+     *
+     * IMPORTANTE: Colaborador Responsável é resolvido pela aba PRÓPRIA
+     * da Base.xlsx (APP.referencias.colaboradoresResponsaveis), NÃO
+     * pela de Operadores — são cadastros separados, o mesmo número de
+     * ID é pessoas diferentes nas duas abas (ver
+     * database/patch-08-colaborador-responsavel.sql). Por isso devolve
+     * o NOME já resolvido (na tabela certa para cada caso), não o
+     * código cru — quem chama não tem como saber sozinho qual das duas
+     * tabelas usar. Essa aba não tem coluna de SETOR: agrupamento por
+     * setor continua vindo do Operador (ver agregarPorSetor/
+     * FiltroEngine.fechamentoEhDoSetor), nunca do Colaborador
+     * Responsável.
+     */
+    nomeResponsavelFechamento(movFechamento) {
+        if (!movFechamento) return null;
+        const { colaboradorResponsavel, operador } = movFechamento;
+
+        if (colaboradorResponsavel !== null && colaboradorResponsavel !== undefined && colaboradorResponsavel !== "") {
+            return AuditEngine.resolverReferencia(
+                APP.referencias.colaboradoresResponsaveis, colaboradorResponsavel, CONFIG_BASE.colaboradoresResponsaveis.nome
+            );
+        }
+        return AuditEngine.resolverReferencia(APP.referencias.operadores, operador, CONFIG_BASE.operadores.nome);
+    },
+
     calcularRecorrencia(ordens) {
         // Idempotente: pode ser chamado de novo (ex.: depois de mudar o
         // Filtro Global) sem deixar alertas velhos presos numa OS que já
@@ -207,10 +247,7 @@ const IndicatorEngine = {
                 return { id, assunto: null, tecnico: null, dataAbertura: null };
             }
 
-            const operadorFechamento = analise.get(ordem.id)?.ultimoFechamento?.operador;
-            const tecnico = (operadorFechamento !== null && operadorFechamento !== undefined)
-                ? AuditEngine.resolverReferencia(APP.referencias.operadores, operadorFechamento, CONFIG_BASE.operadores.nome)
-                : null;
+            const tecnico = this.nomeResponsavelFechamento(analise.get(ordem.id)?.ultimoFechamento);
 
             return {
                 id: ordem.id,
@@ -971,12 +1008,8 @@ const IndicatorEngine = {
         for (const info of analise.values()) {
             if (!info.ultimoFechamento) continue;
 
-            const tecnico = info.ultimoFechamento.operador;
-            if (tecnico === null || tecnico === undefined) continue;
-
-            const nome = AuditEngine.resolverReferencia(
-                APP.referencias.operadores, tecnico, CONFIG_BASE.operadores.nome
-            );
+            const nome = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            if (nome === null || nome === undefined) continue;
 
             contagem.set(nome, (contagem.get(nome) ?? 0) + 1);
         }
@@ -1015,12 +1048,9 @@ const IndicatorEngine = {
                 // (analise), igual o resto do sistema já faz.
                 const fechamentoAnterior = analise.get(anterior.id)?.ultimoFechamento;
                 if (!fechamentoAnterior?.data || !seguinte.dataAbertura) continue;
-                if (fechamentoAnterior.operador === null || fechamentoAnterior.operador === undefined) continue;
+                const nome = this.nomeResponsavelFechamento(fechamentoAnterior);
+                if (nome === null || nome === undefined) continue;
                 if (!this.dentroDoLimite(fechamentoAnterior.data, seguinte.dataAbertura)) continue;
-
-                const nome = AuditEngine.resolverReferencia(
-                    APP.referencias.operadores, fechamentoAnterior.operador, CONFIG_BASE.operadores.nome
-                );
 
                 if (!porTecnico.has(nome)) {
                     porTecnico.set(nome, []);
@@ -1117,9 +1147,7 @@ const IndicatorEngine = {
         const codigoEquipe = movFechamento.equipe;
         if (codigoEquipe === null || codigoEquipe === undefined || codigoEquipe === "") return true;
 
-        const nomeOperador = AuditEngine.resolverReferencia(
-            APP.referencias.operadores, movFechamento.operador, CONFIG_BASE.operadores.nome
-        );
+        const nomeOperador = this.nomeResponsavelFechamento(movFechamento);
         const nomeEquipe = AuditEngine.resolverReferencia(
             APP.referencias.operadores, codigoEquipe, CONFIG_BASE.operadores.nome
         );
@@ -1190,12 +1218,8 @@ const IndicatorEngine = {
             const info = analise.get(ordem.id);
             if (!info?.ultimoFechamento) continue;
 
-            const codigoTecnico = info.ultimoFechamento.operador;
-            if (codigoTecnico === null || codigoTecnico === undefined) continue;
-
-            const nome = AuditEngine.resolverReferencia(
-                APP.referencias.operadores, codigoTecnico, CONFIG_BASE.operadores.nome
-            );
+            const nome = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            if (nome === null || nome === undefined) continue;
 
             const ficha = obterFicha(nome);
             ficha.totalFinalizadas++;
@@ -1351,8 +1375,9 @@ const IndicatorEngine = {
             bucket.totalFinalizadas++;
             if (info.temReabertura) bucket.reabertas++;
 
-            if (info.ultimoFechamento.operador !== null && info.ultimoFechamento.operador !== undefined) {
-                bucket.tecnicosAtivos.add(String(info.ultimoFechamento.operador));
+            const nomeFechamentoMes = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            if (nomeFechamentoMes !== null && nomeFechamentoMes !== undefined) {
+                bucket.tecnicosAtivos.add(nomeFechamentoMes);
             }
 
             if (!info.excluidoDoTempo) {
@@ -1449,14 +1474,16 @@ const IndicatorEngine = {
         return this.agregarPorGrupo(ordens, analise, ordem => ordem.cidade, calcularHorasDaOS, top, piores);
     },
 
-    // Setor é atributo do OPERADOR (Base.xlsx), não da OS — usa quem
-    // fechou (ultimoFechamento.operador), igual o Filtro Global já faz
-    // (ver FiltroEngine.fechamentoEhDoSetor).
+    // Setor é atributo do OPERADOR (Base.xlsx), não da OS — usa o
+    // Operador do fechamento (não o Colaborador Responsável: aquela
+    // aba não tem coluna de SETOR, ver nomeResponsavelFechamento),
+    // igual o Filtro Global já faz (ver FiltroEngine.fechamentoEhDoSetor).
     agregarPorSetor(ordens, analise, calcularHorasDaOS, top, piores = false) {
         const calcularGrupo = (ordem, info) => {
-            if (info.ultimoFechamento.operador === null || info.ultimoFechamento.operador === undefined) return null;
+            const operador = info.ultimoFechamento?.operador;
+            if (operador === null || operador === undefined) return null;
             return AuditEngine.resolverReferencia(
-                APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.setor
+                APP.referencias.operadores, operador, CONFIG_BASE.operadores.setor
             );
         };
         return this.agregarPorGrupo(ordens, analise, calcularGrupo, calcularHorasDaOS, top, piores);
@@ -1645,14 +1672,11 @@ const IndicatorEngine = {
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
             if (!ordem.dataAbertura || !info?.ultimoFechamento?.data || info.temReabertura) continue;
-            if (info.ultimoFechamento.operador === null || info.ultimoFechamento.operador === undefined) continue;
+            const nome = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            if (nome === null || nome === undefined) continue;
 
             const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
             if (horas < 0) continue;
-
-            const nome = AuditEngine.resolverReferencia(
-                APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome
-            );
 
             if (!acumulado.has(nome)) acumulado.set(nome, { soma: 0, contagem: 0 });
             const registro = acumulado.get(nome);

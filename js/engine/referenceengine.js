@@ -27,6 +27,10 @@ const ReferenceEngine = {
         const abaOperadores = encontrarAba(workbook, "OPERADOR");
         const abaEventos = encontrarAba(workbook, "EVENTO");
         const abaDiagnosticos = encontrarAba(workbook, "DIAGN");
+        // Opcional (não entra na checagem de "incompleta" abaixo) — Base.xlsx
+        // de antes dessa aba existir continua carregando normalmente, só
+        // sem resolver nome de Colaborador Responsável (fica no código cru).
+        const abaColaboradoresResponsaveis = encontrarAba(workbook, "RESPONS");
 
         if (!abaOperadores || !abaEventos || !abaDiagnosticos) {
             throw new Error(
@@ -53,7 +57,15 @@ const ReferenceEngine = {
             "Diagnósticos"
         );
 
-        return { operadores, eventos, diagnosticos };
+        const colaboradoresResponsaveis = abaColaboradoresResponsaveis
+            ? construirMap(
+                XLSX.utils.sheet_to_json(corrigirRangeSheet(abaColaboradoresResponsaveis)),
+                CONFIG_BASE.colaboradoresResponsaveis.chave,
+                "Colaborador Responsável"
+            )
+            : new Map();
+
+        return { operadores, eventos, diagnosticos, colaboradoresResponsaveis };
     }
 };
 

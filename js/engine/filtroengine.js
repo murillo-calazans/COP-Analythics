@@ -11,8 +11,12 @@
  * Período, operador, setor e diagnóstico são todos amarrados ao
  * FECHAMENTO da OS (ver ultimoFechamentoDaOrdem): "período" é a data
  * de finalização (não a de abertura), e "operador" é quem finalizou
- * (não qualquer um que só abriu, assumiu ou movimentou a OS no meio
- * do caminho) — mesma regra já usada em setor/diagnóstico. É por isso
+ * de fato — o Colaborador Responsável do fechamento, com fallback pro
+ * Operador só em fechamentos antigos (ver IndicatorEngine.
+ * nomeResponsavelFechamento) — não qualquer um que só abriu, assumiu
+ * ou movimentou a OS no meio do caminho — mesma regra já usada em
+ * diagnóstico (setor continua vindo do Operador — a aba de
+ * Colaborador Responsável não tem coluna de SETOR). É por isso
  * que reagendamentos e deslocamentos abandonados (calculados em cima
  * do resultado deste filtro, ver IndicatorEngine) respeitam o Filtro
  * Global: a OS só entra nesse conjunto se o SEU FECHAMENTO bater com
@@ -112,28 +116,31 @@ const FiltroEngine = {
     fechamentoEhDoOperador(ordem, nomeOperadorAlvo) {
         const alvo = normalizarTexto(nomeOperadorAlvo);
         const fechamento = this.ultimoFechamentoDaOrdem(ordem);
+        const nome = IndicatorEngine.nomeResponsavelFechamento(fechamento);
 
-        if (!fechamento || fechamento.operador === null || fechamento.operador === undefined) return false;
+        if (nome === null || nome === undefined) return false;
 
-        const nome = AuditEngine.resolverReferencia(APP.referencias.operadores, fechamento.operador, CONFIG_BASE.operadores.nome);
-        return normalizarTexto(nome ?? "") === alvo;
+        return normalizarTexto(nome) === alvo;
     },
 
     /**
-     * Setor é igual operador (fechamentoEhDoOperador): só o operador que
-     * FECHOU a OS conta — um dispatcher de outro setor que só agendou ou
-     * alterou a OS no meio do caminho não conta. Setor é atributo do
-     * OPERADOR na Base (coluna ao lado do nome), não da movimentação —
-     * reaproveita resolverReferencia trocando só a coluna lida (nome →
-     * setor).
+     * Setor é igual operador antigo (antes do Colaborador Responsável
+     * existir): quem FECHOU a OS conta — um dispatcher de outro setor
+     * que só agendou ou alterou a OS no meio do caminho não conta.
+     * Setor é atributo do OPERADOR na Base (coluna ao lado do nome),
+     * não da movimentação — reaproveita resolverReferencia trocando só
+     * a coluna lida (nome → setor). Usa o Operador do fechamento, não
+     * o Colaborador Responsável: a aba de Colaborador Responsável não
+     * tem coluna de SETOR (ver IndicatorEngine.nomeResponsavelFechamento).
      */
     fechamentoEhDoSetor(ordem, nomeSetorAlvo) {
         const alvo = normalizarTexto(nomeSetorAlvo);
         const fechamento = this.ultimoFechamentoDaOrdem(ordem);
+        const operador = fechamento?.operador;
 
-        if (!fechamento || fechamento.operador === null || fechamento.operador === undefined) return false;
+        if (operador === null || operador === undefined) return false;
 
-        const setor = AuditEngine.resolverReferencia(APP.referencias.operadores, fechamento.operador, CONFIG_BASE.operadores.setor);
+        const setor = AuditEngine.resolverReferencia(APP.referencias.operadores, operador, CONFIG_BASE.operadores.setor);
         return normalizarTexto(setor ?? "") === alvo;
     },
 
@@ -200,10 +207,12 @@ const FiltroEngine = {
             // nenhum fechamento (ex.: técnico que só agenda, nunca finaliza).
             const fechamento = this.ultimoFechamentoDaOrdem(ordem);
 
-            if (fechamento?.operador !== null && fechamento?.operador !== undefined) {
-                const nome = AuditEngine.resolverReferencia(APP.referencias.operadores, fechamento.operador, CONFIG_BASE.operadores.nome);
-                if (nome) operadores.add(nome);
+            const nomeFechamento = IndicatorEngine.nomeResponsavelFechamento(fechamento);
+            if (nomeFechamento) operadores.add(nomeFechamento);
 
+            // Setor não tem como vir do Colaborador Responsável (aba sem
+            // coluna de SETOR) — usa sempre o Operador do fechamento.
+            if (fechamento?.operador !== null && fechamento?.operador !== undefined) {
                 const setor = AuditEngine.resolverReferencia(APP.referencias.operadores, fechamento.operador, CONFIG_BASE.operadores.setor);
                 if (setor) setores.add(setor);
             }

@@ -56,6 +56,7 @@ async function salvarCacheLocal(referenciasBrutas, ordensBrutas) {
                 operadores: referenciasBrutas.operadores,
                 eventos: referenciasBrutas.eventos,
                 diagnosticos: referenciasBrutas.diagnosticos,
+                colaboradoresResponsaveis: referenciasBrutas.colaboradoresResponsaveis,
                 linhasOrdens: ordensBrutas.linhasOrdens,
                 linhasMovimentacoes: ordensBrutas.linhasMovimentacoes,
                 salvoEm: new Date().toISOString()

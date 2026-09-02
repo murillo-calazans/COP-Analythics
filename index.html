@@ -294,6 +294,12 @@
                 <label>Diagnósticos — coluna nome
                     <input data-config="CONFIG_BASE.diagnosticos.nome">
                 </label>
+                <label>Colaboradores Responsáveis — coluna chave
+                    <input data-config="CONFIG_BASE.colaboradoresResponsaveis.chave">
+                </label>
+                <label>Colaboradores Responsáveis — coluna nome
+                    <input data-config="CONFIG_BASE.colaboradoresResponsaveis.nome">
+                </label>
 
                 <h3>Ordens.xlsx</h3>
 
@@ -317,6 +323,9 @@
                 </label>
                 <label>Operador
                     <input data-config="CONFIG_ORDENS.operador">
+                </label>
+                <label>Colaborador Responsável (quem de fato fechou a OS — só preenchido no fechamento)
+                    <input data-config="CONFIG_ORDENS.colaboradorResponsavel">
                 </label>
                 <label>Equipe (só preenchido no fechamento)
                     <input data-config="CONFIG_ORDENS.equipe">
@@ -543,9 +552,10 @@
         <p class="modal-descricao">
             Aplica em Dashboard, Auditoria, Técnicos e Indicadores ao mesmo tempo (Alertas é
             independente — tem o próprio período, na aba). Período filtra pela data de
-            finalização da OS; operador e setor consideram só quem finalizou. Assunto, cidade,
-            bairro, operador e setor aceitam mais de uma opção. Diagnóstico funciona ao
-            contrário dos demais: começa tudo visível — desmarque só os que você NÃO quer ver.
+            finalização da OS; Colaborador Responsável e setor consideram só quem finalizou de
+            fato. Assunto, cidade, bairro, Colaborador Responsável e setor aceitam mais de uma
+            opção. Diagnóstico funciona ao contrário dos demais: começa tudo visível — desmarque
+            só os que você NÃO quer ver.
         </p>
 
         <div class="filtro-periodo-grid">

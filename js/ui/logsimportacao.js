@@ -67,7 +67,8 @@ function resumoLogImportacao(log) {
     if (!e) return "-";
 
     if (log.tipo === "base") {
-        return `${e.operadores ?? 0} operadores, ${e.eventos ?? 0} eventos, ${e.diagnosticos ?? 0} diagnósticos`;
+        return `${e.operadores ?? 0} operadores, ${e.eventos ?? 0} eventos, ${e.diagnosticos ?? 0} diagnósticos` +
+            (e.colaboradoresResponsaveis > 0 ? `, ${e.colaboradoresResponsaveis} colaboradores responsáveis` : "");
     }
 
     return `${e.ordens ?? 0} ordens, ${e.movimentacoes ?? 0} movimentações` +

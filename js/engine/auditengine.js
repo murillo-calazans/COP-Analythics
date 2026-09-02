@@ -53,6 +53,7 @@ const AuditEngine = {
         return {
             data: mov.data,
             operador: this.resolverReferencia(APP.referencias.operadores, mov.operador, CONFIG_BASE.operadores.nome),
+            colaboradorResponsavel: this.resolverReferencia(APP.referencias.operadores, mov.colaboradorResponsavel, CONFIG_BASE.operadores.nome),
             evento: this.resolverReferencia(APP.referencias.eventos, mov.evento, CONFIG_BASE.eventos.nome),
             diagnostico: this.resolverReferencia(APP.referencias.diagnosticos, mov.diagnostico, CONFIG_BASE.diagnosticos.nome),
             status: mov.status,

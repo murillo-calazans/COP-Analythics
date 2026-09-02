@@ -26,6 +26,9 @@ function abrirModalOS(id, idModalRetorno = null) {
 function renderizarDetalhesOS({ ordem, timeline }) {
     document.getElementById("modalTitulo").textContent = `OS ${ordem.id}`;
 
+    const fechamento = FiltroEngine.ultimoFechamentoDaOrdem(ordem);
+    const colaboradorResponsavel = IndicatorEngine.nomeResponsavelFechamento(fechamento);
+
     document.getElementById("modalResumo").innerHTML = `
         <div class="resumo-grid">
             <div><span>Cliente</span><strong>${escaparHtml(ordem.cliente ?? "-")}</strong></div>
@@ -34,7 +37,8 @@ function renderizarDetalhesOS({ ordem, timeline }) {
             <div><span>Assunto</span><strong>${escaparHtml(ordem.assunto ?? "-")}</strong></div>
             <div><span>Status atual</span><strong>${escaparHtml(ordem.statusAtual ?? "-")}</strong></div>
             <div><span>Abertura</span><strong>${formatarDataHora(ordem.dataAbertura)}</strong></div>
-            <div><span>Fechamento</span><strong>${formatarDataHora(FiltroEngine.ultimoFechamentoDaOrdem(ordem)?.data)}</strong></div>
+            <div><span>Fechamento</span><strong>${formatarDataHora(fechamento?.data)}</strong></div>
+            <div><span>Colaborador Responsável</span><strong>${escaparHtml(colaboradorResponsavel ?? "-")}</strong></div>
         </div>
         ${ordem.alertas.length > 0 ? `
             <div class="alertas-os">
@@ -52,6 +56,7 @@ function renderizarDetalhesOS({ ordem, timeline }) {
                 <strong>${escaparHtml(item.evento ?? "Evento não informado")}</strong>
                 <span class="timeline-status">${escaparHtml(item.status ?? "-")}</span>
                 <p class="timeline-operador">Operador: ${escaparHtml(item.operador ?? "-")}</p>
+                ${item.colaboradorResponsavel ? `<p class="timeline-operador">Colaborador responsável: ${escaparHtml(item.colaboradorResponsavel)}</p>` : ""}
                 ${item.diagnostico ? `<p class="timeline-diagnostico">Diagnóstico: ${escaparHtml(item.diagnostico)}</p>` : ""}
                 ${item.mensagem ? `<p class="timeline-mensagem">${escaparHtml(item.mensagem)}</p>` : ""}
             </div>

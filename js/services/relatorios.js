@@ -563,9 +563,7 @@ function coletarLinhasDetalheOS(ordens) {
 
     return [...ordens.values()].map(ordem => {
         const info = analise.get(ordem.id);
-        const tecnico = info?.ultimoFechamento?.operador !== null && info?.ultimoFechamento?.operador !== undefined
-            ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome)
-            : null;
+        const tecnico = IndicatorEngine.nomeResponsavelFechamento(info?.ultimoFechamento);
         const diagnostico = info?.ultimoFechamento?.diagnostico
             ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, info.ultimoFechamento.diagnostico, CONFIG_BASE.diagnosticos.nome)
             : null;
@@ -613,9 +611,7 @@ function coletarOsTempoAlto(ordens) {
         const tmaAlto = tmaHoras !== null && tmaHoras > LIMIAR_TMA_HORAS_TEMPO_ALTO;
         if (!tmsAlto && !tmaAlto) continue;
 
-        const tecnico = info.ultimoFechamento?.operador !== null && info.ultimoFechamento?.operador !== undefined
-            ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome)
-            : null;
+        const tecnico = IndicatorEngine.nomeResponsavelFechamento(info.ultimoFechamento);
 
         registros.push({
             id: ordem.id,
@@ -700,9 +696,7 @@ function coletarOsTempoBaixo(ordens) {
         const tmaBaixo = tmaHoras !== null && tmaHoras < LIMIAR_TMA_HORAS_TEMPO_BAIXO;
         if (!tmsBaixo && !tmaBaixo) continue;
 
-        const tecnico = info.ultimoFechamento?.operador !== null && info.ultimoFechamento?.operador !== undefined
-            ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.ultimoFechamento.operador, CONFIG_BASE.operadores.nome)
-            : null;
+        const tecnico = IndicatorEngine.nomeResponsavelFechamento(info.ultimoFechamento);
 
         registros.push({
             id: ordem.id,
@@ -763,7 +757,7 @@ function tabelaOsTempoBaixo(ordens) {
 /** Botão "Baixar planilha (.csv)" (Dashboard) — só o detalhamento por OS, sem passar pelo relatório em HTML. */
 function gerarPlanilhaDetalheOS() {
     const ordens = FiltroEngine.ordensFiltradas();
-    const cabecalho = ["ID OS", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Técnico", "Diagnóstico", "Abertura", "Fechamento", "Status"];
+    const cabecalho = ["ID OS", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Colaborador Responsável", "Diagnóstico", "Abertura", "Fechamento", "Status"];
 
     const linhas = coletarLinhasDetalheOS(ordens).map(d => [
         d.id,

@@ -17,7 +17,7 @@ const CAMPOS_MULTIPLOS_FILTRO = [
     { chave: "assuntos", rotulo: "Assunto" },
     { chave: "cidades", rotulo: "Cidade" },
     { chave: "bairros", rotulo: "Bairro" },
-    { chave: "operadores", rotulo: "Operador" },
+    { chave: "operadores", rotulo: "Colaborador Responsável" },
     { chave: "setores", rotulo: "Setor" }
 ];
 

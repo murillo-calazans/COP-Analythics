@@ -112,6 +112,7 @@ const DataEngine = {
     criarMovimentacao(linha, colunas) {
         return new Movimentacao({
             operador: this.valor(linha, colunas.operador),
+            colaboradorResponsavel: this.valor(linha, colunas.colaboradorResponsavel),
             equipe: this.valor(linha, colunas.equipe),
             evento: this.valor(linha, colunas.evento),
             diagnostico: this.valor(linha, colunas.diagnostico),

@@ -125,21 +125,23 @@ async function apagarTodasLinhas(tabela, colunaId, aoProgredir) {
 
 /** Busca as linhas brutas de referência do Supabase — sem reconstruir nada ainda (ver reconstruirReferencias). */
 async function buscarLinhasReferencias(aoProgredir) {
-    const [operadores, eventos, diagnosticos] = await Promise.all([
+    const [operadores, eventos, diagnosticos, colaboradoresResponsaveis] = await Promise.all([
         buscarTodasLinhas("ref_operadores", "chave, dados", "chave", n => aoProgredir?.(`operadores: ${n}`)),
         buscarTodasLinhas("ref_eventos", "chave, dados", "chave", n => aoProgredir?.(`eventos: ${n}`)),
-        buscarTodasLinhas("ref_diagnosticos", "chave, dados", "chave", n => aoProgredir?.(`diagnósticos: ${n}`))
+        buscarTodasLinhas("ref_diagnosticos", "chave, dados", "chave", n => aoProgredir?.(`diagnósticos: ${n}`)),
+        buscarTodasLinhas("ref_colaboradores_responsaveis", "chave, dados", "chave", n => aoProgredir?.(`colaboradores responsáveis: ${n}`))
     ]);
 
-    return { operadores, eventos, diagnosticos };
+    return { operadores, eventos, diagnosticos, colaboradoresResponsaveis };
 }
 
 /** Linhas brutas -> Map<chave, dadosBrutos> por referência. Mesmo formato tanto vindo do Supabase quanto do cache local. */
-function reconstruirReferencias({ operadores, eventos, diagnosticos }) {
+function reconstruirReferencias({ operadores, eventos, diagnosticos, colaboradoresResponsaveis }) {
     return {
         operadores: new Map(operadores.map(linha => [linha.chave, linha.dados])),
         eventos: new Map(eventos.map(linha => [linha.chave, linha.dados])),
-        diagnosticos: new Map(diagnosticos.map(linha => [linha.chave, linha.dados]))
+        diagnosticos: new Map(diagnosticos.map(linha => [linha.chave, linha.dados])),
+        colaboradoresResponsaveis: new Map((colaboradoresResponsaveis ?? []).map(linha => [linha.chave, linha.dados]))
     };
 }
 
@@ -183,6 +185,7 @@ function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
         ordem.movimentacoes = movimentacoesBrutas
             .map(m => new Movimentacao({
                 operador: m.operador,
+                colaboradorResponsavel: m.colaborador_responsavel,
                 equipe: m.equipe,
                 evento: m.evento,
                 diagnostico: m.diagnostico,
@@ -208,6 +211,7 @@ function aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas) {
     APP.referencias.operadores = referencias.operadores;
     APP.referencias.eventos = referencias.eventos;
     APP.referencias.diagnosticos = referencias.diagnosticos;
+    APP.referencias.colaboradoresResponsaveis = referencias.colaboradoresResponsaveis;
     APP.dados.ordens = ordens;
 }
 
@@ -278,16 +282,39 @@ async function buscarLogsLogin(limite = 30) {
 }
 
 /**
- * Upsert das referências (Base.xlsx) no Supabase — chamado por
+ * Substitui as referências (Base.xlsx) no Supabase — chamado por
  * importarBase() em js/services/importador.js. Guarda a linha bruta
  * inteira em JSONB, exatamente como já vem de ReferenceEngine.carregar.
  * Em lotes (ver enviarEmLotes) — Base.xlsx costuma ser pequena, mas não
  * custa nada ficar consistente com o resto.
+ *
+ * SUBSTITUI, não agrega: primeiro faz upsert de quem veio na planilha
+ * (atualiza quem já existia, insere quem é novo), depois apaga do
+ * banco quem NÃO veio nessa importação — assim um ID removido da
+ * Base.xlsx (ex.: operador desligado) some de verdade, em vez de
+ * ficar "preso" pra sempre. Nessa ordem (upsert antes de apagar) uma
+ * falha no meio do caminho no pior caso deixa registro antigo demais
+ * no banco (como já era antes), nunca a tabela vazia. Diferente de
+ * Ordens.xlsx (persistirOrdensNoSupabase), que continua acumulando de
+ * propósito — Base.xlsx é subida inteira e esporadicamente, então faz
+ * sentido cada importação refletir o estado atual da planilha; Ordens
+ * é grande demais pra caber num arquivo só e é importada aos pedaços.
  */
 async function persistirReferenciasNoSupabase(referencias, aoProgredir) {
     const paraLinhas = mapa => [...mapa.entries()].map(([chave, dados]) => ({ chave: String(chave), dados }));
 
-    const gravar = async (tabela, linhas, rotulo) => {
+    const substituir = async (tabela, linhas, rotulo) => {
+        // Guarda de segurança: um arquivo sem NENHUMA linha pra essa
+        // referência (aba vazia, aba não encontrada — ver
+        // ReferenceEngine.carregar, Colaborador Responsável é opcional)
+        // não deve apagar o que já estava salvo. Sem isso, subir uma
+        // Base.xlsx mais antiga (sem aquela aba) apagaria a tabela
+        // inteira em vez de simplesmente não mexer nela.
+        if (linhas.length === 0) {
+            console.warn(`Nenhuma linha de "${rotulo}" veio nesse arquivo — mantendo o que já estava salvo.`);
+            return;
+        }
+
         await enviarEmLotes(
             linhas,
             lote => supabaseClient.from(tabela).upsert(lote, { onConflict: "chave" }).then(({ error }) => {
@@ -295,11 +322,26 @@ async function persistirReferenciasNoSupabase(referencias, aoProgredir) {
             }),
             aoProgredir ? (feitas, total) => aoProgredir(`Salvando ${rotulo}: ${feitas}/${total}`) : null
         );
+
+        const existentes = await buscarTodasLinhas(tabela, "chave", "chave");
+        const chavesNovas = new Set(linhas.map(l => l.chave));
+        const chavesRemover = existentes.map(l => l.chave).filter(chave => !chavesNovas.has(chave));
+
+        if (chavesRemover.length > 0) {
+            await enviarEmLotes(
+                chavesRemover,
+                lote => supabaseClient.from(tabela).delete().in("chave", lote).then(({ error }) => {
+                    if (error) throw error;
+                }),
+                aoProgredir ? (feitas, total) => aoProgredir(`Removendo ${rotulo} antigos: ${feitas}/${total}`) : null
+            );
+        }
     };
 
-    await gravar("ref_operadores", paraLinhas(referencias.operadores), "operadores");
-    await gravar("ref_eventos", paraLinhas(referencias.eventos), "eventos");
-    await gravar("ref_diagnosticos", paraLinhas(referencias.diagnosticos), "diagnósticos");
+    await substituir("ref_operadores", paraLinhas(referencias.operadores), "operadores");
+    await substituir("ref_eventos", paraLinhas(referencias.eventos), "eventos");
+    await substituir("ref_diagnosticos", paraLinhas(referencias.diagnosticos), "diagnósticos");
+    await substituir("ref_colaboradores_responsaveis", paraLinhas(referencias.colaboradoresResponsaveis), "colaboradores responsáveis");
 }
 
 /**
@@ -404,6 +446,8 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
             linhasMovimentacoes.push({
                 ordem_id: String(id),
                 operador: mov.operador === null || mov.operador === undefined ? null : String(mov.operador),
+                colaborador_responsavel: mov.colaboradorResponsavel === null || mov.colaboradorResponsavel === undefined
+                    ? null : String(mov.colaboradorResponsavel),
                 equipe: mov.equipe === null || mov.equipe === undefined ? null : String(mov.equipe),
                 evento: mov.evento === null || mov.evento === undefined ? null : String(mov.evento),
                 diagnostico: mov.diagnostico === null || mov.diagnostico === undefined ? null : String(mov.diagnostico),
@@ -442,7 +486,10 @@ async function restaurarDoCacheLocal() {
 
     try {
         aplicarLinhasAoEstado(
-            { operadores: cache.operadores, eventos: cache.eventos, diagnosticos: cache.diagnosticos },
+            {
+                operadores: cache.operadores, eventos: cache.eventos, diagnosticos: cache.diagnosticos,
+                colaboradoresResponsaveis: cache.colaboradoresResponsaveis ?? []
+            },
             { linhasOrdens: cache.linhasOrdens, linhasMovimentacoes: cache.linhasMovimentacoes }
         );
         APP.status.baseCarregada = APP.dados.ordens.size > 0 || APP.referencias.operadores.size > 0;
@@ -557,6 +604,7 @@ async function limparDadosImportados() {
             supabaseClient.from("ref_operadores").delete().neq("chave", ""),
             supabaseClient.from("ref_eventos").delete().neq("chave", ""),
             supabaseClient.from("ref_diagnosticos").delete().neq("chave", ""),
+            supabaseClient.from("ref_colaboradores_responsaveis").delete().neq("chave", ""),
             supabaseClient.from("logs_importacao").delete().neq("id", 0)
         ]);
         const falha = resultados.find(r => r.error);
@@ -574,6 +622,7 @@ async function limparDadosImportados() {
     APP.referencias.operadores = new Map();
     APP.referencias.eventos = new Map();
     APP.referencias.diagnosticos = new Map();
+    APP.referencias.colaboradoresResponsaveis = new Map();
     APP.indicadores = {};
     APP.status.baseCarregada = false;
 

@@ -33,6 +33,16 @@ create table if not exists ref_diagnosticos (
     atualizado_em timestamptz not null default now()
 );
 
+-- Cadastro SEPARADO do de ref_operadores (aba própria "Coloborador
+-- Responsável" na Base.xlsx, sem coluna de SETOR) — o mesmo número de
+-- ID pode ser pessoas diferentes nas duas tabelas, ver
+-- database/patch-08-colaborador-responsavel.sql.
+create table if not exists ref_colaboradores_responsaveis (
+    chave text primary key,
+    dados jsonb not null,
+    atualizado_em timestamptz not null default now()
+);
+
 -- ---------- Ordens de Serviço ----------
 
 create table if not exists ordens (
@@ -60,6 +70,10 @@ create table if not exists movimentacoes (
     id bigint generated always as identity primary key,
     ordem_id text not null references ordens(id) on delete cascade,
     operador text,
+    -- Quem de fato fechou a OS (ver patch-08-colaborador-responsavel.sql)
+    -- — diferente do operador quando quem finaliza no sistema não é
+    -- quem foi a campo. Só costuma vir preenchido no Fechamento.
+    colaborador_responsavel text,
     equipe text,
     evento text,
     diagnostico text,
@@ -112,6 +126,7 @@ create table if not exists logs_login (
 alter table ref_operadores enable row level security;
 alter table ref_eventos enable row level security;
 alter table ref_diagnosticos enable row level security;
+alter table ref_colaboradores_responsaveis enable row level security;
 alter table ordens enable row level security;
 alter table movimentacoes enable row level security;
 alter table perfis enable row level security;
@@ -128,6 +143,8 @@ create policy "leitura autenticada" on ref_operadores for select to authenticate
 create policy "leitura autenticada" on ref_eventos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 create policy "leitura autenticada" on ref_diagnosticos for select to authenticated
+    using (exists (select 1 from perfis where id = auth.uid()));
+create policy "leitura autenticada" on ref_colaboradores_responsaveis for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 -- ordens/movimentacoes: além de estar em "perfis", o setor do usuário
 -- (se tiver algum) precisa bater com o setor da OS — null em
@@ -182,6 +199,13 @@ create policy "escrita admin" on ref_diagnosticos for insert to authenticated
 create policy "atualizacao admin" on ref_diagnosticos for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 create policy "exclusao admin" on ref_diagnosticos for delete to authenticated
+    using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+
+create policy "escrita admin" on ref_colaboradores_responsaveis for insert to authenticated
+    with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+create policy "atualizacao admin" on ref_colaboradores_responsaveis for update to authenticated
+    using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+create policy "exclusao admin" on ref_colaboradores_responsaveis for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
 create policy "escrita admin" on ordens for insert to authenticated
