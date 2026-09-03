@@ -214,6 +214,12 @@ function aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas) {
     APP.referencias.diagnosticos = referencias.diagnosticos;
     APP.referencias.colaboradoresResponsaveis = referencias.colaboradoresResponsaveis;
     APP.dados.ordens = ordens;
+
+    // Só em memória — o Supabase continua guardando o bairro cru da
+    // planilha. Roda sempre com o conjunto INTEIRO de OS, pra agrupar
+    // grafias parecidas de forma consistente mesmo entre OS importadas
+    // em arquivos diferentes (ver BairroEngine).
+    BairroEngine.normalizarBairros(APP.dados.ordens);
 }
 
 /**

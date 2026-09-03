@@ -176,6 +176,8 @@ create policy "leitura autenticada" on logs_importacao for select to authenticat
     using (exists (select 1 from perfis where id = auth.uid()));
 create policy "escrita admin" on logs_importacao for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+create policy "exclusao admin" on logs_importacao for delete to authenticated
+    using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
 -- Logs de login: qualquer usuário autenticado insere o próprio registro
 -- (admin e leitor os dois fazem login), leitura igual ao resto.

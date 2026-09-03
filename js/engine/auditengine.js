@@ -71,6 +71,52 @@ const AuditEngine = {
 
         const colunaReal = encontrarColuna(linha, colunaNome);
         return colunaReal ? linha[colunaReal] : String(codigo);
+    },
+
+    /**
+     * Diagnóstico numérico (formato antigo — movimentações importadas
+     * antes da planilha de Ordens passar a trazer o nome direto) que
+     * não bate com nenhuma linha da aba Diagnósticos da Base.xlsx
+     * atual — resolverReferencia mostra o código cru nesses casos (ver
+     * acima), o que aparece como um número solto na tela em vez de um
+     * nome. Só considera valor PURAMENTE NUMÉRICO (diagnóstico já no
+     * formato novo é sempre texto, ex.: "INSTALAÇÃO CONCLUÍDA (340)"
+     * — isso nunca é confundido com um ID sem correspondência).
+     * Devolve, por código, quantas movimentações ele afeta — pra
+     * saber se vale importar uma Base mais antiga ou se é só
+     * diagnóstico já descontinuado.
+     *
+     * "0" é ignorado de propósito: é o valor padrão que o sistema de
+     * origem grava quando a movimentação simplesmente não tem
+     * diagnóstico (confirmado nos dados reais — a maioria das
+     * ocorrências é em eventos que nunca preenchem diagnóstico, tipo
+     * Alteração/Registro de Mensagem) — não é um ID órfão de verdade,
+     * é o mesmo que vazio. Sem esse filtro ele afoga o resultado.
+     */
+    listarDiagnosticosNaoResolvidos(ordens) {
+        const contagem = new Map();
+
+        for (const ordem of ordens.values()) {
+            for (const mov of ordem.movimentacoes) {
+                const bruto = mov.diagnostico;
+                if (bruto === null || bruto === undefined || bruto === "") continue;
+
+                const textoBruto = String(bruto).trim();
+                if (textoBruto === "0") continue; // sentinela de "sem diagnóstico" — ver comentário acima
+                if (!/^\d+$/.test(textoBruto)) continue; // já é texto (formato novo) — não é o caso
+
+                const linha = APP.referencias.diagnosticos.get(bruto)
+                    ?? APP.referencias.diagnosticos.get(Number(bruto))
+                    ?? APP.referencias.diagnosticos.get(String(bruto));
+                if (linha) continue; // achou na Base — resolve normalmente, não é o caso
+
+                contagem.set(textoBruto, (contagem.get(textoBruto) ?? 0) + 1);
+            }
+        }
+
+        return [...contagem.entries()]
+            .map(([codigo, quantidade]) => ({ codigo, quantidade }))
+            .sort((a, b) => b.quantidade - a.quantidade);
     }
 
 };

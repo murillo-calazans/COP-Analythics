@@ -3,14 +3,22 @@
  * UI do Filtro Global
  * ==========================================================
  * Modal com período (único, filtra pela data de FINALIZAÇÃO da OS) +
- * assunto/cidade/bairro/operador/setor (seleção múltipla, com busca e
- * chips) + diagnóstico (lista com toggle, lógica invertida — ver mais
- * abaixo). Operador e setor consideram só quem FECHOU a OS (ver
+ * assunto/cidade/bairro/operador/setor/diagnóstico — cada campo é um
+ * botão que abre um popup compartilhado (modalSeletorFiltro) com
+ * busca por nome e caixa de marcação, igual pros seis campos.
+ * Operador e setor consideram só quem FECHOU a OS (ver
  * js/engine/filtroengine.js). Ao aplicar, recalcula tudo que depende do
  * recorte filtrado — Dashboard, Técnicos, Indicadores e a busca de
  * Auditoria (se houver uma ativa). Alertas é a única tela independente
  * disso (ver js/ui/alertas.js). Não decide regra nenhuma aqui — só lê o
  * formulário e chama FiltroEngine/IndicatorEngine.
+ *
+ * Diagnóstico é o único campo "invertido" (chave "diagnosticos",
+ * invertido:true): guarda as CHAVES normalizadas dos diagnósticos
+ * ESCONDIDOS, não dos mostrados — tudo que não estiver na lista de
+ * ocultos continua visível (padrão: nada escondido, caixa vem
+ * marcada). Os demais campos são lista branca normal: guardam os
+ * valores SELECIONADOS, caixa começa desmarcada.
  */
 
 const CAMPOS_MULTIPLOS_FILTRO = [
@@ -18,34 +26,37 @@ const CAMPOS_MULTIPLOS_FILTRO = [
     { chave: "cidades", rotulo: "Cidade" },
     { chave: "bairros", rotulo: "Bairro" },
     { chave: "operadores", rotulo: "Colaborador Responsável" },
-    { chave: "setores", rotulo: "Setor" }
+    { chave: "setores", rotulo: "Setor" },
+    { chave: "diagnosticos", rotulo: "Diagnóstico", invertido: true }
 ];
 
 let _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], operadores: [], setores: [] };
 let _opcoesFiltroGlobal = { assuntos: [], cidades: [], bairros: [], operadores: [], setores: [], diagnosticos: [] };
-
-// Diagnóstico é o único campo com lógica invertida (lista negra): guarda
-// as CHAVES normalizadas dos diagnósticos ESCONDIDOS, não dos mostrados —
-// tudo que não estiver aqui continua visível (padrão: nada escondido).
 let _diagnosticosOcultosPendentes = [];
+
+// Campo atualmente aberto no popup compartilhado (modalSeletorFiltro) — null quando nenhum está aberto.
+let _campoPopupAtivo = null;
 
 function registrarFiltroGlobal() {
     const botaoAbrir = document.getElementById("btnAbrirFiltroGlobal");
     const botaoAplicar = document.getElementById("btnAplicarFiltroGlobal");
     const botaoLimpar = document.getElementById("btnLimparFiltroGlobal");
-    const buscaDiagnostico = document.getElementById("buscaFiltroDiagnostico");
+    const buscaSeletor = document.getElementById("buscaSeletorFiltro");
+    const botaoSelecionarTodos = document.getElementById("btnSeletorFiltroSelecionarTodos");
+    const botaoLimparSelecao = document.getElementById("btnSeletorFiltroLimpar");
 
     if (botaoAbrir) botaoAbrir.addEventListener("click", abrirFiltroGlobal);
     if (botaoAplicar) botaoAplicar.addEventListener("click", aplicarFiltroGlobalDaTela);
     if (botaoLimpar) botaoLimpar.addEventListener("click", limparFiltroGlobal);
-    if (buscaDiagnostico) {
-        buscaDiagnostico.addEventListener("input", () => renderizarListaFiltroDiagnosticos(buscaDiagnostico.value));
-    }
+    if (buscaSeletor) buscaSeletor.addEventListener("input", () => renderizarListaSeletorFiltro(buscaSeletor.value));
+    if (botaoSelecionarTodos) botaoSelecionarTodos.addEventListener("click", selecionarTodosVisiveisSeletorFiltro);
+    if (botaoLimparSelecao) botaoLimparSelecao.addEventListener("click", limparSelecaoSeletorFiltro);
 
     montarCamposMultiplos();
     atualizarBadgeFiltroGlobal();
 }
 
+/** Um botão por campo (não mais dropdown+chips inline) — clicar abre o popup compartilhado com busca e checkbox. */
 function montarCamposMultiplos() {
     const container = document.getElementById("filtrosMultiplosContainer");
     if (!container) return;
@@ -53,27 +64,16 @@ function montarCamposMultiplos() {
     container.innerHTML = CAMPOS_MULTIPLOS_FILTRO.map(campo => `
         <div class="seletor-multiplo">
             <label>${campo.rotulo}</label>
-            <div class="seletor-multiplo-chips" id="chips-${campo.chave}"></div>
-            <div class="seletor-multiplo-busca-wrap">
-                <input type="text" class="seletor-multiplo-input" id="busca-${campo.chave}"
-                    placeholder="Buscar ${campo.rotulo.toLowerCase()}..." autocomplete="off">
-                <div class="seletor-multiplo-dropdown" id="dropdown-${campo.chave}" hidden></div>
-            </div>
+            <button type="button" class="seletor-multiplo-abrir" data-campo="${campo.chave}">
+                <span class="seletor-multiplo-resumo" id="resumo-${campo.chave}">Todos</span>
+                <span class="seletor-multiplo-seta">▾</span>
+            </button>
         </div>
     `).join("");
 
-    CAMPOS_MULTIPLOS_FILTRO.forEach(campo => registrarSeletorMultiplo(campo.chave));
-}
-
-function registrarSeletorMultiplo(chave) {
-    const busca = document.getElementById(`busca-${chave}`);
-    if (!busca) return;
-
-    busca.addEventListener("focus", () => renderizarDropdown(chave));
-    busca.addEventListener("input", () => renderizarDropdown(chave));
-    busca.addEventListener("blur", () => {
-        // Atraso pra deixar o mousedown da opção disparar antes do dropdown sumir.
-        setTimeout(() => fecharDropdown(chave), 150);
+    container.querySelectorAll(".seletor-multiplo-abrir").forEach(botao => {
+        const campo = CAMPOS_MULTIPLOS_FILTRO.find(c => c.chave === botao.dataset.campo);
+        if (campo) botao.addEventListener("click", () => abrirSeletorFiltro(campo));
     });
 }
 
@@ -96,150 +96,148 @@ function abrirFiltroGlobal() {
     document.getElementById("filtroDataFim").value =
         APP.filtrosGlobais.dataFim ? formatarDataParaInput(APP.filtrosGlobais.dataFim) : "";
 
-    CAMPOS_MULTIPLOS_FILTRO.forEach(campo => {
-        const busca = document.getElementById(`busca-${campo.chave}`);
-        if (busca) busca.value = "";
-        renderizarChips(campo.chave);
-        fecharDropdown(campo.chave);
-    });
-
-    const buscaDiagnostico = document.getElementById("buscaFiltroDiagnostico");
-    if (buscaDiagnostico) buscaDiagnostico.value = "";
-    renderizarListaFiltroDiagnosticos("");
+    CAMPOS_MULTIPLOS_FILTRO.forEach(campo => atualizarResumoCampo(campo));
 
     abrirModal("modalFiltroGlobal");
 }
 
-function renderizarChips(chave) {
-    const container = document.getElementById(`chips-${chave}`);
-    if (!container) return;
+/** Abre o popup compartilhado (modalSeletorFiltro) já carregado pro campo clicado. */
+function abrirSeletorFiltro(campo) {
+    _campoPopupAtivo = campo;
 
-    const selecionados = _filtrosPendentes[chave] ?? [];
+    document.getElementById("seletorFiltroTitulo").textContent = campo.rotulo;
 
-    container.innerHTML = selecionados.map(valor => `
-        <span class="chip-selecionado" data-valor="${escaparHtml(valor)}">
-            ${escaparHtml(valor)}
-            <button type="button" aria-label="Remover ${escaparHtml(valor)}">&times;</button>
-        </span>
-    `).join("");
+    const botaoSelecionarTodos = document.getElementById("btnSeletorFiltroSelecionarTodos");
+    const botaoLimpar = document.getElementById("btnSeletorFiltroLimpar");
+    if (botaoSelecionarTodos) botaoSelecionarTodos.textContent = campo.invertido ? "Mostrar todos" : "Selecionar todos";
+    if (botaoLimpar) botaoLimpar.textContent = campo.invertido ? "Ocultar todos" : "Limpar seleção";
 
-    container.querySelectorAll(".chip-selecionado button").forEach(botao => {
-        botao.addEventListener("click", () => {
-            const valor = botao.parentElement.dataset.valor;
-            removerValorSelecionado(chave, valor);
-        });
-    });
-}
-
-function renderizarDropdown(chave) {
-    const dropdown = document.getElementById(`dropdown-${chave}`);
-    const busca = document.getElementById(`busca-${chave}`);
-    if (!dropdown || !busca) return;
-
-    const todasOpcoes = _opcoesFiltroGlobal[chave] ?? [];
-    const selecionados = _filtrosPendentes[chave] ?? [];
-    const termoNormalizado = normalizarTexto(busca.value);
-
-    const disponiveis = todasOpcoes
-        .filter(opcao => !selecionados.includes(opcao))
-        .filter(opcao => !termoNormalizado || normalizarTexto(opcao).includes(termoNormalizado))
-        .slice(0, 50);
-
-    if (todasOpcoes.length === 0) {
-        dropdown.innerHTML = '<div class="seletor-multiplo-vazio">Importe dados pra ver as opções.</div>';
-    } else if (disponiveis.length === 0) {
-        dropdown.innerHTML = '<div class="seletor-multiplo-vazio">Nenhuma opção encontrada.</div>';
-    } else {
-        dropdown.innerHTML = disponiveis.map(opcao => `
-            <div class="seletor-multiplo-opcao" data-valor="${escaparHtml(opcao)}">${escaparHtml(opcao)}</div>
-        `).join("");
-
-        dropdown.querySelectorAll(".seletor-multiplo-opcao").forEach(item => {
-            item.addEventListener("mousedown", evento => {
-                evento.preventDefault(); // dispara antes do blur do campo de busca
-                adicionarValorSelecionado(chave, item.dataset.valor);
-            });
-        });
-    }
-
-    dropdown.hidden = false;
-}
-
-function fecharDropdown(chave) {
-    const dropdown = document.getElementById(`dropdown-${chave}`);
-    if (dropdown) dropdown.hidden = true;
-}
-
-function adicionarValorSelecionado(chave, valor) {
-    if (!_filtrosPendentes[chave].includes(valor)) {
-        _filtrosPendentes[chave].push(valor);
-    }
-
-    const busca = document.getElementById(`busca-${chave}`);
+    const busca = document.getElementById("buscaSeletorFiltro");
     if (busca) busca.value = "";
 
-    renderizarChips(chave);
-    renderizarDropdown(chave);
+    renderizarListaSeletorFiltro("");
+    abrirModalComRetorno("modalSeletorFiltro", "modalFiltroGlobal");
+
+    if (busca) busca.focus();
 }
 
-function removerValorSelecionado(chave, valor) {
-    _filtrosPendentes[chave] = _filtrosPendentes[chave].filter(v => v !== valor);
-    renderizarChips(chave);
-    renderizarDropdown(chave);
+function opcaoEstaMarcada(campo, opcao) {
+    if (campo.invertido) return !_diagnosticosOcultosPendentes.includes(normalizarTexto(opcao));
+    return _filtrosPendentes[campo.chave].includes(opcao);
 }
 
-/**
- * Diagnóstico é o único campo do Filtro Global com lógica invertida:
- * mostra TODOS os diagnósticos como "visível" por padrão — clicar
- * ESCONDE (some da tela, evento é o oposto dos outros campos, que
- * começam vazios e você ADICIONA pra restringir).
- */
-function renderizarListaFiltroDiagnosticos(termoBusca) {
-    const container = document.getElementById("listaFiltroDiagnosticos");
-    if (!container) return;
+function renderizarListaSeletorFiltro(termoBusca) {
+    const container = document.getElementById("listaSeletorFiltro");
+    if (!container || !_campoPopupAtivo) return;
 
-    const todos = _opcoesFiltroGlobal.diagnosticos ?? [];
+    const campo = _campoPopupAtivo;
+    const todasOpcoes = _opcoesFiltroGlobal[campo.chave] ?? [];
 
-    if (todos.length === 0) {
-        container.innerHTML = '<p class="alerta-vazio">Importe dados pra ver os diagnósticos.</p>';
+    if (todasOpcoes.length === 0) {
+        container.innerHTML = '<p class="alerta-vazio">Importe dados pra ver as opções.</p>';
         return;
     }
 
     const termoNormalizado = normalizarTexto(termoBusca ?? "");
-    const filtrados = termoNormalizado
-        ? todos.filter(diagnostico => normalizarTexto(diagnostico).includes(termoNormalizado))
-        : todos;
+    const filtradas = termoNormalizado
+        ? todasOpcoes.filter(opcao => normalizarTexto(opcao).includes(termoNormalizado))
+        : todasOpcoes;
 
-    if (filtrados.length === 0) {
-        container.innerHTML = '<p class="alerta-vazio">Nenhum diagnóstico bate com esse termo.</p>';
+    if (filtradas.length === 0) {
+        container.innerHTML = '<p class="alerta-vazio">Nenhuma opção bate com esse termo.</p>';
         return;
     }
 
-    container.innerHTML = filtrados.map(diagnostico => {
-        const chave = normalizarTexto(diagnostico);
-        const oculto = _diagnosticosOcultosPendentes.includes(chave);
+    container.innerHTML = filtradas.map(opcao => {
+        const marcado = opcaoEstaMarcada(campo, opcao);
         return `
-            <div class="item-assunto-modal ${!oculto ? "incluido" : ""}" data-diagnostico="${escaparHtml(chave)}">
-                <span>${escaparHtml(diagnostico)}</span>
-                <span class="item-assunto-tag">${oculto ? "Oculto — clique pra mostrar" : "Visível — clique pra ocultar"}</span>
-            </div>
+            <label class="item-checkbox-modal ${marcado ? "marcado" : ""}">
+                <input type="checkbox" data-valor="${escaparHtml(opcao)}" ${marcado ? "checked" : ""}>
+                <span>${escaparHtml(opcao)}</span>
+            </label>
         `;
     }).join("");
 
-    container.querySelectorAll(".item-assunto-modal").forEach(item => {
-        item.addEventListener("click", () => alternarDiagnosticoOculto(item.dataset.diagnostico));
+    container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener("change", () => alternarValorSeletorFiltro(checkbox.dataset.valor));
     });
 }
 
-function alternarDiagnosticoOculto(chaveDiagnostico) {
-    if (_diagnosticosOcultosPendentes.includes(chaveDiagnostico)) {
-        _diagnosticosOcultosPendentes = _diagnosticosOcultosPendentes.filter(d => d !== chaveDiagnostico);
+function alternarValorSeletorFiltro(valor) {
+    if (!_campoPopupAtivo) return;
+    const campo = _campoPopupAtivo;
+
+    if (campo.invertido) {
+        const chaveValor = normalizarTexto(valor);
+        if (_diagnosticosOcultosPendentes.includes(chaveValor)) {
+            _diagnosticosOcultosPendentes = _diagnosticosOcultosPendentes.filter(d => d !== chaveValor);
+        } else {
+            _diagnosticosOcultosPendentes.push(chaveValor);
+        }
+    } else if (_filtrosPendentes[campo.chave].includes(valor)) {
+        _filtrosPendentes[campo.chave] = _filtrosPendentes[campo.chave].filter(v => v !== valor);
     } else {
-        _diagnosticosOcultosPendentes.push(chaveDiagnostico);
+        _filtrosPendentes[campo.chave].push(valor);
     }
 
-    const busca = document.getElementById("buscaFiltroDiagnostico");
-    renderizarListaFiltroDiagnosticos(busca ? busca.value : "");
+    atualizarResumoCampo(campo);
+
+    const busca = document.getElementById("buscaSeletorFiltro");
+    renderizarListaSeletorFiltro(busca ? busca.value : "");
+}
+
+/** "Selecionar/Mostrar todos" age só sobre as opções que a busca atual está mostrando, não a lista inteira. */
+function selecionarTodosVisiveisSeletorFiltro() {
+    if (!_campoPopupAtivo) return;
+    const campo = _campoPopupAtivo;
+
+    const busca = document.getElementById("buscaSeletorFiltro");
+    const termoNormalizado = normalizarTexto(busca ? busca.value : "");
+    const todasOpcoes = _opcoesFiltroGlobal[campo.chave] ?? [];
+    const visiveis = termoNormalizado
+        ? todasOpcoes.filter(opcao => normalizarTexto(opcao).includes(termoNormalizado))
+        : todasOpcoes;
+
+    if (campo.invertido) {
+        const chavesVisiveis = visiveis.map(normalizarTexto);
+        _diagnosticosOcultosPendentes = _diagnosticosOcultosPendentes.filter(d => !chavesVisiveis.includes(d));
+    } else {
+        for (const opcao of visiveis) {
+            if (!_filtrosPendentes[campo.chave].includes(opcao)) _filtrosPendentes[campo.chave].push(opcao);
+        }
+    }
+
+    atualizarResumoCampo(campo);
+    renderizarListaSeletorFiltro(busca ? busca.value : "");
+}
+
+function limparSelecaoSeletorFiltro() {
+    if (!_campoPopupAtivo) return;
+    const campo = _campoPopupAtivo;
+
+    if (campo.invertido) {
+        _diagnosticosOcultosPendentes = [..._opcoesFiltroGlobal.diagnosticos.map(normalizarTexto)];
+    } else {
+        _filtrosPendentes[campo.chave] = [];
+    }
+
+    atualizarResumoCampo(campo);
+    const busca = document.getElementById("buscaSeletorFiltro");
+    renderizarListaSeletorFiltro(busca ? busca.value : "");
+}
+
+/** Texto curto no botão do campo, na tela principal do Filtro Global (ex.: "3 selecionados", "Todos", "2 ocultos"). */
+function atualizarResumoCampo(campo) {
+    const resumo = document.getElementById(`resumo-${campo.chave}`);
+    if (!resumo) return;
+
+    if (campo.invertido) {
+        const ocultos = _diagnosticosOcultosPendentes.length;
+        resumo.textContent = ocultos === 0 ? "Todos visíveis" : `${ocultos} oculto(s)`;
+    } else {
+        const total = _filtrosPendentes[campo.chave].length;
+        resumo.textContent = total === 0 ? "Todos" : `${total} selecionado(s)`;
+    }
 }
 
 function formatarDataParaInput(data) {
@@ -289,11 +287,7 @@ function limparFiltroGlobal() {
     if (dataInicio) dataInicio.value = "";
     if (dataFim) dataFim.value = "";
 
-    CAMPOS_MULTIPLOS_FILTRO.forEach(campo => renderizarChips(campo.chave));
-
-    const buscaDiagnostico = document.getElementById("buscaFiltroDiagnostico");
-    if (buscaDiagnostico) buscaDiagnostico.value = "";
-    renderizarListaFiltroDiagnosticos("");
+    CAMPOS_MULTIPLOS_FILTRO.forEach(campo => atualizarResumoCampo(campo));
 
     atualizarBadgeFiltroGlobal();
     atualizarTodasAsTelas();

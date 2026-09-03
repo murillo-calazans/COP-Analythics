@@ -67,35 +67,41 @@ function renderizarPainelAuditoriaOperacional() {
             </div>
         </div>
 
-        ${resultado.porTipoErro.length > 0 ? `
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Tipos de erro encontrados</div>
-                        <div class="grafico-subtitulo">Quantidade de achados por tipo</div>
+        ${(resultado.porTipoErro.length > 0 || resultado.semRegraDiagnosticos.length > 0) ? `
+            <div class="graficos-grid">
+                ${resultado.porTipoErro.length > 0 ? `
+                    <div class="grafico-card">
+                        <div class="grafico-cabecalho">
+                            <div>
+                                <div class="grafico-titulo">Tipos de erro encontrados</div>
+                                <div class="grafico-subtitulo">Quantidade de achados por tipo</div>
+                            </div>
+                        </div>
+                        <div id="graficoTiposErroAuditoria"></div>
                     </div>
-                </div>
-                <div id="graficoTiposErroAuditoria"></div>
+                ` : ""}
+
+                ${resultado.semRegraDiagnosticos.length > 0 ? `
+                    <div class="grafico-card">
+                        <div class="grafico-cabecalho">
+                            <div>
+                                <div class="grafico-titulo">Diagnósticos sem regra mapeada</div>
+                                <div class="grafico-subtitulo">Ainda não têm Próxima Tarefa esperada definida — ver js/config/regrasauditoria.js</div>
+                            </div>
+                        </div>
+                        <div id="graficoSemRegraAuditoria"></div>
+                    </div>
+                ` : ""}
             </div>
         ` : ""}
 
-        ${resultado.semRegraDiagnosticos.length > 0 ? `
-            <div class="grafico-card">
-                <div class="grafico-cabecalho">
-                    <div>
-                        <div class="grafico-titulo">Diagnósticos sem regra mapeada</div>
-                        <div class="grafico-subtitulo">Ainda não têm Próxima Tarefa esperada definida — ver js/config/regrasauditoria.js</div>
-                    </div>
-                </div>
-                <div id="graficoSemRegraAuditoria"></div>
-            </div>
-        ` : ""}
-
-        <p class="resultados-contagem">Achados (${_achadosAuditoriaOperacionalCache.length})</p>
-        <form class="form-busca" id="formBuscaAchadosAuditoria">
-            <input type="text" id="buscaAchadosAuditoria" placeholder="Buscar achado por OS, cliente ou login...">
-        </form>
-        <div id="listaAchadosAuditoria"></div>
+        <div>
+            <p class="resultados-contagem">Achados (${_achadosAuditoriaOperacionalCache.length})</p>
+            <form class="form-busca" id="formBuscaAchadosAuditoria">
+                <input type="text" id="buscaAchadosAuditoria" placeholder="Buscar achado por OS, cliente ou login...">
+            </form>
+            <div id="listaAchadosAuditoria"></div>
+        </div>
     `;
 
     if (resultado.porTipoErro.length > 0) {
@@ -149,32 +155,34 @@ function renderizarListaAchadosAuditoria(termo) {
     }
 
     container.innerHTML = `
-        <table class="tabela-alertas">
-            <thead>
-                <tr>
-                    <th>OS</th>
-                    <th>Cliente / Login</th>
-                    <th>Tipo</th>
-                    <th>Diagnóstico</th>
-                    <th>Próxima Tarefa</th>
-                    <th>Esperado</th>
-                    <th>Motivo</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${filtrados.map(achado => `
-                    <tr data-id="${escaparHtml(String(achado.ordemId))}" class="linha-clicavel">
-                        <td>${escaparHtml(String(achado.ordemId))}</td>
-                        <td>${escaparHtml(achado.cliente ?? "-")} (${escaparHtml(achado.login ?? "-")})</td>
-                        <td>${escaparHtml(ROTULOS_TIPO_ACHADO_AUDITORIA[achado.tipo] ?? achado.tipo)}</td>
-                        <td>${escaparHtml(achado.diagnostico ?? "-")}</td>
-                        <td>${escaparHtml(achado.proximaTarefa ?? "-")}</td>
-                        <td>${escaparHtml((achado.proximaTarefaEsperada ?? []).join(" ou ") || "-")}</td>
-                        <td>${escaparHtml(achado.motivo ?? "-")}</td>
+        <div class="tabela-scroll">
+            <table class="tabela-alertas">
+                <thead>
+                    <tr>
+                        <th>OS</th>
+                        <th>Cliente / Login</th>
+                        <th>Tipo</th>
+                        <th>Diagnóstico</th>
+                        <th>Próxima Tarefa</th>
+                        <th>Esperado</th>
+                        <th>Motivo</th>
                     </tr>
-                `).join("")}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    ${filtrados.map(achado => `
+                        <tr data-id="${escaparHtml(String(achado.ordemId))}" class="linha-clicavel">
+                            <td>${escaparHtml(String(achado.ordemId))}</td>
+                            <td>${escaparHtml(achado.cliente ?? "-")} (${escaparHtml(achado.login ?? "-")})</td>
+                            <td>${escaparHtml(ROTULOS_TIPO_ACHADO_AUDITORIA[achado.tipo] ?? achado.tipo)}</td>
+                            <td>${escaparHtml(achado.diagnostico ?? "-")}</td>
+                            <td>${escaparHtml(achado.proximaTarefa ?? "-")}</td>
+                            <td>${escaparHtml((achado.proximaTarefaEsperada ?? []).join(" ou ") || "-")}</td>
+                            <td>${escaparHtml(achado.motivo ?? "-")}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </div>
     `;
 
     container.querySelectorAll("tr[data-id]").forEach(tr => {

@@ -228,6 +228,16 @@ function renderizarSecaoIndicadores() {
             <div class="grafico-card">
                 <div class="grafico-cabecalho">
                     <div>
+                        <div class="grafico-titulo">Produtivo x Improdutivo</div>
+                        <div class="grafico-subtitulo" id="produtividadeSubtitulo">Diagnóstico do fechamento — configure em Configurações &gt; Diagnósticos Improdutivos</div>
+                    </div>
+                </div>
+                <div id="graficoProdutividade"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
                         <div class="grafico-titulo">Deslocamentos abandonados por técnico</div>
                         <div class="grafico-subtitulo">Deslocamento/execução sem aviso, substituído por um Agendamento de outro operador</div>
                     </div>
@@ -319,6 +329,22 @@ function renderizarSecaoIndicadores() {
     ], {
         serie: "serie-1",
         limite: 2
+    });
+
+    const produtividade = IndicatorEngine.calcularProdutividade(ordensFiltradas);
+    const produtividadeSubtitulo = document.getElementById("produtividadeSubtitulo");
+    if (produtividadeSubtitulo) {
+        produtividadeSubtitulo.textContent = produtividade.improdutivas + produtividade.produtivas > 0
+            ? `${produtividade.percentualProdutivas.toFixed(1)}% das classificadas são produtivas`
+            : 'Diagnóstico do fechamento — configure em Configurações > Diagnósticos Improdutivos';
+    }
+    renderizarGraficoBarras("graficoProdutividade", [
+        { rotulo: "Produtiva", valor: produtividade.produtivas },
+        { rotulo: "Improdutiva", valor: produtividade.improdutivas },
+        { rotulo: "Não classificada", valor: produtividade.naoClassificadas }
+    ], {
+        serie: "serie-2",
+        limite: 3
     });
 
     renderizarGraficoBarras("graficoAbandonosTecnico", painel.deslocamentosAbandonados.porTecnico, {

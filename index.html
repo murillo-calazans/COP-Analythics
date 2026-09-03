@@ -162,12 +162,14 @@
     </section>
 
     <section id="secao-auditoria" class="secao">
-        <div class="placeholder-card auditoria-card">
-            <h2>📋 Auditoria Operacional</h2>
-            <p>Verifica automaticamente se o Diagnóstico do fechamento de cada OS é coerente com a Próxima Tarefa — respeita o Filtro Global.</p>
-
-            <div id="auditoriaOperacionalConteudo"></div>
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>📋 Auditoria Operacional</h2>
+                <p>Verifica automaticamente se o Diagnóstico do fechamento de cada OS é coerente com a Próxima Tarefa — respeita o Filtro Global.</p>
+            </div>
         </div>
+
+        <div id="auditoriaOperacionalConteudo" class="dashboard-grid"></div>
 
         <div class="placeholder-card auditoria-card">
             <h2>🔍 Buscar OS</h2>
@@ -416,6 +418,31 @@
             <div id="resumoDiagnosticosExcluidosRecorrencia"></div>
             <button type="button" id="btnAbrirDiagnosticosExcluidosRecorrencia">Gerenciar diagnósticos excluídos</button>
         </div>
+
+        <div class="placeholder-card">
+            <h2>🎯 Diagnósticos Improdutivos</h2>
+            <p>
+                Marque aqui os diagnósticos do fechamento que indicam que a visita NÃO resolveu o
+                que deveria (ex.: "Cliente Ausente", "CTO Sem Vaga", "Inviabilidade") — alimenta o
+                indicador Produtivo x Improdutivo (aba Indicadores). Por padrão nada está marcado;
+                o indicador fica em "Não classificada" até você configurar.
+            </p>
+            <div id="resumoDiagnosticosImprodutivos"></div>
+            <button type="button" id="btnAbrirDiagnosticosImprodutivos">Gerenciar diagnósticos improdutivos</button>
+        </div>
+
+        <div class="placeholder-card" id="cardDiagnosticosNaoResolvidos" hidden>
+            <h2>🔎 Diagnósticos Não Resolvidos</h2>
+            <p>
+                Movimentações antigas (de antes da planilha de Ordens trazer o nome do diagnóstico
+                direto) guardam só um ID numérico — se esse ID não bate com nenhuma linha da aba
+                Diagnósticos da Base.xlsx que você importou, o sistema mostra o número cru em vez
+                do nome. Clique em Verificar pra ver quais códigos estão nessa situação e quantas
+                movimentações cada um afeta. Só admin vê este card.
+            </p>
+            <button type="button" id="btnVerificarDiagnosticosNaoResolvidos">Verificar</button>
+            <div id="resultadoDiagnosticosNaoResolvidos"></div>
+        </div>
     </section>
 
 </main>
@@ -560,9 +587,10 @@
             Aplica em Dashboard, Auditoria, Técnicos e Indicadores ao mesmo tempo (Alertas é
             independente — tem o próprio período, na aba). Período filtra pela data de
             finalização da OS; Colaborador Responsável e setor consideram só quem finalizou de
-            fato. Assunto, cidade, bairro, Colaborador Responsável e setor aceitam mais de uma
-            opção. Diagnóstico funciona ao contrário dos demais: começa tudo visível — desmarque
-            só os que você NÃO quer ver.
+            fato. Clique em cada campo abaixo pra abrir a lista com busca e marcação — Assunto,
+            Cidade, Bairro, Colaborador Responsável e Setor aceitam mais de uma opção. Diagnóstico
+            funciona ao contrário dos demais: começa tudo marcado (visível) — desmarque só os que
+            você NÃO quer ver.
         </p>
 
         <div class="filtro-periodo-grid">
@@ -576,14 +604,30 @@
 
         <div id="filtrosMultiplosContainer" class="filtros-multiplos-grid"></div>
 
-        <label class="seletor-multiplo-label-diagnostico">Diagnósticos (desmarque os que não quer ver)</label>
-        <input type="text" id="buscaFiltroDiagnostico" class="input-busca-modal" placeholder="Buscar diagnóstico..." autocomplete="off">
-        <div id="listaFiltroDiagnosticos" class="lista-assuntos-modal"></div>
-
         <div class="form-config-acoes">
             <button type="button" id="btnAplicarFiltroGlobal">Aplicar filtro</button>
             <button type="button" id="btnLimparFiltroGlobal">Limpar filtro</button>
         </div>
+
+    </div>
+</div>
+
+<div id="modalSeletorFiltro" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2 id="seletorFiltroTitulo">Campo</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <input type="text" id="buscaSeletorFiltro" class="input-busca-modal" placeholder="Buscar..." autocomplete="off">
+
+        <div class="seletor-filtro-acoes">
+            <button type="button" class="botao-secundario" id="btnSeletorFiltroSelecionarTodos">Selecionar todos</button>
+            <button type="button" class="botao-secundario" id="btnSeletorFiltroLimpar">Limpar seleção</button>
+        </div>
+
+        <div id="listaSeletorFiltro" class="lista-assuntos-modal"></div>
 
     </div>
 </div>
@@ -644,6 +688,21 @@
         <input type="text" id="buscaDiagnosticoExcluidoRecorrencia" class="input-busca-modal" placeholder="Digite para filtrar os diagnósticos...">
 
         <div id="listaDiagnosticosExcluidosRecorrenciaModal" class="lista-assuntos-modal"></div>
+
+    </div>
+</div>
+
+<div id="modalDiagnosticosImprodutivos" class="modal">
+    <div class="modal-conteudo">
+
+        <div class="modal-cabecalho">
+            <h2>Diagnósticos Improdutivos</h2>
+            <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
+        </div>
+
+        <input type="text" id="buscaDiagnosticoImprodutivo" class="input-busca-modal" placeholder="Digite para filtrar os diagnósticos...">
+
+        <div id="listaDiagnosticosImprodutivosModal" class="lista-assuntos-modal"></div>
 
     </div>
 </div>
@@ -762,12 +821,13 @@
 <script src="js/engine/indicatorengine.js"></script>
 <script src="js/engine/filtroengine.js"></script>
 <script src="js/engine/auditoriaoperacionalengine.js"></script>
+<script src="js/engine/bairroengine.js"></script>
 
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
 <script src="js/services/funilassuntos.js"></script>
 <script src="js/services/setorescop.js"></script>
-<script src="js/services/diagnosticosexcluidos.js"></script><script src="js/services/diagnosticosexcluidosrecorrencia.js"></script><script src="js/services/assuntosincluidoscancelamento.js"></script><script src="js/services/auth.js"></script>
+<script src="js/services/diagnosticosexcluidos.js"></script><script src="js/services/diagnosticosexcluidosrecorrencia.js"></script><script src="js/services/diagnosticosimprodutivos.js"></script><script src="js/services/assuntosincluidoscancelamento.js"></script><script src="js/services/auth.js"></script>
 <script src="js/services/auditoriaia.js"></script>
 <script src="js/services/cachelocal.js"></script>
 <script src="js/services/armazenamento.js"></script>
@@ -786,7 +846,7 @@
 <script src="js/ui/filtroperiodo.js"></script>
 <script src="js/ui/funilassuntos.js"></script>
 <script src="js/ui/setorescop.js"></script>
-<script src="js/ui/diagnosticosexcluidos.js"></script><script src="js/ui/diagnosticosexcluidosrecorrencia.js"></script><script src="js/ui/tabela.js"></script>
+<script src="js/ui/diagnosticosexcluidos.js"></script><script src="js/ui/diagnosticosexcluidosrecorrencia.js"></script><script src="js/ui/diagnosticosimprodutivos.js"></script><script src="js/ui/diagnosticosnaoresolvidos.js"></script><script src="js/ui/tabela.js"></script>
 <script src="js/ui/timeline.js"></script>
 <script src="js/ui/logsimportacao.js"></script>
 <script src="js/ui/modal.js"></script>

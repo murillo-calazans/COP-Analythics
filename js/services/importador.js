@@ -145,6 +145,12 @@ async function importarOrdens() {
             mensagem => { status.textContent = mensagem; }
         );
 
+        // Depois de persistir (o Supabase guarda o bairro cru da
+        // planilha) — só em memória, pra já mostrar a grafia canônica
+        // sem esperar um F5. Roda no conjunto INTEIRO acumulado, não só
+        // no que acabou de ser importado (ver BairroEngine).
+        BairroEngine.normalizarBairros(APP.dados.ordens);
+
         await registrarLogImportacao(arquivo.name, "ordens", {
             linhas: estatisticas.linhas,
             ordens: estatisticas.ordens,

@@ -370,14 +370,104 @@
 
 }
 
-.seletor-multiplo-label-diagnostico {
+/* Botão-gatilho de cada campo do Filtro Global — clicar abre o popup
+   compartilhado (modalSeletorFiltro) com busca e checkbox. Os
+   demais seletores múltiplos do app (Funil de Assuntos, Setores do
+   COP) continuam usando o padrão de chips+dropdown inline abaixo. */
+.seletor-multiplo-abrir {
 
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
 
-    margin: 20px 0 6px;
+    width: 100%;
 
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+
+    padding: 10px 14px;
+
+    color: var(--cor-texto);
     font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: .2s;
+
+}
+
+.seletor-multiplo-abrir:hover {
+
+    border-color: var(--cor-primaria);
+
+}
+
+.seletor-multiplo-resumo {
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+}
+
+.seletor-multiplo-seta {
+
     color: var(--cor-texto-suave);
+    flex-shrink: 0;
+
+}
+
+.seletor-filtro-acoes {
+
+    display: flex;
+    gap: 8px;
+
+    margin-bottom: 16px;
+
+}
+
+/* Linha com checkbox de verdade — usada no popup compartilhado do
+   Filtro Global (modalSeletorFiltro). */
+.item-checkbox-modal {
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--cor-borda);
+
+    font-size: 14px;
+    color: var(--cor-texto);
+
+    cursor: pointer;
+    transition: .2s;
+
+}
+
+.item-checkbox-modal:hover {
+
+    background: var(--cor-fundo-elevado);
+
+}
+
+.item-checkbox-modal input[type="checkbox"] {
+
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--cor-primaria);
+
+}
+
+.item-checkbox-modal.marcado {
+
+    background: #1e3a8a;
+    border-color: #2563EB;
+    color: #bfdbfe;
 
 }
 

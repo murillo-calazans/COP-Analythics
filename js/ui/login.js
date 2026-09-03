@@ -95,9 +95,11 @@ function aplicarGateDePapel() {
     const botaoImportar = document.getElementById("btnAbrirImportar");
     const botaoLimpar = document.getElementById("btnLimparDados");
     const botaoLogs = document.getElementById("btnAbrirLogs");
+    const cardDiagnosticosNaoResolvidos = document.getElementById("cardDiagnosticosNaoResolvidos");
 
     const admin = ehAdmin();
     if (botaoImportar) botaoImportar.hidden = !admin;
     if (botaoLimpar) botaoLimpar.hidden = !admin;
     if (botaoLogs) botaoLogs.hidden = !admin;
+    if (cardDiagnosticosNaoResolvidos) cardDiagnosticosNaoResolvidos.hidden = !admin;
 }

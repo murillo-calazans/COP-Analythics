@@ -8,6 +8,20 @@
 
 }
 
+/* Pra tabelas com muitas colunas (ex.: achados da Auditoria Operacional)
+   dentro de um card de largura limitada — rola só a tabela, não a página. */
+.tabela-scroll {
+
+    overflow-x: auto;
+
+}
+
+.tabela-scroll .tabela-alertas {
+
+    min-width: 720px;
+
+}
+
 .tabela-alertas th,
 .tabela-alertas td {
 

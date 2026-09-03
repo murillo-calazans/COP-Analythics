@@ -13,6 +13,7 @@ class OrdemServico {
         this.login = login; // identificador de recorrência — um cliente pode ter vários logins, mas cada login é único
         this.cidade = cidade;
         this.bairro = bairro;
+        this.bairroOriginal = null; // grafia exatamente como veio da planilha — preenchido por BairroEngine.normalizarBairros na 1ª normalização; this.bairro passa a ser a grafia canônica escolhida
         this.assunto = assunto;
 
         this.statusAtual = null;

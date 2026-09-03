@@ -1174,6 +1174,61 @@ const IndicatorEngine = {
     },
 
     /**
+     * Classifica cada OS FINALIZADA (só olha o Fechamento, igual o
+     * resto do sistema — nunca OS ainda aberta) em Produtiva,
+     * Improdutiva ou Não classificada, a partir do diagnóstico do
+     * fechamento e da lista configurável de diagnósticos improdutivos
+     * (Configurações > Diagnósticos Improdutivos — mesmo padrão de
+     * Diagnósticos Excluídos do Tempo/Recorrência).
+     *
+     * Lista vazia (nada configurado ainda) = tudo fica em "Não
+     * classificada", de propósito — não presume que está tudo
+     * produtivo antes de alguém revisar e marcar os diagnósticos que
+     * realmente são improdutivos, senão o indicador mostraria um
+     * "100% produtivo" enganoso logo de cara.
+     */
+    calcularProdutividade(ordens) {
+        const analise = this.analisarEventosDeTodas(ordens);
+        const improdutivos = APP.configuracoes.diagnosticosImprodutivos ?? new Set();
+
+        let produtivas = 0;
+        let improdutivas = 0;
+        let naoClassificadas = 0;
+
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!info?.ultimoFechamento) continue;
+
+            const nome = AuditEngine.resolverReferencia(
+                APP.referencias.diagnosticos, info.ultimoFechamento.diagnostico, CONFIG_BASE.diagnosticos.nome
+            );
+
+            if (!nome) {
+                naoClassificadas++;
+                continue;
+            }
+
+            if (improdutivos.has(normalizarTexto(nome))) {
+                improdutivas++;
+            } else if (improdutivos.size === 0) {
+                naoClassificadas++;
+            } else {
+                produtivas++;
+            }
+        }
+
+        const totalFinalizadas = produtivas + improdutivas + naoClassificadas;
+
+        return {
+            produtivas,
+            improdutivas,
+            naoClassificadas,
+            totalFinalizadas,
+            percentualProdutivas: totalFinalizadas > 0 ? (produtivas / totalFinalizadas) * 100 : 0
+        };
+    },
+
+    /**
      * Ficha individual por técnico: OS finalizadas, TMS/TMA próprios
      * (segmentados — ver cabeçalho do arquivo), reaberturas, % de
      * reabertura, recorrência gerada (cliente que volta depois do
