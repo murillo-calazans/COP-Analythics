@@ -220,6 +220,10 @@ function aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas) {
     // grafias parecidas de forma consistente mesmo entre OS importadas
     // em arquivos diferentes (ver BairroEngine).
     BairroEngine.normalizarBairros(APP.dados.ordens);
+
+    // Idem pra assunto (ex.: "X - Terceirizado" -> "X") — ver
+    // js/config/assuntosequivalentes.js.
+    AssuntoEngine.normalizarAssuntos(APP.dados.ordens);
 }
 
 /**

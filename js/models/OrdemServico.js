@@ -15,6 +15,7 @@ class OrdemServico {
         this.bairro = bairro;
         this.bairroOriginal = null; // grafia exatamente como veio da planilha — preenchido por BairroEngine.normalizarBairros na 1ª normalização; this.bairro passa a ser a grafia canônica escolhida
         this.assunto = assunto;
+        this.assuntoOriginal = null; // assunto exatamente como veio da planilha — preenchido por AssuntoEngine.normalizarAssuntos na 1ª normalização; this.assunto passa a ser o canônico (ver js/config/assuntosequivalentes.js)
 
         this.statusAtual = null;
         this.tecnicoResponsavel = null; // operador da movimentação mais recente (não necessariamente a última importada)

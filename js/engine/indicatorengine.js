@@ -117,6 +117,35 @@ const IndicatorEngine = {
         return AuditEngine.resolverReferencia(APP.referencias.operadores, operador, CONFIG_BASE.operadores.nome);
     },
 
+    /**
+     * Confere se um operador pertence ao(s) setor(es) atualmente
+     * selecionado(s) no Filtro Global > Setor (sem filtro de setor
+     * ativo, deixa passar sempre) — usado nos indicadores "por
+     * técnico" que atribuem a quem fez uma ação ESPECÍFICA
+     * (deslocamento abandonado, reagendamento, segmento de TMS/TMA),
+     * não a quem fechou a OS.
+     *
+     * Sem essa checagem, o Filtro Global > Setor só recorta QUAIS OS
+     * entram (pelo setor de quem FECHOU — ver
+     * FiltroEngine.fechamentoEhDoSetor), mas um técnico de OUTRO setor
+     * que só tocou a mesma OS no meio do caminho (ex.: abandonou um
+     * deslocamento antes de alguém do setor filtrado fechar) continuava
+     * aparecendo nesses indicadores específicos, mesmo filtrando por 1
+     * setor só.
+     */
+    operadorPertenceAoFiltroSetor(codigoOperador) {
+        const setoresFiltro = APP.filtrosGlobais?.setores;
+        if (!setoresFiltro || setoresFiltro.length === 0) return true;
+        if (codigoOperador === null || codigoOperador === undefined) return false;
+
+        const setor = AuditEngine.resolverReferencia(
+            APP.referencias.operadores, codigoOperador, CONFIG_BASE.operadores.setor
+        );
+
+        const alvo = setoresFiltro.map(normalizarTexto);
+        return alvo.includes(normalizarTexto(setor ?? ""));
+    },
+
     calcularRecorrencia(ordens) {
         // Idempotente: pode ser chamado de novo (ex.: depois de mudar o
         // Filtro Global) sem deixar alertas velhos presos numa OS que já
@@ -916,6 +945,7 @@ const IndicatorEngine = {
                 );
                 if (normalizarTexto(nomeEvento ?? "") !== alvoReagendamento) continue;
                 if (mov.operador === null || mov.operador === undefined) continue;
+                if (!this.operadorPertenceAoFiltroSetor(mov.operador)) continue;
 
                 const nome = AuditEngine.resolverReferencia(
                     APP.referencias.operadores, mov.operador, CONFIG_BASE.operadores.nome
@@ -1097,6 +1127,7 @@ const IndicatorEngine = {
 
             for (const abandono of info.deslocamentosAbandonados) {
                 if (abandono.operador === null || abandono.operador === undefined) continue;
+                if (!this.operadorPertenceAoFiltroSetor(abandono.operador)) continue;
 
                 const nome = AuditEngine.resolverReferencia(
                     APP.referencias.operadores, abandono.operador, CONFIG_BASE.operadores.nome
@@ -1311,6 +1342,8 @@ const IndicatorEngine = {
             if (!info || info.excluidoDoTempo) continue;
 
             for (const [codigoOperador, horas] of this.agruparSegmentosPorOperador(info.segmentosSolucao)) {
+                if (!this.operadorPertenceAoFiltroSetor(codigoOperador)) continue;
+
                 const nome = AuditEngine.resolverReferencia(
                     APP.referencias.operadores, codigoOperador, CONFIG_BASE.operadores.nome
                 );
@@ -1321,6 +1354,8 @@ const IndicatorEngine = {
             }
 
             for (const [codigoOperador, horas] of this.agruparSegmentosPorOperador(info.segmentosAtendimento)) {
+                if (!this.operadorPertenceAoFiltroSetor(codigoOperador)) continue;
+
                 const nome = AuditEngine.resolverReferencia(
                     APP.referencias.operadores, codigoOperador, CONFIG_BASE.operadores.nome
                 );

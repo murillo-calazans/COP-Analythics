@@ -150,6 +150,7 @@ async function importarOrdens() {
         // sem esperar um F5. Roda no conjunto INTEIRO acumulado, não só
         // no que acabou de ser importado (ver BairroEngine).
         BairroEngine.normalizarBairros(APP.dados.ordens);
+        AssuntoEngine.normalizarAssuntos(APP.dados.ordens);
 
         await registrarLogImportacao(arquivo.name, "ordens", {
             linhas: estatisticas.linhas,
