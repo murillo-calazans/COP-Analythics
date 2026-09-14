@@ -189,14 +189,28 @@ const AuditoriaOperacionalEngine = {
         return { status: "ok", diagnostico: diagnosticoNome, proximaTarefa: proximaTarefaBruta };
     },
 
+    // id da regra em REGRAS_AUDITORIA_DIAGNOSTICO usada por
+    // auditarDuplicidadeLogin abaixo pra restringir a checagem de
+    // duplicidade só a diagnósticos de troca/recolhimento de
+    // equipamento — ver comentário lá.
+    REGRA_ID_DUPLICIDADE_EQUIPAMENTO: "equipamento-troca-ou-recolhimento",
+
     /**
-     * Mesmo login + mesmo assunto + mesmo diagnóstico do fechamento
-     * repetido em 2+ OS — sinaliza como possível duplicidade (ex.:
-     * "Instalação Concluída" duas vezes pro mesmo cliente no mesmo
-     * assunto). Dimensão SEPARADA da checagem Diagnóstico x Próxima
-     * Tarefa acima — uma OS pode estar "ok" ali e ainda assim entrar
-     * aqui. Exige assunto preenchido nos dois lados (sem isso o
-     * agrupamento juntaria OS sem relação nenhuma sob uma chave vazia).
+     * Mesmo login + mesmo assunto + mesmo diagnóstico de troca/
+     * recolhimento de equipamento (ver REGRA_ID_DUPLICIDADE_EQUIPAMENTO)
+     * repetido em 2+ OS — sinaliza como possível duplicidade (ex.: dois
+     * "Equipamento Recolhido" pro mesmo cliente no mesmo assunto, sinal
+     * de que o equipamento pode ter sido recolhido/trocado mais de uma
+     * vez sem necessidade). Só faz sentido pra essa família de
+     * diagnóstico — repetir OUTROS diagnósticos (ex.: "Troca de
+     * Conector", "Verificação sem problema encontrado") pro mesmo
+     * cliente é normal, não indica nada suspeito, então não deve virar
+     * achado aqui.
+     *
+     * Dimensão SEPARADA da checagem Diagnóstico x Próxima Tarefa acima —
+     * uma OS pode estar "ok" ali e ainda assim entrar aqui. Exige
+     * assunto preenchido nos dois lados (sem isso o agrupamento
+     * juntaria OS sem relação nenhuma sob uma chave vazia).
      */
     auditarDuplicidadeLogin(ordens, analise) {
         const porGrupo = new Map();
@@ -211,6 +225,9 @@ const AuditoriaOperacionalEngine = {
                 APP.referencias.diagnosticos, fechamento.diagnostico, CONFIG_BASE.diagnosticos.nome
             );
             if (!diagnosticoNome) continue;
+
+            const regra = this.regraParaDiagnostico(diagnosticoNome);
+            if (regra?.id !== this.REGRA_ID_DUPLICIDADE_EQUIPAMENTO) continue;
 
             const chave = [ordem.login, normalizarTexto(ordem.assunto), normalizarTexto(diagnosticoNome)].join("||");
             if (!porGrupo.has(chave)) porGrupo.set(chave, []);
