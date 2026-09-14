@@ -47,6 +47,12 @@ const AuditoriaOperacionalEngine = {
      * ou null se não houver nenhuma regra mapeada pra ele ainda (nesse
      * caso a OS fica em "sem regra mapeada", não conta como certo nem
      * como erro).
+     *
+     * Cada regra casa o diagnóstico de um dos dois jeitos (ver
+     * js/config/regrasauditoria.js): "diagnostico" exige texto EXATO
+     * (normalizado); "diagnosticoContemAlgum" basta o diagnóstico CONTER
+     * uma das palavras/trechos da lista — usado quando a grafia real
+     * varia demais pra travar num texto único.
      */
     regraParaDiagnostico(diagnosticoNome) {
         if (!diagnosticoNome) return null;
@@ -54,14 +60,20 @@ const AuditoriaOperacionalEngine = {
         const diagnosticoBase = this.removerSufixoIdDiagnostico(diagnosticoNome);
         const diagnosticoNormalizado = normalizarTexto(diagnosticoBase);
 
-        const especifica = REGRAS_AUDITORIA_DIAGNOSTICO.find(
-            regra => normalizarTexto(regra.diagnostico) === diagnosticoNormalizado
-        );
+        const especifica = REGRAS_AUDITORIA_DIAGNOSTICO.find(regra => {
+            if (regra.diagnosticoContemAlgum) {
+                return regra.diagnosticoContemAlgum.some(
+                    chave => diagnosticoNormalizado.includes(normalizarTexto(chave))
+                );
+            }
+            return normalizarTexto(regra.diagnostico) === diagnosticoNormalizado;
+        });
 
         if (especifica) {
             return {
                 id: especifica.id,
-                proximaTarefaEsperada: especifica.proximaTarefaEsperada,
+                proximaTarefaEsperada: especifica.proximaTarefaEsperada ?? null,
+                proximaTarefaContemAlgum: especifica.proximaTarefaContemAlgum ?? null,
                 severidade: especifica.severidade ?? "erro",
                 mensagem: especifica.mensagem
             };
@@ -71,12 +83,35 @@ const AuditoriaOperacionalEngine = {
             return {
                 id: "concluida-generico",
                 proximaTarefaEsperada: [diagnosticoBase],
+                proximaTarefaContemAlgum: null,
                 severidade: "erro",
                 mensagem: `O diagnóstico indica conclusão ("${diagnosticoBase}") — a Próxima Tarefa deveria seguir o mesmo processo.`
             };
         }
 
         return null;
+    },
+
+    /**
+     * Confere se a Próxima Tarefa informada satisfaz a regra: texto
+     * EXATO (proximaTarefaEsperada) ou apenas CONTER uma das
+     * palavras/trechos aceitos (proximaTarefaContemAlgum) — ver
+     * regraParaDiagnostico.
+     */
+    proximaTarefaAtendeRegra(regra, proximaTarefaNormalizada) {
+        if (regra.proximaTarefaContemAlgum) {
+            return regra.proximaTarefaContemAlgum.some(
+                chave => proximaTarefaNormalizada.includes(normalizarTexto(chave))
+            );
+        }
+        return regra.proximaTarefaEsperada.some(
+            esperado => normalizarTexto(esperado) === proximaTarefaNormalizada
+        );
+    },
+
+    /** Lista pra exibir no achado (coluna "Esperado") — funciona pros dois modos de regra. */
+    textoProximaTarefaEsperada(regra) {
+        return regra.proximaTarefaContemAlgum ?? regra.proximaTarefaEsperada;
     },
 
     /**
@@ -125,16 +160,14 @@ const AuditoriaOperacionalEngine = {
                     severidade: regra.severidade,
                     diagnostico: diagnosticoNome,
                     proximaTarefa: null,
-                    proximaTarefaEsperada: regra.proximaTarefaEsperada,
+                    proximaTarefaEsperada: this.textoProximaTarefaEsperada(regra),
                     motivo: `Diagnóstico "${diagnosticoNome}" exige uma Próxima Tarefa, mas ela não foi informada no fechamento.`
                 }
             };
         }
 
         const proximaTarefaNormalizada = normalizarTexto(proximaTarefaBruta);
-        const bateComEsperado = regra.proximaTarefaEsperada.some(
-            esperado => normalizarTexto(esperado) === proximaTarefaNormalizada
-        );
+        const bateComEsperado = this.proximaTarefaAtendeRegra(regra, proximaTarefaNormalizada);
 
         if (!bateComEsperado) {
             return {
@@ -146,7 +179,7 @@ const AuditoriaOperacionalEngine = {
                     severidade: regra.severidade,
                     diagnostico: diagnosticoNome,
                     proximaTarefa: proximaTarefaBruta,
-                    proximaTarefaEsperada: regra.proximaTarefaEsperada,
+                    proximaTarefaEsperada: this.textoProximaTarefaEsperada(regra),
                     motivo: regra.mensagem
                         ?? `Próxima Tarefa "${proximaTarefaBruta}" não é compatível com o diagnóstico "${diagnosticoNome}".`
                 }

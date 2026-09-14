@@ -14,41 +14,60 @@
  * próximo passo esperado for DIFERENTE do próprio texto do
  * diagnóstico (uma EXCEÇÃO à regra padrão).
  *
- * Cada entrada:
+ * Cada entrada usa UM dos dois pares abaixo pro lado do diagnóstico (nunca
+ * os dois juntos) e UM dos dois pares abaixo pro lado da Próxima Tarefa:
+ * - diagnostico (texto EXATO, sem diferenciar acento/maiúscula) OU
+ *   diagnosticoContemAlgum (lista de palavras/trechos — a regra vale se o
+ *   diagnóstico CONTIVER qualquer uma delas). Use "ContemAlgum" quando o
+ *   texto varia bastante nos dados reais (plural, "trocado" vs "troca",
+ *   sufixo "(terceirizado)"/"- equipe interna" etc.) e o que importa é só
+ *   a ideia central, não a grafia exata.
+ * - proximaTarefaEsperada (lista de textos EXATOS aceitos) OU
+ *   proximaTarefaContemAlgum (lista de palavras/trechos — a Próxima
+ *   Tarefa é aceita se CONTIVER qualquer uma delas). Mesma lógica: use
+ *   "ContemAlgum" quando não faz sentido travar num texto único.
+ *
+ * Demais campos:
  * - id: identificador curto, único, usado internamente (não aparece pro usuário).
- * - diagnostico: texto exato do diagnóstico que essa regra cobre
- *   (comparado sem diferenciar acento/maiúscula — ver normalizarTexto).
- * - proximaTarefaEsperada: lista de textos aceitos como Próxima
- *   Tarefa (normalmente só 1 — é lista pra já deixar aberto o caso de
- *   mais de um próximo passo válido pro mesmo diagnóstico).
  * - severidade: "erro" (por enquanto é a única usada na Auditoria).
  * - mensagem: texto mostrado no achado quando a regra é violada.
  */
 const REGRAS_AUDITORIA_DIAGNOSTICO = [
     {
-        id: "troca-equipamento",
-        diagnostico: "TROCA DE EQUIPAMENTO",
-        // Dois caminhos válidos conferidos nos dados reais: troca comum
-        // (maioria) e troca junto de upgrade de plano.
-        proximaTarefaEsperada: ["EQUIPAMENTO TROCADO - IR PARA CONFERÊNCIA", "TROCA DE EQUIPAMENTO - ATUALIZAÇÃO DE PLANO"],
+        id: "equipamento-troca-ou-recolhimento",
+        // Cobre qualquer variação que fale em troca ou recolhimento de
+        // equipamento — ex.: "TROCA DE EQUIPAMENTO", "EQUIPAMENTO
+        // TROCADO", "EQUIPAMENTO RECOLHIDO (TERCEIRIZADO)", "EQUIPAMENTO
+        // RECOLHIDO - EQUIPE INTERNA". Antes eram 3 regras de texto EXATO
+        // (troca-equipamento/equipamento-recolhido-terceirizado/
+        // equipamento-recolhido-equipe-interna) — trocadas por esta única
+        // regra "contém" porque o nome do diagnóstico varia demais nos
+        // dados reais pra travar numa lista fechada de textos.
+        // "TROCA DE EQUIPAMENTO" já casa com o plural "...EQUIPAMENTOS"
+        // (é um prefixo dele), mas "EQUIPAMENTO TROCADO"/"EQUIPAMENTO
+        // RECOLHIDO" não casam com "EQUIPAMENTOS TROCADOS"/"EQUIPAMENTOS
+        // RECOLHIDOS" (o "S" de EQUIPAMENTOS quebra o "includes") — por
+        // isso as variantes no plural entram explícitas também.
+        diagnosticoContemAlgum: [
+            "TROCA DE EQUIPAMENTO", "EQUIPAMENTO TROCADO", "EQUIPAMENTOS TROCADOS",
+            "EQUIPAMENTO RECOLHIDO", "EQUIPAMENTOS RECOLHIDOS"
+        ],
+        // Mesma ideia do lado da Próxima Tarefa: aceita qualquer uma que
+        // mencione recolhimento ou troca de equipamento, sem exigir o
+        // texto inteiro batendo (ex.: "RECOLHIDO - CONFERÊNCIA DE
+        // EQUIPAMENTOS", "EQUIPAMENTO TROCADO - IR PARA CONFERÊNCIA",
+        // "TROCA DE EQUIPAMENTO - ATUALIZAÇÃO DE PLANO" — todas batem).
+        // "CONFERÊNCIA DE EQUIPAMENTOS" sozinho (sem "recolhido"/"troca")
+        // também entra — era o 2º caminho válido já conferido nos dados
+        // reais pras regras antigas de equipamento recolhido; sem essa
+        // entrada, todo fechamento que usa só esse texto passaria a
+        // virar erro por engano.
+        proximaTarefaContemAlgum: [
+            "RECOLHIDO", "RECOLHIDOS", "TROCA DE EQUIPAMENTO", "EQUIPAMENTO TROCADO",
+            "EQUIPAMENTOS TROCADOS", "CONFERÊNCIA DE EQUIPAMENTOS"
+        ],
         severidade: "erro",
-        mensagem: "Diagnóstico indica troca de equipamento — a Próxima Tarefa deveria abrir a conferência de estoque (ou, se houve upgrade de plano junto, seguir esse fluxo)."
-    },
-    {
-        id: "equipamento-recolhido-terceirizado",
-        diagnostico: "EQUIPAMENTO RECOLHIDO (TERCEIRIZADO)",
-        proximaTarefaEsperada: ["CONFERÊNCIA DE EQUIPAMENTOS", "RECOLHIDO - CONFERÊNCIA DE EQUIPAMENTOS"],
-        severidade: "erro",
-        mensagem: "Diagnóstico indica equipamento recolhido por terceirizado — a Próxima Tarefa deveria abrir a conferência de estoque."
-    },
-    {
-        id: "equipamento-recolhido-equipe-interna",
-        // Sem o "(8)" do fim — o sufixo com o ID do diagnóstico já é
-        // removido antes de comparar, ver removerSufixoIdDiagnostico.
-        diagnostico: "EQUIPAMENTO RECOLHIDO - EQUIPE INTERNA",
-        proximaTarefaEsperada: ["CONFERÊNCIA DE EQUIPAMENTOS", "RECOLHIDO - CONFERÊNCIA DE EQUIPAMENTOS"],
-        severidade: "erro",
-        mensagem: "Diagnóstico indica equipamento recolhido pela equipe interna — a Próxima Tarefa deveria abrir a conferência de estoque."
+        mensagem: "Diagnóstico indica troca ou recolhimento de equipamento — a Próxima Tarefa deveria mencionar troca ou recolhimento de equipamento (ex.: abrir a conferência de estoque)."
     },
     // "Mudança de Tecnologia" tem convenção PRÓPRIA, diferente da regra
     // padrão (que espera a Próxima Tarefa igual ao diagnóstico
