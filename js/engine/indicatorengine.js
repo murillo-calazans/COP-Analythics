@@ -146,6 +146,21 @@ const IndicatorEngine = {
         return alvo.includes(normalizarTexto(setor ?? ""));
     },
 
+    /**
+     * Data que conta pra janela de recorrência (LIMITE_DIAS_RECORRENCIA):
+     * o Fechamento de verdade (evento "Fechamento", ver analisarEventosOS),
+     * caindo pra dataAbertura só se a OS nunca fechou. Mesmo padrão já
+     * usado em calcularFunilAssuntos — necessário porque dataAbertura
+     * sozinha não representa quando o cliente foi de fato atendido: OS
+     * geradas automaticamente (sem intervenção humana na abertura) podem
+     * ficar dias/semanas esperando um técnico ir a campo, e é essa visita
+     * (o Fechamento) que é o evento relevante pra "cliente recorrente",
+     * não a data em que o sistema criou a OS sozinho.
+     */
+    dataEfetivaRecorrencia(ordem, analise) {
+        return analise.get(ordem.id)?.ultimoFechamento?.data ?? ordem.dataAbertura;
+    },
+
     calcularRecorrencia(ordens) {
         // Idempotente: pode ser chamado de novo (ex.: depois de mudar o
         // Filtro Global) sem deixar alertas velhos presos numa OS que já
@@ -162,7 +177,7 @@ const IndicatorEngine = {
         // OS do mesmo tipo em LIMITE_DIAS_RECORRENCIA dias).
         for (const [login, listaOrdens] of porLogin) {
             const recentes = listaOrdens.filter(ordem =>
-                this.dentroDoLimite(ordem.dataAbertura, dataReferencia)
+                this.dentroDoLimite(this.dataEfetivaRecorrencia(ordem, analise), dataReferencia)
             );
 
             if (recentes.length < this.LIMITE_QTD_RECORRENCIA) continue;
@@ -195,7 +210,7 @@ const IndicatorEngine = {
 
             const listaOrdens = porLogin.get(login) ?? [];
             const recentes = listaOrdens.filter(ordem =>
-                this.dentroDoLimite(ordem.dataAbertura, dataReferencia)
+                this.dentroDoLimite(this.dataEfetivaRecorrencia(ordem, analise), dataReferencia)
             );
 
             recorrentes.set(login, {
@@ -282,7 +297,12 @@ const IndicatorEngine = {
                 id: ordem.id,
                 assunto: ordem.assunto,
                 tecnico,
-                dataAbertura: ordem.dataAbertura
+                // Mesma base de data usada pra qualificar a recorrência
+                // (ver dataEfetivaRecorrencia) — assim o agrupamento por
+                // mês abaixo (contarOSPorMes) bate com o mês em que a OS
+                // de fato contou, não com a abertura (que numa OS
+                // automática pode ser bem anterior ao atendimento).
+                dataAbertura: this.dataEfetivaRecorrencia(ordem, analise)
             };
         });
 
