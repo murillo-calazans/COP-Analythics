@@ -1,13 +1,13 @@
 /**
  * ==========================================================
- * UI de Diagnósticos Não Resolvidos (Configurações — só admin)
+ * UI de Diagnósticos Não Resolvidos (Configurações — admin/editor)
  * ==========================================================
  * Botão "Verificar" lista os códigos numéricos de diagnóstico
  * (movimentações antigas) que não batem com nenhuma linha da Base.xlsx
  * atual — ver AuditEngine.listarDiagnosticosNaoResolvidos. Só calcula
  * quando clicado (não é caro, mas não tem por que rodar sozinho toda
- * hora). Visibilidade do card em si é gate de admin — ver
- * js/ui/login.js -> aplicarGateDePapel.
+ * hora). Visibilidade do card em si é gate de papel (quem pode
+ * importar) — ver js/ui/login.js -> aplicarGateDePapel.
  */
 
 function registrarDiagnosticosNaoResolvidos() {

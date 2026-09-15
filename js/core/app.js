@@ -127,9 +127,9 @@ async function inicializarDadosAutenticado() {
                 `${APP.referencias.operadores.size} operadores, ${APP.referencias.eventos.size} eventos, ` +
                 `${APP.referencias.diagnosticos.size} diagnósticos.`;
         }
-    } else if (ehAdmin()) {
+    } else if (podeImportar()) {
         // Sem dado nenhum ainda — só faz sentido oferecer o popup de
-        // importação pra quem pode importar.
+        // importação pra quem pode importar (admin ou editor).
         abrirModalImportar();
     }
 

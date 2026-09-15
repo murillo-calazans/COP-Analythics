@@ -2,11 +2,20 @@
  * ==========================================================
  * Serviço de Autenticação (Supabase Auth)
  * ==========================================================
- * Login/logout e resolução do papel do usuário (admin/leitor) a
+ * Login/logout e resolução do papel do usuário (admin/editor/leitor) a
  * partir da tabela "perfis". Sem autocadastro — contas são
  * criadas manualmente no painel do Supabase (Authentication ->
  * Add user), e o papel é definido inserindo uma linha em
- * "perfis" (ver database/schema-supabase.sql).
+ * "perfis" (ver database/schema-supabase.sql e
+ * database/patch-11-papel-editor.sql).
+ *
+ * Três papéis:
+ * - admin: tudo (importar, apagar dados compartilhados, ver Logs de
+ *   Importação, rodar o Auditor IA).
+ * - editor: só importar dados e ver o card de Diagnósticos Não
+ *   Resolvidos — não apaga dados nem vê Logs de Importação (ver
+ *   js/ui/login.js -> aplicarGateDePapel).
+ * - leitor: só enxerga (nenhuma ação de escrita).
  */
 
 async function obterSessaoAtual() {
@@ -60,6 +69,11 @@ async function carregarUsuarioAtual(sessao) {
 
 function ehAdmin() {
     return APP.usuario?.papel === "admin";
+}
+
+/** admin ou editor — os dois podem importar dados (ver aplicarGateDePapel). */
+function podeImportar() {
+    return APP.usuario?.papel === "admin" || APP.usuario?.papel === "editor";
 }
 
 function traduzirErroLogin(error) {

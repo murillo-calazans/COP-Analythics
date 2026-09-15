@@ -82,7 +82,9 @@ function mostrarAppAutenticado() {
 
     const rotulo = document.getElementById("usuarioLogado");
     if (rotulo) {
-        const papel = APP.usuario.papel === "admin" ? "admin" : "leitor";
+        const papel = APP.usuario.papel === "admin" || APP.usuario.papel === "editor"
+            ? APP.usuario.papel
+            : "leitor";
         const setor = APP.usuario.setor ? ` (${APP.usuario.setor})` : "";
         rotulo.textContent = `${APP.usuario.email} · ${papel}${setor}`;
     }
@@ -90,7 +92,11 @@ function mostrarAppAutenticado() {
     aplicarGateDePapel();
 }
 
-/** Esconde ações de escrita (importar/apagar) e os Logs pra quem não é admin. */
+/**
+ * Esconde ações restritas conforme o papel (ver js/services/auth.js):
+ * Importar e o card de Diagnósticos Não Resolvidos liberam pra
+ * admin+editor; Apagar Dados e Logs de Importação continuam só admin.
+ */
 function aplicarGateDePapel() {
     const botaoImportar = document.getElementById("btnAbrirImportar");
     const botaoLimpar = document.getElementById("btnLimparDados");
@@ -98,8 +104,9 @@ function aplicarGateDePapel() {
     const cardDiagnosticosNaoResolvidos = document.getElementById("cardDiagnosticosNaoResolvidos");
 
     const admin = ehAdmin();
-    if (botaoImportar) botaoImportar.hidden = !admin;
+    const importar = podeImportar();
+    if (botaoImportar) botaoImportar.hidden = !importar;
     if (botaoLimpar) botaoLimpar.hidden = !admin;
     if (botaoLogs) botaoLogs.hidden = !admin;
-    if (cardDiagnosticosNaoResolvidos) cardDiagnosticosNaoResolvidos.hidden = !admin;
+    if (cardDiagnosticosNaoResolvidos) cardDiagnosticosNaoResolvidos.hidden = !importar;
 }
