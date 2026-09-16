@@ -104,17 +104,33 @@ const IndicatorEngine = {
      * setor continua vindo do Operador (ver agregarPorSetor/
      * FiltroEngine.fechamentoEhDoSetor), nunca do Colaborador
      * Responsável.
+     *
+     * Se o código do Colaborador Responsável vier preenchido mas SEM
+     * cadastro correspondente na aba (Base.xlsx desatualizada/
+     * incompleta — já aconteceu de verdade: ID sem linha na aba
+     * "Coloborador Responsável" enquanto o Operador da mesma
+     * movimentação tinha cadastro certinho), cai pro Operador em vez de
+     * devolver o código cru — um número solto (ex.: "443") não serve de
+     * nome pra ninguém em ranking/gráfico, e pior: rouba o crédito de
+     * quem de fato fechou a OS (o Operador), que ficaria escondido
+     * atrás desse número.
      */
     nomeResponsavelFechamento(movFechamento) {
         if (!movFechamento) return null;
         const { colaboradorResponsavel, operador } = movFechamento;
 
         if (colaboradorResponsavel !== null && colaboradorResponsavel !== undefined && colaboradorResponsavel !== "") {
-            return AuditEngine.resolverReferencia(
-                APP.referencias.colaboradoresResponsaveis, colaboradorResponsavel, CONFIG_BASE.colaboradoresResponsaveis.nome
-            );
+            const linha = this.encontrarLinhaReferencia(APP.referencias.colaboradoresResponsaveis, colaboradorResponsavel);
+            const colunaReal = linha ? encontrarColuna(linha, CONFIG_BASE.colaboradoresResponsaveis.nome) : null;
+            if (colunaReal) return linha[colunaReal];
         }
         return AuditEngine.resolverReferencia(APP.referencias.operadores, operador, CONFIG_BASE.operadores.nome);
+    },
+
+    /** Acha a linha crua na Base pro código dado, ou null se não achar — sem o fallback pro código cru que AuditEngine.resolverReferencia devolve (aqui quem chama decide o que fazer quando não acha). */
+    encontrarLinhaReferencia(mapa, codigo) {
+        if (codigo === null || codigo === undefined || codigo === "") return null;
+        return mapa.get(codigo) ?? mapa.get(Number(codigo)) ?? mapa.get(String(codigo)) ?? null;
     },
 
     /**
@@ -580,6 +596,16 @@ const IndicatorEngine = {
         const alvoStatusAguardandoAgendamento = normalizarTexto(this.STATUS_AGUARDANDO_AGENDAMENTO);
 
         let ultimoFechamento = null;
+        // 1º Fechamento cronológico — reabertura só acontece pra acerto de
+        // processo (nunca um novo atendimento de campo), então É ESTE o
+        // fechamento "de verdade" pra período, crédito de técnico,
+        // Auditoria Operacional e TME (ver dataEfetivaRecorrencia/
+        // FiltroEngine.primeiroFechamentoDaOrdem pro mesmo raciocínio já
+        // aplicado noutros pontos). ultimoFechamento continua existindo
+        // (e sendo usado por quem não foi migrado pra este) só como o
+        // registro histórico bruto de "qual foi a última movimentação de
+        // Fechamento", sem juízo de valor sobre qual conta.
+        let primeiroFechamento = null;
         let ultimoEncerramento = null; // Fechamento OU Reagendar — usado pro índice de reabertura/reagendamento
         let primeiroAgendamento = null; // 1º status "Agendada" — fim do TMR
         let temReabertura = false;
@@ -608,6 +634,9 @@ const IndicatorEngine = {
                 if (ehFechamento) {
                     if (!ultimoFechamento || (mov.data && ultimoFechamento.data && mov.data > ultimoFechamento.data)) {
                         ultimoFechamento = mov;
+                    }
+                    if (!primeiroFechamento || (mov.data && primeiroFechamento.data && mov.data < primeiroFechamento.data)) {
+                        primeiroFechamento = mov;
                     }
                 }
                 if (ehFechamento || ehReagendamento) {
@@ -688,7 +717,7 @@ const IndicatorEngine = {
         const excluidoDoTempo = this.diagnosticoExcluidoDoTempo(ultimoFechamento);
 
         return {
-            ultimoFechamento, ultimoEncerramento, primeiroAgendamento,
+            ultimoFechamento, primeiroFechamento, ultimoEncerramento, primeiroAgendamento,
             temReabertura, temReagendamento, segmentosSolucao, segmentosAtendimento,
             deslocamentosAbandonados, excluidoDoTempo
         };
@@ -849,11 +878,14 @@ const IndicatorEngine = {
 
     /**
      * TME — Tempo Médio de Espera, em horas: da abertura da OS até o
-     * Fechamento. Visão do cliente — quanto tempo ele esperou no total,
-     * do pedido até a solução, sem descontar nada (fila, reagendamentos,
-     * tudo conta, porque tudo isso é tempo real de espera do cliente). OS
-     * com Reabertura em algum momento fica de fora inteira — não é um
-     * atendimento "limpo" (fechado, reaberto pra acertar diagnóstico etc.).
+     * 1º Fechamento. Visão do cliente — quanto tempo ele esperou no
+     * total, do pedido até a solução, sem descontar nada (fila,
+     * reagendamentos, tudo conta, porque tudo isso é tempo real de
+     * espera do cliente). Usa o PRIMEIRO Fechamento mesmo se a OS foi
+     * reaberta depois — reabertura é acerto de processo, não um novo
+     * atendimento de campo, então não teria sentido descontar/inflar o
+     * tempo de espera do cliente por causa dela (ver
+     * js/engine/filtroengine.js pro mesmo raciocínio).
      */
     calcularTME(ordens, analise) {
         let somaHoras = 0;
@@ -861,10 +893,9 @@ const IndicatorEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!ordem.dataAbertura || !info?.ultimoFechamento?.data) continue;
-            if (info.temReabertura) continue;
+            if (!ordem.dataAbertura || !info?.primeiroFechamento?.data) continue;
 
-            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
             if (horas < 0) continue;
 
             somaHoras += horas;
@@ -1049,16 +1080,18 @@ const IndicatorEngine = {
 
     /**
      * Ranking de técnicos por volume de OS **realmente finalizadas**
-     * (tem evento Fechamento) — o técnico contado é quem executou esse
-     * Fechamento especificamente, não só quem tocou a OS por último.
+     * (tem evento Fechamento) — o técnico contado é quem executou o 1º
+     * Fechamento especificamente (ver js/engine/filtroengine.js — uma
+     * reabertura+refechamento posterior é acerto de processo, não
+     * atendimento novo, e não deveria mudar de mãos o crédito).
      */
     calcularRankingTecnicos(analise) {
         const contagem = new Map();
 
         for (const info of analise.values()) {
-            if (!info.ultimoFechamento) continue;
+            if (!info.primeiroFechamento) continue;
 
-            const nome = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            const nome = this.nomeResponsavelFechamento(info.primeiroFechamento);
             if (nome === null || nome === undefined) continue;
 
             contagem.set(nome, (contagem.get(nome) ?? 0) + 1);
@@ -1319,12 +1352,15 @@ const IndicatorEngine = {
         };
 
         // Passo 1: finalizadas/reabertura/diagnóstico/solo-dupla ficam com
-        // quem de fato FECHOU a OS — isso não depende de segmento algum.
+        // quem de fato fechou a OS a 1ª vez (ver
+        // js/engine/filtroengine.js — reabertura é acerto de processo,
+        // não atendimento novo, então o crédito não muda de mãos por
+        // causa dela) — isso não depende de segmento algum.
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!info?.ultimoFechamento) continue;
+            if (!info?.primeiroFechamento) continue;
 
-            const nome = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            const nome = this.nomeResponsavelFechamento(info.primeiroFechamento);
             if (nome === null || nome === undefined) continue;
 
             const ficha = obterFicha(nome);
@@ -1336,14 +1372,14 @@ const IndicatorEngine = {
                 ficha.ordensReabertas.push(ordem.id);
             }
 
-            const diagnostico = info.ultimoFechamento.diagnostico;
+            const diagnostico = info.primeiroFechamento.diagnostico;
             if (diagnostico !== null && diagnostico !== undefined && diagnostico !== "") {
                 ficha.diagnosticosPreenchidos++;
             } else {
                 ficha.diagnosticosAusentes++;
             }
 
-            if (this.ehTrabalhoSolo(info.ultimoFechamento)) {
+            if (this.ehTrabalhoSolo(info.primeiroFechamento)) {
                 ficha.trabalhosSolo++;
             } else {
                 ficha.trabalhosDupla++;
@@ -1432,11 +1468,12 @@ const IndicatorEngine = {
     /**
      * Visão mensal (Jan até o último mês com dado) das OS finalizadas
      * naquele ano: volume, TMS/TMA/TMR/TME médios, reaberturas (contagem)
-     * e técnicos ativos — todos agrupados pelo mês em que a OS foi
-     * FECHADA (não abertura nem agendamento), pra ficar consistente entre
-     * as métricas. Ano de referência é o ano da finalização mais recente
-     * nos dados (ou, sem nenhuma finalizada, o da abertura mais recente).
-     * Só entram OS com Fechamento — igual ao resto do sistema.
+     * e técnicos ativos — todos agrupados pelo mês do 1º FECHAMENTO da OS
+     * (não abertura, agendamento, nem um refechamento posterior depois de
+     * reaberta — ver js/engine/filtroengine.js), pra ficar consistente
+     * entre as métricas. Ano de referência é o ano da finalização mais
+     * recente nos dados (ou, sem nenhuma finalizada, o da abertura mais
+     * recente). Só entram OS com Fechamento — igual ao resto do sistema.
      */
     calcularTendenciaMensal(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
@@ -1473,9 +1510,12 @@ const IndicatorEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!info?.ultimoFechamento?.data) continue;
+            if (!info?.primeiroFechamento?.data) continue;
 
-            const dataFechamento = info.ultimoFechamento.data;
+            // 1º Fechamento, não o último — reabertura é acerto de
+            // processo (ver js/engine/filtroengine.js), então o mês em
+            // que a OS "conta" é o do atendimento de verdade.
+            const dataFechamento = info.primeiroFechamento.data;
             if (dataFechamento.getFullYear() !== ano) continue;
 
             const mes = dataFechamento.getMonth();
@@ -1485,7 +1525,7 @@ const IndicatorEngine = {
             bucket.totalFinalizadas++;
             if (info.temReabertura) bucket.reabertas++;
 
-            const nomeFechamentoMes = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            const nomeFechamentoMes = this.nomeResponsavelFechamento(info.primeiroFechamento);
             if (nomeFechamentoMes !== null && nomeFechamentoMes !== undefined) {
                 bucket.tecnicosAtivos.add(nomeFechamentoMes);
             }
@@ -1503,8 +1543,8 @@ const IndicatorEngine = {
                 if (horasTmr >= 0) { bucket.somaTmr += horasTmr; bucket.contagemTmr++; }
             }
 
-            // TME ignora OS com Reabertura em algum momento — mesma regra de calcularTME.
-            if (ordem.dataAbertura && !info.temReabertura) {
+            // TME usa o 1º Fechamento (dataFechamento já é ele) — mesma regra de calcularTME.
+            if (ordem.dataAbertura) {
                 const horasTme = (dataFechamento - ordem.dataAbertura) / 3600000;
                 if (horasTme >= 0) { bucket.somaTme += horasTme; bucket.contagemTme++; }
             }
@@ -1699,12 +1739,12 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Assuntos com o melhor (ou, com piores=true, o pior) TME médio (abertura até fechamento, sem OS reaberta). */
+    /** Assuntos com o melhor (ou, com piores=true, o pior) TME médio (abertura até o 1º Fechamento). */
     calcularTmePorAssunto(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
-            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
+            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
@@ -1741,28 +1781,28 @@ const IndicatorEngine = {
     calcularTmePorDiagnostico(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
-            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
+            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
 
-    /** Cidades com o melhor (ou, com piores=true, o pior) TME médio (abertura até fechamento, sem OS reaberta). */
+    /** Cidades com o melhor (ou, com piores=true, o pior) TME médio (abertura até o 1º Fechamento). */
     calcularTmePorCidade(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
-            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
+            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
 
-    /** Setores com o melhor (ou, com piores=true, o pior) TME médio (abertura até fechamento, sem OS reaberta). */
+    /** Setores com o melhor (ou, com piores=true, o pior) TME médio (abertura até o 1º Fechamento). */
     calcularTmePorSetor(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorSetor(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.ultimoFechamento?.data || info.temReabertura) return null;
-            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
+            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
@@ -1781,11 +1821,11 @@ const IndicatorEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!ordem.dataAbertura || !info?.ultimoFechamento?.data || info.temReabertura) continue;
-            const nome = this.nomeResponsavelFechamento(info.ultimoFechamento);
+            if (!ordem.dataAbertura || !info?.primeiroFechamento?.data) continue;
+            const nome = this.nomeResponsavelFechamento(info.primeiroFechamento);
             if (nome === null || nome === undefined) continue;
 
-            const horas = (info.ultimoFechamento.data - ordem.dataAbertura) / 3600000;
+            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
             if (horas < 0) continue;
 
             if (!acumulado.has(nome)) acumulado.set(nome, { soma: 0, contagem: 0 });

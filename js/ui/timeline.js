@@ -26,7 +26,7 @@ function abrirModalOS(id, idModalRetorno = null) {
 function renderizarDetalhesOS({ ordem, timeline }) {
     document.getElementById("modalTitulo").textContent = `OS ${ordem.id}`;
 
-    const fechamento = FiltroEngine.ultimoFechamentoDaOrdem(ordem);
+    const fechamento = FiltroEngine.primeiroFechamentoDaOrdem(ordem);
     const colaboradorResponsavel = IndicatorEngine.nomeResponsavelFechamento(fechamento);
 
     document.getElementById("modalResumo").innerHTML = `

@@ -14,8 +14,13 @@
  * (evento "Fechamento" — conferido nos dados reais: toda linha com
  * esse evento tem status "Finalizada", e vice-versa, então as duas
  * condições citadas no pedido original são a mesma coisa) — reaproveita
- * IndicatorEngine.analisarEventosDeTodas/ultimoFechamento em vez de
- * duplicar essa varredura.
+ * IndicatorEngine.analisarEventosDeTodas/primeiroFechamento em vez de
+ * duplicar essa varredura. É o 1º Fechamento, não o último: uma
+ * reabertura é sempre acerto de processo (nunca um novo atendimento),
+ * então o Diagnóstico x Próxima Tarefa que representa o que realmente
+ * aconteceu na OS é o da primeira finalização (ver
+ * js/engine/filtroengine.js pro mesmo raciocínio aplicado no resto do
+ * sistema).
  *
  * Diagnóstico pode vir como ID (dado antigo, já importado antes da
  * planilha passar a trazer o nome direto) ou como texto (dado novo)
@@ -288,7 +293,11 @@ const AuditoriaOperacionalEngine = {
         const semRegraDiagnosticos = new Map();
 
         for (const ordem of ordens.values()) {
-            const fechamento = analise.get(ordem.id)?.ultimoFechamento;
+            // 1º Fechamento, não o último — reabertura é só acerto de
+            // processo (ver js/engine/filtroengine.js), então o
+            // Diagnóstico x Próxima Tarefa que representa o atendimento
+            // de verdade é o da primeira finalização.
+            const fechamento = analise.get(ordem.id)?.primeiroFechamento;
 
             if (!fechamento) {
                 resumo.semFechamento++;
