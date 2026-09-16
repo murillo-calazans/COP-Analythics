@@ -7,6 +7,14 @@
  * Pra adicionar/ajustar uma regra, ver js/config/regrasauditoria.js.
  * Respeita o Filtro Global, igual Dashboard/Técnicos/Indicadores
  * (diferente de Alertas, que é independente dele).
+ *
+ * Coluna "Status": um achado já corrigido no sistema de origem (ex.:
+ * reaberto e ajustado) continua aparecendo aqui — o 1º Fechamento, que
+ * é o que a Auditoria audita, não muda — mas pode ser marcado como
+ * "já corrigido" (qualquer usuário logado, inclusive leitor) pra não
+ * confundir com pendência real; sai da contagem "Com erro"/
+ * "Possíveis duplicidades" e entra em "Já corrigidos". Ver
+ * js/services/auditoriacorrecoes.js.
  */
 
 const ROTULOS_TIPO_ACHADO_AUDITORIA = {
@@ -56,6 +64,10 @@ function renderizarPainelAuditoriaOperacional() {
             <div class="stat-tile">
                 <div class="stat-label">Possíveis duplicidades</div>
                 <div class="stat-valor">${resumo.duplicidades.toLocaleString("pt-BR")}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Já corrigidos</div>
+                <div class="stat-valor">${resumo.corrigidos.toLocaleString("pt-BR")}</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-label">Sem regra mapeada</div>
@@ -166,6 +178,7 @@ function renderizarListaAchadosAuditoria(termo) {
                         <th>Próxima Tarefa</th>
                         <th>Esperado</th>
                         <th>Motivo</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -178,6 +191,7 @@ function renderizarListaAchadosAuditoria(termo) {
                             <td>${escaparHtml(achado.proximaTarefa ?? "-")}</td>
                             <td>${escaparHtml((achado.proximaTarefaEsperada ?? []).join(" ou ") || "-")}</td>
                             <td>${escaparHtml(achado.motivo ?? "-")}</td>
+                            <td>${celulaStatusAchado(achado)}</td>
                         </tr>
                     `).join("")}
                 </tbody>
@@ -188,4 +202,59 @@ function renderizarListaAchadosAuditoria(termo) {
     container.querySelectorAll("tr[data-id]").forEach(tr => {
         tr.addEventListener("click", () => abrirModalOS(tr.dataset.id));
     });
+
+    container.querySelectorAll("[data-acao-correcao]").forEach(botao => {
+        botao.addEventListener("click", evento => {
+            evento.stopPropagation(); // não abre o modal da OS ao clicar no botão
+            alternarCorrecaoAchado(botao, botao.dataset.ordemId, botao.dataset.tipoAchado, botao.dataset.acaoCorrecao === "desfazer");
+        });
+    });
+}
+
+/** Etiqueta "Corrigido" (com quem/quando) + botão de desfazer, ou botão de marcar — ver js/services/auditoriacorrecoes.js. */
+function celulaStatusAchado(achado) {
+    if (!achado.corrigido) {
+        return `
+            <button type="button" class="botao-corrigir" data-acao-correcao="marcar"
+                data-ordem-id="${escaparHtml(String(achado.ordemId))}" data-tipo-achado="${escaparHtml(achado.tipo)}">
+                Marcar como corrigido
+            </button>
+        `;
+    }
+
+    const quemQuando = [achado.corrigidoPor, achado.corrigidoEm ? formatarDataHora(new Date(achado.corrigidoEm)) : null]
+        .filter(Boolean)
+        .join(" — ");
+
+    return `
+        <span class="tag-corrigido" title="${escaparHtml(quemQuando || "Corrigido")}">✓ Corrigido</span>
+        <button type="button" class="botao-desfazer-correcao" data-acao-correcao="desfazer"
+            data-ordem-id="${escaparHtml(String(achado.ordemId))}" data-tipo-achado="${escaparHtml(achado.tipo)}">
+            Desfazer
+        </button>
+    `;
+}
+
+/** Marca/desmarca um achado como corrigido (qualquer usuário logado, ver patch-12) e recarrega a lista. */
+async function alternarCorrecaoAchado(botao, ordemId, tipoAchado, desfazer) {
+    botao.disabled = true;
+
+    const ok = desfazer
+        ? await desmarcarAchadoCorrigido(ordemId, tipoAchado)
+        : await marcarAchadoCorrigido(ordemId, tipoAchado);
+
+    if (!ok) {
+        alert("Não foi possível salvar agora. Tenta de novo em instantes.");
+        botao.disabled = false;
+        return;
+    }
+
+    const termoAtual = document.getElementById("buscaAchadosAuditoria")?.value ?? "";
+    renderizarPainelAuditoriaOperacional();
+
+    const inputNovo = document.getElementById("buscaAchadosAuditoria");
+    if (inputNovo && termoAtual) {
+        inputNovo.value = termoAtual;
+        renderizarListaAchadosAuditoria(termoAtual.trim());
+    }
 }

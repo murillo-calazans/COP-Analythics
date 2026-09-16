@@ -285,7 +285,11 @@ const AuditoriaOperacionalEngine = {
             semErro: 0,
             comErro: 0,
             semRegraMapeada: 0,
-            duplicidades: 0
+            duplicidades: 0,
+            // Achados (de qualquer tipo) marcados manualmente como já
+            // corrigidos (ver js/services/auditoriacorrecoes.js) — contam
+            // à parte, não entram em comErro/duplicidades.
+            corrigidos: 0
         };
 
         const achados = [];
@@ -319,23 +323,36 @@ const AuditoriaOperacionalEngine = {
                 continue;
             }
 
-            resumo.comErro++;
-            porTipoErro.set(resultado.achado.tipo, (porTipoErro.get(resultado.achado.tipo) ?? 0) + 1);
+            const correcao = this.buscarCorrecaoAchado(ordem.id, resultado.achado.tipo);
+            if (correcao) {
+                resumo.corrigidos++;
+            } else {
+                resumo.comErro++;
+                porTipoErro.set(resultado.achado.tipo, (porTipoErro.get(resultado.achado.tipo) ?? 0) + 1);
+            }
 
             achados.push({
                 ordemId: ordem.id,
                 login: ordem.login,
                 cliente: ordem.cliente,
                 assunto: ordem.assunto,
-                ...resultado.achado
+                ...resultado.achado,
+                corrigido: !!correcao,
+                corrigidoPor: correcao?.corrigidoPor ?? null,
+                corrigidoEm: correcao?.corrigidoEm ?? null
             });
         }
 
         const achadosDuplicidade = this.auditarDuplicidadeLogin(ordens, analise);
         for (const achado of achadosDuplicidade) {
-            resumo.duplicidades++;
-            porTipoErro.set(achado.tipo, (porTipoErro.get(achado.tipo) ?? 0) + 1);
-            achados.push(achado);
+            const correcao = this.buscarCorrecaoAchado(achado.ordemId, achado.tipo);
+            if (correcao) {
+                resumo.corrigidos++;
+            } else {
+                resumo.duplicidades++;
+                porTipoErro.set(achado.tipo, (porTipoErro.get(achado.tipo) ?? 0) + 1);
+            }
+            achados.push({ ...achado, corrigido: !!correcao, corrigidoPor: correcao?.corrigidoPor ?? null, corrigidoEm: correcao?.corrigidoEm ?? null });
         }
 
         return {
@@ -344,6 +361,11 @@ const AuditoriaOperacionalEngine = {
             porTipoErro: IndicatorEngine.paraListaOrdenada(porTipoErro),
             semRegraDiagnosticos: IndicatorEngine.paraListaOrdenada(semRegraDiagnosticos)
         };
+    },
+
+    /** Correção manual (se houver) pra um achado — ver js/services/auditoriacorrecoes.js. */
+    buscarCorrecaoAchado(ordemId, tipoAchado) {
+        return APP.correcoesAuditoria?.get(chaveCorrecaoAuditoria(ordemId, tipoAchado)) ?? null;
     }
 
 };

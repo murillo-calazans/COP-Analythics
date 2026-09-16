@@ -106,6 +106,11 @@ async function inicializarDadosAutenticado() {
         mostrarCarregandoDados();
     }
 
+    // Independente do cache/Supabase de ordens — tabela pequena e à parte
+    // (ver js/services/auditoriacorrecoes.js). Não bloqueia o resto do
+    // carregamento.
+    buscarCorrecoesAuditoria().then(mapa => { APP.correcoesAuditoria = mapa; });
+
     const carregado = await atualizarDoSupabase(
         mensagem => atualizarTextoCarregando(`Carregando ${mensagem}...`),
         tinhaCache

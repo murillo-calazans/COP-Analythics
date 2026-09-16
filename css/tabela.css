@@ -44,3 +44,50 @@
     background: var(--cor-fundo-elevado);
 
 }
+
+/* Achado da Auditoria já corrigido manualmente (ver
+   js/services/auditoriacorrecoes.js) — coluna "Status". */
+.tag-corrigido {
+
+    display: inline-block;
+
+    background: #14532d;
+    color: #86efac;
+
+    padding: 4px 10px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    white-space: nowrap;
+
+}
+
+.botao-corrigir,
+.botao-desfazer-correcao {
+
+    background: transparent;
+    border: 1px solid var(--cor-borda);
+    color: var(--cor-texto-suave);
+
+    padding: 4px 10px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+
+}
+
+.botao-corrigir:hover {
+
+    border-color: #22c55e;
+    color: #22c55e;
+
+}
+
+.botao-desfazer-correcao:hover {
+
+    border-color: #DC2626;
+    color: #DC2626;
+
+}

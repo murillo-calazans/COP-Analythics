@@ -78,6 +78,11 @@ const APP = {
 
     alertas: [],
 
+    // Correções manuais de achados da Auditoria Operacional — Map<`${ordemId}||${tipoAchado}`, {corrigidoPor, corrigidoEm}>.
+    // Compartilhado (Supabase), qualquer usuário logado marca/desmarca —
+    // ver js/services/auditoriacorrecoes.js.
+    correcoesAuditoria: new Map(),
+
     configuracoes: {},
 
     // Filtro Global: recorta o que aparece em Dashboard/Auditoria/Técnicos/
