@@ -29,6 +29,15 @@ function renderizarDetalhesOS({ ordem, timeline }) {
     const fechamento = FiltroEngine.primeiroFechamentoDaOrdem(ordem);
     const colaboradorResponsavel = IndicatorEngine.nomeResponsavelFechamento(fechamento);
 
+    // Diagnóstico/Próxima Tarefa e Reabertura são sempre do 1º Fechamento —
+    // mesmo critério do resto do sistema (ver js/engine/filtroengine.js):
+    // reabertura é acerto de processo, não atendimento novo.
+    const diagnostico = fechamento
+        ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, fechamento.diagnostico, CONFIG_BASE.diagnosticos.nome)
+        : null;
+    const proximaTarefa = fechamento?.proximaTarefa ? String(fechamento.proximaTarefa).trim() : null;
+    const temReabertura = IndicatorEngine.analisarEventosOS(ordem).temReabertura;
+
     document.getElementById("modalResumo").innerHTML = `
         <div class="resumo-grid">
             <div><span>Cliente</span><strong>${escaparHtml(ordem.cliente ?? "-")}</strong></div>
@@ -39,6 +48,9 @@ function renderizarDetalhesOS({ ordem, timeline }) {
             <div><span>Abertura</span><strong>${formatarDataHora(ordem.dataAbertura)}</strong></div>
             <div><span>Fechamento</span><strong>${formatarDataHora(fechamento?.data)}</strong></div>
             <div><span>Colaborador Responsável</span><strong>${escaparHtml(colaboradorResponsavel ?? "-")}</strong></div>
+            <div><span>Diagnóstico</span><strong>${escaparHtml(diagnostico ?? "-")}</strong></div>
+            <div><span>Próxima Tarefa</span><strong>${escaparHtml(proximaTarefa ?? "-")}</strong></div>
+            <div><span>Reabertura</span><strong>${temReabertura ? "Sim" : "Não"}</strong></div>
         </div>
         ${ordem.alertas.length > 0 ? `
             <div class="alertas-os">
