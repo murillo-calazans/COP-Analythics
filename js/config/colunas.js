@@ -17,7 +17,7 @@ const CONFIG_BASE = {
     operadores: {
         chave: "ID",
         nome: "NOME",
-        setor: "SETOR"          // <- AJUSTAR se o cabeçalho real vier diferente — ex.: "Controle de Operações", "Técnico"
+        setor: "DESCRIAAO"      // sic — cabeçalho real da planilha (aba Operadores não tem coluna "SETOR"; o setor de cada operador vem na coluna "Descrição" mesmo, ex.: "AZUL", "TECHNOMAIS", "CONTROLE DE OPERAÇÕES")
     },
     eventos: {
         chave: "ID",
