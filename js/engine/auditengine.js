@@ -53,7 +53,18 @@ const AuditEngine = {
         return {
             data: mov.data,
             operador: this.resolverReferencia(APP.referencias.operadores, mov.operador, CONFIG_BASE.operadores.nome),
-            colaboradorResponsavel: this.resolverReferencia(APP.referencias.operadores, mov.colaboradorResponsavel, CONFIG_BASE.operadores.nome),
+            // Colaborador Responsável é resolvido pela aba PRÓPRIA da
+            // Base.xlsx (colaboradoresResponsaveis), NÃO pela de
+            // Operadores — cadastros separados, o mesmo ID é pessoas
+            // diferentes nas duas abas (ver
+            // IndicatorEngine.nomeResponsavelFechamento e
+            // database/patch-08-colaborador-responsavel.sql). Resolver
+            // contra a tabela errada aqui mostrava, na timeline da OS, o
+            // nome de um OPERADOR qualquer que por coincidência tem o
+            // mesmo ID do Colaborador Responsável de verdade.
+            colaboradorResponsavel: this.resolverReferencia(
+                APP.referencias.colaboradoresResponsaveis, mov.colaboradorResponsavel, CONFIG_BASE.colaboradoresResponsaveis.nome
+            ),
             evento: this.resolverReferencia(APP.referencias.eventos, mov.evento, CONFIG_BASE.eventos.nome),
             diagnostico: this.resolverReferencia(APP.referencias.diagnosticos, mov.diagnostico, CONFIG_BASE.diagnosticos.nome),
             status: mov.status,

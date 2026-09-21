@@ -48,9 +48,14 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
         // RECOLHIDO" não casam com "EQUIPAMENTOS TROCADOS"/"EQUIPAMENTOS
         // RECOLHIDOS" (o "S" de EQUIPAMENTOS quebra o "includes") — por
         // isso as variantes no plural entram explícitas também.
+        // "EQUIPAMENTO DEVOLVIDO EM LOJA" entra aqui também — cliente
+        // devolveu na loja em vez do técnico recolher em campo, mas o
+        // próximo passo é o mesmo (conferência de estoque): 95% dos
+        // casos reais fecham com "EQUIPAMENTO RECOLHIDO - IR PARA
+        // CONFERÊNCIA".
         diagnosticoContemAlgum: [
             "TROCA DE EQUIPAMENTO", "EQUIPAMENTO TROCADO", "EQUIPAMENTOS TROCADOS",
-            "EQUIPAMENTO RECOLHIDO", "EQUIPAMENTOS RECOLHIDOS"
+            "EQUIPAMENTO RECOLHIDO", "EQUIPAMENTOS RECOLHIDOS", "EQUIPAMENTO DEVOLVIDO"
         ],
         // Mesma ideia do lado da Próxima Tarefa: aceita qualquer uma que
         // mencione recolhimento ou troca de equipamento, sem exigir o
@@ -62,9 +67,18 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
         // reais pras regras antigas de equipamento recolhido; sem essa
         // entrada, todo fechamento que usa só esse texto passaria a
         // virar erro por engano.
+        //
+        // "GERAR BOLETO" é um 3º caminho válido, DIFERENTE dos de cima:
+        // não é troca/recolhimento de equipamento com defeito, é
+        // ADIÇÃO de equipamento novo em comodato (ex.: OS 1901247 —
+        // assunto "ADICIONAR REPETIDOR - COMODATO", diagnóstico "TROCA
+        // DE EQUIPAMENTO" só porque é a categoria genérica usada pra
+        // qualquer alteração de equipamento; a Próxima Tarefa correta
+        // aqui é faturar o comodato novo, não mandar pra conferência de
+        // estoque). Confirmado com o usuário que isso não é erro.
         proximaTarefaContemAlgum: [
             "RECOLHIDO", "RECOLHIDOS", "TROCA DE EQUIPAMENTO", "EQUIPAMENTO TROCADO",
-            "EQUIPAMENTOS TROCADOS", "CONFERÊNCIA DE EQUIPAMENTOS"
+            "EQUIPAMENTOS TROCADOS", "CONFERÊNCIA DE EQUIPAMENTOS", "GERAR BOLETO"
         ],
         severidade: "erro",
         mensagem: "Diagnóstico indica troca ou recolhimento de equipamento — a Próxima Tarefa deveria mencionar troca ou recolhimento de equipamento (ex.: abrir a conferência de estoque)."
@@ -88,6 +102,73 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
         proximaTarefaEsperada: ["NÃO CONCLUÍDA"],
         severidade: "erro",
         mensagem: "Diagnóstico indica mudança de tecnologia NÃO concluída — a Próxima Tarefa esperada é \"NÃO CONCLUÍDA\"."
+    },
+    /**
+     * Famílias abaixo levantadas cruzando os diagnósticos com ~47 mil
+     * fechamentos reais (Downloads/ORDENS_REABERTAS...) — cada uma
+     * cobre vários diagnósticos que já mostraram o MESMO padrão de
+     * Próxima Tarefa esperada nos dados, confirmado com o usuário.
+     */
+    // Família "reparo de campo concluído" — diagnóstico descreve um
+    // problema técnico resolvido na visita (não troca/recolhimento de
+    // equipamento, não instalação nova) — o esperado é só o
+    // fechamento padrão de pós-atendimento, não um texto específico.
+    {
+        id: "reparo-campo-concluido",
+        diagnosticoContemAlgum: [
+            "CABEAMENTO REMANEJADO", "CABO NA PORTA ERRADA", "CLIENTE AUSENTE",
+            "CONECTOR CTO", "CONFIGURAÇÃO DE ROTEADOR JUNTO A ONU",
+            "EQUIPAMENTO DESLIGADO", "EQUIPAMENTO PESSOAL / IPTV", "FIBRA ATENUADA",
+            "PROBLEMAS NO EQUIPAMENTO DO CLIENTE",
+            "PROBLEMAS RELACIONADOS A CONEXÃO - RESOLVIDO",
+            "RECONFIGURAÇÃO DE ROTEADOR", "ROMPIMENTO DE FIBRA", "TROCA DE CONECTOR"
+        ],
+        // "MANUTENÇÃO CONCLUIDA - NÃO FOI TROCADO EQUIPAMENTO" é um
+        // caminho válido À PARTE (149 casos reais) — resolveu o
+        // problema sem precisar trocar equipamento, só com texto
+        // diferente do fechamento padrão de pós-atendimento.
+        proximaTarefaContemAlgum: [
+            "POS ATENDIMENTO", "PÓS ATENDIMENTO", "PESQUISA DE SATISFAÇÃO", "A.O.M",
+            "MANUTENÇÃO CONCLUIDA - NÃO FOI TROCADO EQUIPAMENTO"
+        ],
+        severidade: "erro",
+        mensagem: "Diagnóstico indica reparo de campo concluído — a Próxima Tarefa deveria ser o fechamento padrão de pós-atendimento (ex.: \"POS ATENDIMENTO\")."
+    },
+    // Família "instalação/viabilidade não concluída" — cliente desistiu,
+    // ou a instalação/transferência não pôde ser concluída por
+    // inviabilidade técnica.
+    {
+        id: "instalacao-viabilidade-nao-concluida",
+        diagnosticoContemAlgum: [
+            "DESISTÊNCIA - TRANSFERÊNCIA DE ENDEREÇO", "DESISTÊNCIA DE INSTALAÇÃO",
+            "INVIABILIDADE", "INVIABILIDADE - ÁREA DE RISCO"
+        ],
+        proximaTarefaContemAlgum: ["SEM VIABILIDADE", "INVIABILIDADE", "NÃO CONCLUÍDA", "DESISTÊNCIA"],
+        severidade: "erro",
+        mensagem: "Diagnóstico indica instalação/transferência não concluída por desistência ou inviabilidade — a Próxima Tarefa deveria refletir isso (ex.: \"SEM VIABILIDADE / DESISTÊNCIA\")."
+    },
+    // Família "equipamento não devolvido" — cliente não devolveu (ou se
+    // negou a devolver) o equipamento — vira cobrança, não conferência
+    // de estoque (esse é o caminho de EQUIPAMENTO RECOLHIDO, regra
+    // "equipamento-troca-ou-recolhimento" acima).
+    {
+        id: "equipamento-nao-devolvido",
+        diagnosticoContemAlgum: [
+            "3 TENTATIVAS DE RECOLHIMENTO", "CLIENTE SE NEGOU ENTREGAR O EQUIPAMENTO",
+            "EQUIPAMENTO DO PROPRIO CLIENTE", "EQUIPAMENTO NÃO RECOLHIDO"
+        ],
+        proximaTarefaContemAlgum: ["FATURAR EQUIPAMENTO", "EQUIPAMENTO RECOLHIDO", "CONFERÊNCIA DE EQUIPAMENTOS"],
+        severidade: "erro",
+        mensagem: "Diagnóstico indica equipamento não devolvido pelo cliente — a Próxima Tarefa deveria mencionar faturamento do equipamento (ex.: \"FATURAR EQUIPAMENTO NÃO DEVOLVIDO\")."
+    },
+    // Comodato de equipamento novo (não troca de equipamento com
+    // defeito) — o passo seguinte é faturar o comodato.
+    {
+        id: "comodato-realizado",
+        diagnostico: "TROCA DE COMODO REALIZADA",
+        proximaTarefaContemAlgum: ["GERAR BOLETO TROCA DE COMODO", "GERAR BOLETO TROCA DE CÔMODO"],
+        severidade: "erro",
+        mensagem: "Diagnóstico indica troca de comodato realizada — a Próxima Tarefa esperada é gerar o boleto do novo comodato."
     }
     // Novas exceções entram aqui. Ex.:
     // {
@@ -99,4 +180,33 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
     // }
 ];
 
+/**
+ * Diagnósticos que NUNCA esperam Próxima Tarefa — não entram na
+ * Auditoria de jeito nenhum (nem regra específica acima, nem a regra
+ * genérica de "CONCLUÍDA", que sem essa lista pegaria "EXPANSÃO
+ * CONCLUÍDA" por engano). Dois grupos:
+ *
+ * - "Ordens de estrutura" (conceito do usuário): ordens INTERNAS pra
+ *   corrigir um problema da rede/infraestrutura (CTO, switch...), não
+ *   do cliente — não levam nome de cliente, só o diagnóstico já basta,
+ *   não faz sentido cobrar Próxima Tarefa.
+ * - Diagnósticos confirmados nos dados reais como "a Próxima Tarefa
+ *   sempre vem vazia e está certo assim" (ex.: EXPANSÃO CONCLUÍDA — só
+ *   7 casos, mas os 7 sem Próxima Tarefa nenhuma).
+ * - Diagnósticos HETEROGÊNEOS demais pra ter UM próximo passo esperado
+ *   (ex.: ORDEM CANCELADA PELO CLIENTE — o cancelamento pode acontecer
+ *   no meio de qualquer tipo de visita — retirada de equipamento,
+ *   instalação, comodato, transferência — cada uma com um fechamento
+ *   válido diferente; ver OS 1549361, cancelamento durante retirada de
+ *   equipamento, fechada certinho com "FATURAR EQUIPAMENTO NÃO
+ *   DEVOLVIDO", que a regra de "reparo de campo" não previa).
+ */
+const DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA = [
+    "CTO SEM POTÊNCIA",           // ordem de estrutura
+    "CTO SEM VAGA",                // ordem de estrutura
+    "EXPANSÃO CONCLUÍDA",          // confirmado nos dados: Próxima Tarefa sempre vazia
+    "ORDEM CANCELADA PELO CLIENTE" // próximo passo varia demais conforme o tipo de visita cancelada
+];
+
 window.REGRAS_AUDITORIA_DIAGNOSTICO = REGRAS_AUDITORIA_DIAGNOSTICO;
+window.DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA = DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA;

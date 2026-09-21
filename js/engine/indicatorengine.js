@@ -596,16 +596,28 @@ const IndicatorEngine = {
         const alvoStatusAguardandoAgendamento = normalizarTexto(this.STATUS_AGUARDANDO_AGENDAMENTO);
 
         let ultimoFechamento = null;
-        // 1º Fechamento cronológico — reabertura só acontece pra acerto de
-        // processo (nunca um novo atendimento de campo), então É ESTE o
-        // fechamento "de verdade" pra período, crédito de técnico,
-        // Auditoria Operacional e TME (ver dataEfetivaRecorrencia/
-        // FiltroEngine.primeiroFechamentoDaOrdem pro mesmo raciocínio já
-        // aplicado noutros pontos). ultimoFechamento continua existindo
-        // (e sendo usado por quem não foi migrado pra este) só como o
-        // registro histórico bruto de "qual foi a última movimentação de
-        // Fechamento", sem juízo de valor sobre qual conta.
+        // 1º Fechamento cronológico — regra padrão (ver
+        // classificarMotivoReabertura/fechamentoEfetivo abaixo): reabertura
+        // É acerto de processo NA MAIORIA dos casos (nunca um novo
+        // atendimento de campo), então esse costuma ser o fechamento "de
+        // verdade" pra período, crédito de técnico, Auditoria Operacional e
+        // TME. A EXCEÇÃO é quando a mensagem do evento de Reabertura indica
+        // que o serviço não chegou a ser executado (ver
+        // MOTIVOS_REABERTURA.SERVICO_NAO_EXECUTADO em
+        // js/config/motivosreabertura.js) — nesse caso quem fez o trabalho
+        // de campo de verdade foi quem fechou por ÚLTIMO, então é esse que
+        // deveria contar. ultimoFechamento continua existindo (histórico
+        // bruto de "qual foi a última movimentação de Fechamento", sem
+        // juízo de valor) — quem decide qual dos dois é "o fechamento" é o
+        // campo fechamentoEfetivo, calculado logo abaixo.
         let primeiroFechamento = null;
+        let ultimaReabertura = null; // mov. mais recente de evento "Reabertura"
+        // Fechamento imediatamente ANTES da última Reabertura — quem reabre
+        // às vezes só escreve "cliente retornou contato" (a reabertura em
+        // si) e o motivo de verdade ("visita sem sucesso") está na
+        // mensagem de QUEM FECHOU antes — por isso o motivo é classificado
+        // usando as DUAS mensagens juntas, não só a da reabertura isolada.
+        let fechamentoAntesDaUltimaReabertura = null;
         let ultimoEncerramento = null; // Fechamento OU Reagendar — usado pro índice de reabertura/reagendamento
         let primeiroAgendamento = null; // 1º status "Agendada" — fim do TMR
         let temReabertura = false;
@@ -644,7 +656,17 @@ const IndicatorEngine = {
                         ultimoEncerramento = mov;
                     }
                 }
-                if (nomeEventoNormalizado === alvoReabertura) temReabertura = true;
+                if (nomeEventoNormalizado === alvoReabertura) {
+                    temReabertura = true;
+                    if (!ultimaReabertura || (mov.data && ultimaReabertura.data && mov.data > ultimaReabertura.data)) {
+                        ultimaReabertura = mov;
+                        // ultimoFechamento aqui ainda é "o de antes" —
+                        // movimentações são processadas em ordem
+                        // cronológica (ver DataEngine.processarOrdens), e
+                        // só é reatribuído lá em cima quando ehFechamento.
+                        fechamentoAntesDaUltimaReabertura = ultimoFechamento;
+                    }
+                }
                 if (ehReagendamento) temReagendamento = true;
             }
 
@@ -716,8 +738,39 @@ const IndicatorEngine = {
         // nem ranking — só a conta de tempo (ver calcularTMS/calcularFichasTecnicos).
         const excluidoDoTempo = this.diagnosticoExcluidoDoTempo(ultimoFechamento);
 
+        // Motivo da reabertura (ver js/config/motivosreabertura.js) — só é
+        // calculado quando a OS teve reabertura de verdade (senão fica
+        // null, nem entra no cálculo). Classifica pela mensagem da
+        // Reabertura JUNTO com a do Fechamento que ela reabriu — quem
+        // reabre às vezes só escreve algo curto tipo "cliente retornou
+        // contato" e o motivo de verdade ("visita sem sucesso") está na
+        // mensagem de quem fechou antes, não repetido na reabertura.
+        // "servico_nao_executado" é a ÚNICA classificação que muda qual
+        // fechamento conta; qualquer outra ("erro_processo", "indefinido"
+        // ou sem reabertura nenhuma) mantém o padrão — 1º Fechamento.
+        const mensagemParaClassificar = [fechamentoAntesDaUltimaReabertura?.mensagem, ultimaReabertura?.mensagem]
+            .filter(Boolean)
+            .join(" ");
+        const motivoReabertura = (temReabertura && ultimaReabertura)
+            ? classificarMotivoReabertura(mensagemParaClassificar)
+            : null;
+
+        const fechamentoEfetivo = motivoReabertura === "servico_nao_executado"
+            ? ultimoFechamento
+            : primeiroFechamento;
+
         return {
-            ultimoFechamento, primeiroFechamento, ultimoEncerramento, primeiroAgendamento,
+            ultimoFechamento, primeiroFechamento, fechamentoEfetivo,
+            motivoReabertura, mensagemReabertura: ultimaReabertura?.mensagem ?? null,
+            // Quem executou a REABERTURA em si (evento "Reabertura") — via
+            // de regra um operador interno/despachante organizando o
+            // processo, NÃO necessariamente o técnico que vai ficar com o
+            // crédito do fechamento seguinte (esse é
+            // nomeResponsavelFechamento(ultimoFechamento), coisa
+            // separada). Cru aqui (código do Operador) — quem consome
+            // resolve o nome, igual diagnóstico/próxima tarefa.
+            operadorReabertura: ultimaReabertura?.operador ?? null,
+            ultimoEncerramento, primeiroAgendamento,
             temReabertura, temReagendamento, segmentosSolucao, segmentosAtendimento,
             deslocamentosAbandonados, excluidoDoTempo
         };
@@ -878,14 +931,17 @@ const IndicatorEngine = {
 
     /**
      * TME — Tempo Médio de Espera, em horas: da abertura da OS até o
-     * 1º Fechamento. Visão do cliente — quanto tempo ele esperou no
+     * Fechamento Efetivo. Visão do cliente — quanto tempo ele esperou no
      * total, do pedido até a solução, sem descontar nada (fila,
      * reagendamentos, tudo conta, porque tudo isso é tempo real de
-     * espera do cliente). Usa o PRIMEIRO Fechamento mesmo se a OS foi
-     * reaberta depois — reabertura é acerto de processo, não um novo
-     * atendimento de campo, então não teria sentido descontar/inflar o
-     * tempo de espera do cliente por causa dela (ver
-     * js/engine/filtroengine.js pro mesmo raciocínio).
+     * espera do cliente). Usa o 1º Fechamento mesmo se a OS foi reaberta
+     * depois — reabertura É acerto de processo NA MAIORIA dos casos, não
+     * um novo atendimento de campo, então não teria sentido descontar/
+     * inflar o tempo de espera do cliente por causa dela (ver
+     * js/engine/filtroengine.js pro mesmo raciocínio) — EXCETO quando a
+     * mensagem da reabertura indica que o serviço não tinha sido
+     * executado ainda, caso em que o ÚLTIMO Fechamento é quem conta (ver
+     * fechamentoEfetivo em analisarEventosOS).
      */
     calcularTME(ordens, analise) {
         let somaHoras = 0;
@@ -893,9 +949,9 @@ const IndicatorEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!ordem.dataAbertura || !info?.primeiroFechamento?.data) continue;
+            if (!ordem.dataAbertura || !info?.fechamentoEfetivo?.data) continue;
 
-            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
+            const horas = (info.fechamentoEfetivo.data - ordem.dataAbertura) / 3600000;
             if (horas < 0) continue;
 
             somaHoras += horas;
@@ -1089,9 +1145,9 @@ const IndicatorEngine = {
         const contagem = new Map();
 
         for (const info of analise.values()) {
-            if (!info.primeiroFechamento) continue;
+            if (!info.fechamentoEfetivo) continue;
 
-            const nome = this.nomeResponsavelFechamento(info.primeiroFechamento);
+            const nome = this.nomeResponsavelFechamento(info.fechamentoEfetivo);
             if (nome === null || nome === undefined) continue;
 
             contagem.set(nome, (contagem.get(nome) ?? 0) + 1);
@@ -1358,9 +1414,9 @@ const IndicatorEngine = {
         // causa dela) — isso não depende de segmento algum.
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!info?.primeiroFechamento) continue;
+            if (!info?.fechamentoEfetivo) continue;
 
-            const nome = this.nomeResponsavelFechamento(info.primeiroFechamento);
+            const nome = this.nomeResponsavelFechamento(info.fechamentoEfetivo);
             if (nome === null || nome === undefined) continue;
 
             const ficha = obterFicha(nome);
@@ -1372,14 +1428,14 @@ const IndicatorEngine = {
                 ficha.ordensReabertas.push(ordem.id);
             }
 
-            const diagnostico = info.primeiroFechamento.diagnostico;
+            const diagnostico = info.fechamentoEfetivo.diagnostico;
             if (diagnostico !== null && diagnostico !== undefined && diagnostico !== "") {
                 ficha.diagnosticosPreenchidos++;
             } else {
                 ficha.diagnosticosAusentes++;
             }
 
-            if (this.ehTrabalhoSolo(info.primeiroFechamento)) {
+            if (this.ehTrabalhoSolo(info.fechamentoEfetivo)) {
                 ficha.trabalhosSolo++;
             } else {
                 ficha.trabalhosDupla++;
@@ -1510,12 +1566,12 @@ const IndicatorEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!info?.primeiroFechamento?.data) continue;
+            if (!info?.fechamentoEfetivo?.data) continue;
 
             // 1º Fechamento, não o último — reabertura é acerto de
             // processo (ver js/engine/filtroengine.js), então o mês em
             // que a OS "conta" é o do atendimento de verdade.
-            const dataFechamento = info.primeiroFechamento.data;
+            const dataFechamento = info.fechamentoEfetivo.data;
             if (dataFechamento.getFullYear() !== ano) continue;
 
             const mes = dataFechamento.getMonth();
@@ -1525,7 +1581,7 @@ const IndicatorEngine = {
             bucket.totalFinalizadas++;
             if (info.temReabertura) bucket.reabertas++;
 
-            const nomeFechamentoMes = this.nomeResponsavelFechamento(info.primeiroFechamento);
+            const nomeFechamentoMes = this.nomeResponsavelFechamento(info.fechamentoEfetivo);
             if (nomeFechamentoMes !== null && nomeFechamentoMes !== undefined) {
                 bucket.tecnicosAtivos.add(nomeFechamentoMes);
             }
@@ -1743,8 +1799,8 @@ const IndicatorEngine = {
     calcularTmePorAssunto(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
-            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.fechamentoEfetivo?.data) return null;
+            const horas = (info.fechamentoEfetivo.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
@@ -1781,8 +1837,8 @@ const IndicatorEngine = {
     calcularTmePorDiagnostico(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
-            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.fechamentoEfetivo?.data) return null;
+            const horas = (info.fechamentoEfetivo.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
@@ -1791,8 +1847,8 @@ const IndicatorEngine = {
     calcularTmePorCidade(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
-            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.fechamentoEfetivo?.data) return null;
+            const horas = (info.fechamentoEfetivo.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
@@ -1801,8 +1857,8 @@ const IndicatorEngine = {
     calcularTmePorSetor(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorSetor(ordens, analise, (ordem, info) => {
-            if (!ordem.dataAbertura || !info.primeiroFechamento?.data) return null;
-            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
+            if (!ordem.dataAbertura || !info.fechamentoEfetivo?.data) return null;
+            const horas = (info.fechamentoEfetivo.data - ordem.dataAbertura) / 3600000;
             return horas >= 0 ? horas : null;
         }, top, piores);
     },
@@ -1821,11 +1877,11 @@ const IndicatorEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            if (!ordem.dataAbertura || !info?.primeiroFechamento?.data) continue;
-            const nome = this.nomeResponsavelFechamento(info.primeiroFechamento);
+            if (!ordem.dataAbertura || !info?.fechamentoEfetivo?.data) continue;
+            const nome = this.nomeResponsavelFechamento(info.fechamentoEfetivo);
             if (nome === null || nome === undefined) continue;
 
-            const horas = (info.primeiroFechamento.data - ordem.dataAbertura) / 3600000;
+            const horas = (info.fechamentoEfetivo.data - ordem.dataAbertura) / 3600000;
             if (horas < 0) continue;
 
             if (!acumulado.has(nome)) acumulado.set(nome, { soma: 0, contagem: 0 });

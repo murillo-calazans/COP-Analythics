@@ -26,17 +26,30 @@ function abrirModalOS(id, idModalRetorno = null) {
 function renderizarDetalhesOS({ ordem, timeline }) {
     document.getElementById("modalTitulo").textContent = `OS ${ordem.id}`;
 
-    const fechamento = FiltroEngine.primeiroFechamentoDaOrdem(ordem);
+    // Diagnóstico/Próxima Tarefa/Fechamento mostrados aqui são do
+    // FECHAMENTO EFETIVO — 1º Fechamento por padrão, ou o último quando a
+    // reabertura foi classificada como "serviço não executado" (ver
+    // IndicatorEngine.analisarEventosOS -> fechamentoEfetivo e
+    // js/config/motivosreabertura.js). Mesmo critério do resto do sistema
+    // (ver js/engine/filtroengine.js).
+    const infoEventos = IndicatorEngine.analisarEventosOS(ordem);
+    const fechamento = infoEventos.fechamentoEfetivo;
     const colaboradorResponsavel = IndicatorEngine.nomeResponsavelFechamento(fechamento);
 
-    // Diagnóstico/Próxima Tarefa e Reabertura são sempre do 1º Fechamento —
-    // mesmo critério do resto do sistema (ver js/engine/filtroengine.js):
-    // reabertura é acerto de processo, não atendimento novo.
     const diagnostico = fechamento
         ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, fechamento.diagnostico, CONFIG_BASE.diagnosticos.nome)
         : null;
     const proximaTarefa = fechamento?.proximaTarefa ? String(fechamento.proximaTarefa).trim() : null;
-    const temReabertura = IndicatorEngine.analisarEventosOS(ordem).temReabertura;
+    const temReabertura = infoEventos.temReabertura;
+
+    const ROTULOS_MOTIVO_REABERTURA = {
+        erro_processo: "Erro de processo (mesmo técnico corrige)",
+        servico_nao_executado: "Serviço não executado (outro técnico concluiu)",
+        indefinido: "Motivo não identificado no texto da reabertura"
+    };
+    const motivoReaberturaRotulo = temReabertura
+        ? (ROTULOS_MOTIVO_REABERTURA[infoEventos.motivoReabertura] ?? "-")
+        : null;
 
     document.getElementById("modalResumo").innerHTML = `
         <div class="resumo-grid">
@@ -49,8 +62,9 @@ function renderizarDetalhesOS({ ordem, timeline }) {
             <div><span>Fechamento</span><strong>${formatarDataHora(fechamento?.data)}</strong></div>
             <div><span>Colaborador Responsável</span><strong>${escaparHtml(colaboradorResponsavel ?? "-")}</strong></div>
             <div><span>Diagnóstico</span><strong>${escaparHtml(diagnostico ?? "-")}</strong></div>
-            <div><span>Próxima Tarefa</span><strong>${escaparHtml(proximaTarefa ?? "-")}</strong></div>
+            <div><span>Próxima Tarefa</span><strong>${proximaTarefa ? escaparHtml(proximaTarefa) : '<span class="texto-nao-informado">Não informada</span>'}</strong></div>
             <div><span>Reabertura</span><strong>${temReabertura ? "Sim" : "Não"}</strong></div>
+            ${temReabertura ? `<div><span>Motivo da reabertura</span><strong>${escaparHtml(motivoReaberturaRotulo)}</strong></div>` : ""}
         </div>
         ${ordem.alertas.length > 0 ? `
             <div class="alertas-os">

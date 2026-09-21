@@ -37,6 +37,8 @@
     --cor-primaria: #2563EB;
     --cor-primaria-hover: #1D4ED8;
 
+    --cor-erro: #DC2626;
+
     --cor-sombra: rgba(15, 23, 42, 0.08);
 
     /* Paleta de gráficos (skill dataviz — hex validados p/ contraste e CVD) */
@@ -74,6 +76,8 @@ html[data-tema="dark"]{
 
     --cor-primaria: #2563EB;
     --cor-primaria-hover: #1D4ED8;
+
+    --cor-erro: #F87171;
 
     --cor-sombra: rgba(0, 0, 0, 0.4);
 

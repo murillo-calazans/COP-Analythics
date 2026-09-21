@@ -9,29 +9,32 @@
  * js/ui/alertas.js).
  *
  * Período, operador, setor e diagnóstico são todos amarrados ao
- * PRIMEIRO FECHAMENTO da OS (ver primeiroFechamentoDaOrdem): "período" é
- * a data dessa primeira finalização (não a de abertura, nem a de uma
- * eventual finalização posterior depois de reaberta), e "operador" é
- * quem fechou de fato aquela primeira vez — o Colaborador Responsável
- * do fechamento, com fallback pro Operador só em fechamentos antigos
- * (ver IndicatorEngine.nomeResponsavelFechamento) — não qualquer um que
- * só abriu, assumiu ou movimentou a OS no meio do caminho — mesma regra
- * já usada em diagnóstico (setor continua vindo do Operador — a aba de
+ * FECHAMENTO EFETIVO da OS (ver fechamentoEfetivoDaOrdem): "período" é
+ * a data desse fechamento (não a de abertura), e "operador" é quem
+ * fechou de fato — o Colaborador Responsável do fechamento, com
+ * fallback pro Operador só em fechamentos antigos (ver
+ * IndicatorEngine.nomeResponsavelFechamento) — não qualquer um que só
+ * abriu, assumiu ou movimentou a OS no meio do caminho — mesma regra já
+ * usada em diagnóstico (setor continua vindo do Operador — a aba de
  * Colaborador Responsável não tem coluna de SETOR).
  *
- * Por que o PRIMEIRO fechamento, e não o último: uma OS só é reaberta
- * pra acerto de processo (campo errado, diagnóstico incompleto etc.),
- * nunca pra um novo atendimento de campo — quem fez o trabalho de
- * verdade, e quando ele foi de fato concluído do ponto de vista
- * operacional, é sempre a primeira finalização. Uma reabertura+
- * refechamento meses depois não deveria "roubar" o crédito do técnico
- * original nem mudar de mês uma OS que já tinha sido corretamente
- * contabilizada. É por isso que reagendamentos e deslocamentos
- * abandonados (calculados em cima do resultado deste filtro, ver
- * IndicatorEngine) respeitam o Filtro Global: a OS só entra nesse
- * conjunto se o SEU PRIMEIRO FECHAMENTO bater com os critérios — o que
- * rolou antes dele (reagendamento por outro operador, deslocamento
- * abandonado por outro operador) continua fazendo parte da mesma OS.
+ * Por que "efetivo" e não simplesmente "o 1º fechamento": NA MAIORIA dos
+ * casos uma OS só é reaberta pra acerto de processo (campo errado,
+ * diagnóstico incompleto etc.), nunca pra um novo atendimento de campo —
+ * nesses casos quem fez o trabalho de verdade é sempre a primeira
+ * finalização, e uma reabertura+refechamento meses depois não deveria
+ * "roubar" o crédito do técnico original nem mudar de mês uma OS já
+ * contabilizada. MAS quando a mensagem da reabertura deixa claro que o
+ * serviço não tinha sido executado ainda (ver
+ * js/config/motivosreabertura.js), quem fez o trabalho de campo de
+ * verdade foi quem fechou por ÚLTIMO — nesse caso específico é o último
+ * fechamento que conta. fechamentoEfetivoDaOrdem decide isso pra cada
+ * OS. É por isso que reagendamentos e deslocamentos abandonados
+ * (calculados em cima do resultado deste filtro, ver IndicatorEngine)
+ * respeitam o Filtro Global: a OS só entra nesse conjunto se o SEU
+ * FECHAMENTO EFETIVO bater com os critérios — o que rolou antes dele
+ * (reagendamento por outro operador, deslocamento abandonado por outro
+ * operador) continua fazendo parte da mesma OS.
  *
  * "diagnosticosOcultos" é o único campo com lógica INVERTIDA (lista
  * negra): os demais são lista branca (nada selecionado = mostra tudo,
@@ -85,10 +88,10 @@ const FiltroEngine = {
     },
 
     combina(ordem, filtros) {
-        // Período é sobre a data do PRIMEIRO FECHAMENTO da OS, não a de
-        // abertura nem a de um refechamento posterior — uma OS aberta
-        // fora do período mas finalizada (1ª vez) dentro dele deve
-        // entrar; uma aberta dentro mas finalizada fora, não.
+        // Período é sobre a data do FECHAMENTO EFETIVO da OS (ver
+        // fechamentoEfetivoDaOrdem), não a de abertura — uma OS aberta
+        // fora do período mas com o fechamento efetivo dentro dele deve
+        // entrar; uma aberta dentro mas fechada fora, não.
         if (filtros.dataInicio || filtros.dataFim) {
             const dataFinalizacao = this.dataFinalizacaoDaOrdem(ordem);
             if (filtros.dataInicio && (!dataFinalizacao || dataFinalizacao < filtros.dataInicio)) return false;
@@ -113,9 +116,9 @@ const FiltroEngine = {
         return valoresSelecionados.some(v => normalizarTexto(v) === alvo);
     },
 
-    /** Data de finalização da OS = data do PRIMEIRO Fechamento, ou null se nunca fechou. */
+    /** Data de finalização da OS = data do Fechamento Efetivo, ou null se nunca fechou. */
     dataFinalizacaoDaOrdem(ordem) {
-        return this.primeiroFechamentoDaOrdem(ordem)?.data ?? null;
+        return this.fechamentoEfetivoDaOrdem(ordem)?.data ?? null;
     },
 
     /**
@@ -125,7 +128,7 @@ const FiltroEngine = {
      */
     fechamentoEhDoOperador(ordem, nomeOperadorAlvo) {
         const alvo = normalizarTexto(nomeOperadorAlvo);
-        const fechamento = this.primeiroFechamentoDaOrdem(ordem);
+        const fechamento = this.fechamentoEfetivoDaOrdem(ordem);
         const nome = IndicatorEngine.nomeResponsavelFechamento(fechamento);
 
         if (nome === null || nome === undefined) return false;
@@ -145,7 +148,7 @@ const FiltroEngine = {
      */
     fechamentoEhDoSetor(ordem, nomeSetorAlvo) {
         const alvo = normalizarTexto(nomeSetorAlvo);
-        const fechamento = this.primeiroFechamentoDaOrdem(ordem);
+        const fechamento = this.fechamentoEfetivoDaOrdem(ordem);
         const operador = fechamento?.operador;
 
         if (operador === null || operador === undefined) return false;
@@ -162,7 +165,7 @@ const FiltroEngine = {
      * dá pra saber se ela "é" um dos diagnósticos ocultos).
      */
     diagnosticoDoFechamentoEstaOculto(ordem, diagnosticosOcultos) {
-        const fechamento = this.primeiroFechamentoDaOrdem(ordem);
+        const fechamento = this.fechamentoEfetivoDaOrdem(ordem);
         if (!fechamento || fechamento.diagnostico === null || fechamento.diagnostico === undefined || fechamento.diagnostico === "") {
             return false;
         }
@@ -175,26 +178,58 @@ const FiltroEngine = {
     },
 
     /**
-     * Movimentação de Fechamento mais ANTIGA da OS, ou null se nunca
-     * fechou — de propósito o primeiro, não o último (ver cabeçalho do
-     * arquivo): reabertura é só acerto de processo, então quem fechou
-     * primeiro é quem fez o trabalho de verdade.
+     * Movimentação de Fechamento que REALMENTE conta pra período/
+     * crédito/setor/diagnóstico (ver cabeçalho do arquivo) — o 1º
+     * Fechamento por padrão (reabertura é só acerto de processo NA
+     * MAIORIA dos casos), OU o ÚLTIMO Fechamento quando a mensagem da
+     * reabertura mais recente indica que o serviço não tinha sido
+     * executado ainda (ver js/config/motivosreabertura.js e
+     * classificarMotivoReabertura). Varredura própria, enxuta (sem os
+     * segmentos de TMS/TMA que só IndicatorEngine.analisarEventosOS
+     * precisa) — mesmo raciocínio, calculado de novo aqui de propósito
+     * por desempenho (ver comentário de mesclarOrdens em
+     * js/engine/dataengine.js sobre o volume de movimentações).
      */
-    primeiroFechamentoDaOrdem(ordem) {
+    fechamentoEfetivoDaOrdem(ordem) {
         const alvoFechamento = normalizarTexto(IndicatorEngine.NOME_EVENTO_FECHAMENTO);
+        const alvoReabertura = normalizarTexto(IndicatorEngine.NOME_EVENTO_REABERTURA);
+
         let primeiroFechamento = null;
+        let ultimoFechamento = null;
+        let ultimaReabertura = null;
+        // Fechamento imediatamente ANTES da última Reabertura — mesmo
+        // raciocínio de IndicatorEngine.analisarEventosOS: o motivo real
+        // às vezes está na mensagem de quem FECHOU, não na da reabertura
+        // em si (que pode ser só "cliente retornou contato").
+        let fechamentoAntesDaUltimaReabertura = null;
 
         for (const mov of ordem.movimentacoes) {
             if (mov.evento === null || mov.evento === undefined) continue;
             const nome = AuditEngine.resolverReferencia(APP.referencias.eventos, mov.evento, CONFIG_BASE.eventos.nome);
-            if (normalizarTexto(nome ?? "") !== alvoFechamento) continue;
+            const nomeNormalizado = normalizarTexto(nome ?? "");
 
-            if (!primeiroFechamento || (mov.data && primeiroFechamento.data && mov.data < primeiroFechamento.data)) {
-                primeiroFechamento = mov;
+            if (nomeNormalizado === alvoFechamento) {
+                if (!primeiroFechamento || (mov.data && primeiroFechamento.data && mov.data < primeiroFechamento.data)) {
+                    primeiroFechamento = mov;
+                }
+                if (!ultimoFechamento || (mov.data && ultimoFechamento.data && mov.data > ultimoFechamento.data)) {
+                    ultimoFechamento = mov;
+                }
+            }
+
+            if (nomeNormalizado === alvoReabertura) {
+                if (!ultimaReabertura || (mov.data && ultimaReabertura.data && mov.data > ultimaReabertura.data)) {
+                    ultimaReabertura = mov;
+                    fechamentoAntesDaUltimaReabertura = ultimoFechamento;
+                }
             }
         }
 
-        return primeiroFechamento;
+        const mensagemParaClassificar = [fechamentoAntesDaUltimaReabertura?.mensagem, ultimaReabertura?.mensagem]
+            .filter(Boolean)
+            .join(" ");
+        const motivo = ultimaReabertura ? classificarMotivoReabertura(mensagemParaClassificar) : null;
+        return motivo === "servico_nao_executado" ? ultimoFechamento : primeiroFechamento;
     },
 
     /**
@@ -220,7 +255,7 @@ const FiltroEngine = {
             // / fechamentoEhDoSetor / diagnosticoDoFechamentoEstaOculto),
             // senão a lista de opções mostraria valores que não existem em
             // nenhum fechamento (ex.: técnico que só agenda, nunca finaliza).
-            const fechamento = this.primeiroFechamentoDaOrdem(ordem);
+            const fechamento = this.fechamentoEfetivoDaOrdem(ordem);
 
             const nomeFechamento = IndicatorEngine.nomeResponsavelFechamento(fechamento);
             if (nomeFechamento) operadores.add(nomeFechamento);

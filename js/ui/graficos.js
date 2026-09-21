@@ -95,7 +95,13 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
     }
 }
 
-/** Popup com a lista completa (não só os "limite" primeiros) em tabela. */
+/**
+ * Popup com a lista completa (não só os "limite" primeiros) em tabela.
+ * O modal #modalGraficoCompleto é genérico (só título + um container de
+ * conteúdo) — também reaproveitado por abrirCategoriaAuditoria
+ * (js/ui/auditoriaoperacional.js) pro popup dos cards da Auditoria, com
+ * um HTML diferente (duas colunas em vez de tabela).
+ */
 function abrirGraficoCompleto(containerId) {
     const container = document.getElementById(containerId);
     if (!container || !container._dadosGrafico) return;

@@ -139,6 +139,29 @@
 
 }
 
+/* Card de indicador que abre um popup de detalhamento ao clicar
+   (ver js/ui/auditoriaoperacional.js -> abrirCategoriaAuditoria). */
+.stat-tile-clicavel {
+
+    cursor: pointer;
+
+}
+
+/* Card de prioridade visual — hoje só "Reabertas e fechadas por outro
+   colaborador", no topo da Auditoria Operacional. */
+.stat-tile-destaque {
+
+    border-color: #f59e0b;
+    background: color-mix(in srgb, #f59e0b 8%, var(--cor-fundo-card));
+
+}
+
+.stat-tile-destaque .stat-valor {
+
+    color: #f59e0b;
+
+}
+
 .graficos-grid {
 
     display: grid;
