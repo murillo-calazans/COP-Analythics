@@ -713,6 +713,16 @@
 
 }
 
+/* Botão/tag de "marcar como corrigido" dentro do popup da Auditoria
+   (ver itensCategoriaAuditoriaHtml) — separado do resto do card por
+   uma linha fina, mesmo padrão da tabela principal (celulaStatusAchado). */
+.item-recorrencia-status {
+
+    padding-top: 6px;
+    border-top: 1px solid var(--cor-borda);
+
+}
+
 .item-recorrencia-label {
 
     font-size: 11px;

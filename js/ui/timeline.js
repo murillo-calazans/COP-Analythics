@@ -73,6 +73,7 @@ function renderizarDetalhesOS({ ordem, timeline }) {
         ` : ""}
     `;
 
+    renderizarAuditoriaOperacionalOS(ordem);
     renderizarAuditorIA(ordem);
 
     document.getElementById("modalTimeline").innerHTML = timeline.map(item => `

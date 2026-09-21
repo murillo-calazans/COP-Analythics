@@ -45,6 +45,11 @@ const ROTULOS_TIPO_ACHADO_AUDITORIA = {
 
 let _achadosAuditoriaOperacionalCache = [];
 
+// Como reabrir, com dado fresco, o popup que estiver aberto no momento
+// — usado depois de marcar/desfazer corrigido de DENTRO do popup (ver
+// alternarCorrecaoAchadoNoPopup), sem precisar fechar e reabrir na mão.
+let _reabrirPopupAuditoriaAtual = null;
+
 function renderizarPainelAuditoriaOperacional() {
     const container = document.getElementById("auditoriaOperacionalConteudo");
     if (!container) return;
@@ -243,6 +248,11 @@ function abrirCategoriaAuditoria(categoria) {
     const definicao = DEFINICAO_CATEGORIAS_AUDITORIA[categoria];
     if (!definicao) return;
 
+    // Guardado pra dar pra redesenhar o MESMO popup, com dado fresco, ao
+    // marcar/desfazer corrigido de dentro dele (ver
+    // alternarCorrecaoAchadoNoPopup) — sem precisar fechar e reabrir.
+    _reabrirPopupAuditoriaAtual = () => abrirCategoriaAuditoria(categoria);
+
     const itens = _achadosAuditoriaOperacionalCache.filter(definicao.filtro);
     renderizarPopupDuasColunasAuditoria(definicao.titulo, itens, { duasColunas: definicao.duasColunas !== false });
 }
@@ -272,15 +282,29 @@ function abrirSubcategoriasErro() {
         botao.addEventListener("click", () => {
             const definicaoSub = DEFINICAO_SUBCATEGORIAS_ERRO[botao.dataset.subcategoriaErro];
             if (!definicaoSub) return;
-            renderizarPopupDuasColunasAuditoria(
-                definicaoSub.titulo,
-                itensComErro.filter(definicaoSub.filtro),
-                { aoVoltar: abrirSubcategoriasErro }
-            );
+            abrirSubcategoriaErro(botao.dataset.subcategoriaErro);
         });
     });
 
     abrirModal("modalGraficoCompleto");
+}
+
+/** Popup nível 2 de uma subcategoria de erro — separado pra poder ser rechamado (ver _reabrirPopupAuditoriaAtual). */
+function abrirSubcategoriaErro(chave) {
+    const definicaoSub = DEFINICAO_SUBCATEGORIAS_ERRO[chave];
+    if (!definicaoSub) return;
+
+    const itensComErro = _achadosAuditoriaOperacionalCache.filter(
+        achado => achado.tipo !== "duplicidade" && achado.tipo !== "reabertura-outro-colaborador" && !achado.corrigido
+    );
+
+    _reabrirPopupAuditoriaAtual = () => abrirSubcategoriaErro(chave);
+
+    renderizarPopupDuasColunasAuditoria(
+        definicaoSub.titulo,
+        itensComErro.filter(definicaoSub.filtro),
+        { aoVoltar: abrirSubcategoriasErro }
+    );
 }
 
 /**
@@ -345,11 +369,121 @@ function renderizarPopupDuasColunasAuditoria(titulo, itens, opcoes = {}) {
         botao.addEventListener("click", () => abrirModalOS(botao.dataset.id, "modalGraficoCompleto"));
     });
 
+    conteudo.querySelectorAll("[data-acao-correcao]").forEach(botao => {
+        botao.addEventListener("click", evento => {
+            evento.stopPropagation(); // não abre o modal da OS ao clicar no botão
+            alternarCorrecaoAchadoNoPopup(botao, botao.dataset.ordemId, botao.dataset.tipoAchado, botao.dataset.acaoCorrecao === "desfazer");
+        });
+    });
+
     if (opcoes.aoVoltar) {
         document.getElementById("btnVoltarPopupAuditoria")?.addEventListener("click", opcoes.aoVoltar);
     }
 
     abrirModal("modalGraficoCompleto");
+}
+
+/**
+ * Igual alternarCorrecaoAchado, mas pra quando o botão "Marcar como
+ * corrigido"/"Desfazer" é clicado de DENTRO de um popup da Auditoria
+ * (ver itensCategoriaAuditoriaHtml) — depois de salvar, atualiza a tela
+ * de trás (KPIs/tabela/cache) e redesenha o MESMO popup no lugar, com
+ * dado fresco, em vez de fechar. Some da lista quando o filtro daquele
+ * popup não bate mais (ex.: corrigir dentro de "Com erro" faz o item
+ * desaparecer de lá).
+ */
+async function alternarCorrecaoAchadoNoPopup(botao, ordemId, tipoAchado, desfazer) {
+    botao.disabled = true;
+
+    const ok = desfazer
+        ? await desmarcarAchadoCorrigido(ordemId, tipoAchado)
+        : await marcarAchadoCorrigido(ordemId, tipoAchado);
+
+    if (!ok) {
+        alert("Não foi possível salvar agora. Tenta de novo em instantes.");
+        botao.disabled = false;
+        return;
+    }
+
+    renderizarPainelAuditoriaOperacional();
+    _reabrirPopupAuditoriaAtual?.();
+}
+
+/**
+ * Achados da Auditoria Operacional de UMA OS, dentro do próprio modal
+ * de detalhe da OS (ver js/ui/timeline.js -> renderizarDetalhesOS) —
+ * pra poder marcar/desfazer corrigido sem precisar ir até a aba
+ * Auditoria ou o popup de categoria. Não mostra nada quando a OS não
+ * tem achado nenhum (a maioria dos casos).
+ */
+function renderizarAuditoriaOperacionalOS(ordem) {
+    const container = document.getElementById("modalAuditoriaOperacionalOS");
+    if (!container) return;
+
+    if (!APP.status?.baseCarregada) {
+        container.innerHTML = "";
+        return;
+    }
+
+    // Reaproveita o cache já calculado pela aba Auditoria (ver
+    // renderizarPainelAuditoriaOperacional) quando possível — só
+    // calcula do zero se ainda não tiver sido calculado nessa sessão
+    // (ex.: abriu o modal de uma OS sem nunca ter entrado na aba
+    // Auditoria Operacional antes).
+    if (_achadosAuditoriaOperacionalCache.length === 0) {
+        const ordensFiltradas = FiltroEngine.ordensFiltradas();
+        if (ordensFiltradas.size > 0) {
+            _achadosAuditoriaOperacionalCache = AuditoriaOperacionalEngine.auditar(ordensFiltradas).achados;
+        }
+    }
+
+    const achadosDaOrdem = _achadosAuditoriaOperacionalCache.filter(achado => String(achado.ordemId) === String(ordem.id));
+
+    if (achadosDaOrdem.length === 0) {
+        container.innerHTML = "";
+        return;
+    }
+
+    container.innerHTML = `
+        <h3 class="modal-subtitulo">Auditoria Operacional</h3>
+        <div class="lista-recorrencias">
+            ${achadosDaOrdem.map(achado => `
+                <div class="item-recorrencia item-recorrencia-coluna">
+                    <div class="item-recorrencia-lado">
+                        <span class="item-recorrencia-label">${escaparHtml(ROTULOS_TIPO_ACHADO_AUDITORIA[achado.tipo] ?? achado.tipo)}</span>
+                        <span class="item-recorrencia-nome">${escaparHtml(achado.motivo ?? "-")}</span>
+                    </div>
+                    <div class="item-recorrencia-lado item-recorrencia-status">${celulaStatusAchado(achado)}</div>
+                </div>
+            `).join("")}
+        </div>
+    `;
+
+    container.querySelectorAll("[data-acao-correcao]").forEach(botao => {
+        botao.addEventListener("click", evento => {
+            evento.stopPropagation();
+            alternarCorrecaoAchadoNoModalOS(botao, botao.dataset.ordemId, botao.dataset.tipoAchado, botao.dataset.acaoCorrecao === "desfazer", ordem);
+        });
+    });
+}
+
+/** Igual alternarCorrecaoAchadoNoPopup, mas pro modal de detalhe da OS (ver renderizarAuditoriaOperacionalOS). */
+async function alternarCorrecaoAchadoNoModalOS(botao, ordemId, tipoAchado, desfazer, ordem) {
+    botao.disabled = true;
+
+    const ok = desfazer
+        ? await desmarcarAchadoCorrigido(ordemId, tipoAchado)
+        : await marcarAchadoCorrigido(ordemId, tipoAchado);
+
+    if (!ok) {
+        alert("Não foi possível salvar agora. Tenta de novo em instantes.");
+        botao.disabled = false;
+        return;
+    }
+
+    renderizarPainelAuditoriaOperacional(); // atualiza cache/KPIs/tabela por trás
+    _reabrirPopupAuditoriaAtual?.();        // se tiver um popup de categoria aberto por trás, atualiza junto
+    renderizarAuditoriaOperacionalOS(ordem); // redesenha esse bloco, no mesmo modal da OS
 }
 
 const ROTULOS_MOTIVO_REABERTURA = {
@@ -413,6 +547,7 @@ function itensCategoriaAuditoriaHtml(itens) {
                 ` : ""}
             `}
             ${datasHtml}
+            <div class="item-recorrencia-lado item-recorrencia-status">${celulaStatusAchado(achado)}</div>
         </div>
     `;
     }).join("");
