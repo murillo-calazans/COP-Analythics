@@ -60,6 +60,22 @@ const AuditoriaOperacionalEngine = {
      * uma das palavras/trechos da lista — usado quando a grafia real
      * varia demais pra travar num texto único.
      */
+    /**
+     * Diagnóstico deliberadamente excluído (ver
+     * DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA em
+     * js/config/regrasauditoria.js) — diferente de "ainda não tem regra
+     * mapeada": esse aqui NUNCA vai ter regra, de propósito, então não
+     * deve aparecer no gráfico "Diagnósticos sem regra mapeada" (ver
+     * auditarFechamento/auditar) — esse gráfico é só pra diagnóstico que
+     * falta MESMO cadastrar.
+     */
+    diagnosticoExcluidoDaProximaTarefa(diagnosticoNome) {
+        const diagnosticoNormalizado = normalizarTexto(this.removerSufixoIdDiagnostico(diagnosticoNome));
+        return DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA.some(
+            chave => normalizarTexto(chave) === diagnosticoNormalizado
+        );
+    },
+
     regraParaDiagnostico(diagnosticoNome) {
         if (!diagnosticoNome) return null;
 
@@ -68,13 +84,8 @@ const AuditoriaOperacionalEngine = {
 
         // Checado ANTES de tudo — inclusive da regra genérica de
         // "CONCLUÍDA" logo abaixo, que senão pegaria por engano um
-        // diagnóstico como "EXPANSÃO CONCLUÍDA" (ver
-        // DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA em
-        // js/config/regrasauditoria.js).
-        const semProximaTarefaEsperada = DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA.some(
-            chave => normalizarTexto(chave) === diagnosticoNormalizado
-        );
-        if (semProximaTarefaEsperada) return null;
+        // diagnóstico como "EXPANSÃO CONCLUÍDA".
+        if (this.diagnosticoExcluidoDaProximaTarefa(diagnosticoNome)) return null;
 
         const especifica = REGRAS_AUDITORIA_DIAGNOSTICO.find(regra => {
             if (regra.diagnosticoContemAlgum) {
@@ -173,7 +184,14 @@ const AuditoriaOperacionalEngine = {
 
         const regra = this.regraParaDiagnostico(diagnosticoNome);
         if (!regra) {
-            return { status: "sem-regra", diagnostico: diagnosticoNome };
+            // foraDoEscopo distingue "nunca vai ter regra, de propósito"
+            // (não deve poluir o gráfico de sem regra mapeada) de
+            // "ainda falta cadastrar" (ver diagnosticoExcluidoDaProximaTarefa).
+            return {
+                status: "sem-regra",
+                diagnostico: diagnosticoNome,
+                foraDoEscopo: this.diagnosticoExcluidoDaProximaTarefa(diagnosticoNome)
+            };
         }
 
         const proximaTarefaBruta = (movFechamento.proximaTarefa ?? "").toString().trim();
@@ -435,7 +453,13 @@ const AuditoriaOperacionalEngine = {
 
             if (resultado.status === "sem-regra") {
                 resumo.semRegraMapeada++;
-                semRegraDiagnosticos.set(resultado.diagnostico, (semRegraDiagnosticos.get(resultado.diagnostico) ?? 0) + 1);
+                // foraDoEscopo (diagnóstico deliberadamente excluído, ver
+                // DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA) fica de fora
+                // do gráfico — esse é só pra diagnóstico que falta MESMO
+                // cadastrar regra.
+                if (!resultado.foraDoEscopo) {
+                    semRegraDiagnosticos.set(resultado.diagnostico, (semRegraDiagnosticos.get(resultado.diagnostico) ?? 0) + 1);
+                }
                 continue;
             }
 
