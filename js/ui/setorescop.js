@@ -158,6 +158,8 @@ function renderizarTmrAgendamentoCop() {
 
     const primeiroAgendamento = IndicatorEngine.calcularTmrPrimeiroAgendamentoCop(ordensFiltradas);
     const reagendamento = IndicatorEngine.calcularTmrReagendamentoCop(ordensFiltradas);
+    const ordensAcertadas = AuditoriaOperacionalEngine.contarOrdensAcertadasCopDetalhado(ordensFiltradas);
+    const totalOrdensAcertadas = [...ordensAcertadas.values()].reduce((soma, itens) => soma + itens.length, 0);
 
     container.innerHTML = `
         <div class="kpi-row">
@@ -168,6 +170,10 @@ function renderizarTmrAgendamentoCop() {
             <div class="stat-tile">
                 <div class="stat-label">TMR Reagendamento do COP &middot; ${reagendamento.contagem.toLocaleString("pt-BR")} reagendamentos</div>
                 <div class="stat-valor">${formatarDuracaoHoras(reagendamento.horas)}</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-label">Ordens Acertadas do COP &middot; achados resolvidos na própria reabertura</div>
+                <div class="stat-valor">${totalOrdensAcertadas.toLocaleString("pt-BR")}</div>
             </div>
         </div>
 
@@ -190,6 +196,15 @@ function renderizarTmrAgendamentoCop() {
                 </div>
                 <div id="tmrCopReagendamentoPorColaborador"></div>
             </div>
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Ordens Acertadas por Colaborador</div>
+                        <div class="grafico-subtitulo">Achados da Auditoria resolvidos na própria reabertura do COP</div>
+                    </div>
+                </div>
+                <div id="ordensAcertadasCopPorColaborador"></div>
+            </div>
         </div>
     `;
 
@@ -208,6 +223,17 @@ function renderizarTmrAgendamentoCop() {
         titulo: "TMR de Reagendamento por Colaborador",
         aoClicar: item => abrirDetalheReagendamentoCop(item.rotulo)
     });
+
+    const ordensAcertadasPorColaborador = [...ordensAcertadas.entries()]
+        .map(([rotulo, itens]) => ({ rotulo, valor: itens.length }))
+        .sort((a, b) => b.valor - a.valor);
+
+    renderizarGraficoBarras("ordensAcertadasCopPorColaborador", ordensAcertadasPorColaborador, {
+        serie: "serie-1",
+        limite: 5,
+        titulo: "Ordens Acertadas por Colaborador",
+        aoClicar: item => abrirDetalheOrdensAcertadasCop(item.rotulo)
+    });
 }
 
 /** Clique num colaborador do gráfico "Primeiro Agendamento" — abre as OS que ele agendou, com o tempo de cada uma. */
@@ -220,6 +246,37 @@ function abrirDetalheAgendamentoCop(nome) {
 function abrirDetalheReagendamentoCop(nome) {
     const detalhado = IndicatorEngine.calcularReagendamentosCopDetalhado(FiltroEngine.ordensFiltradas());
     abrirModalTmrCopDetalhe(`Reagendamento do COP — ${nome}`, detalhado.get(nome) ?? []);
+}
+
+/** Clique num colaborador do gráfico "Ordens Acertadas" — abre as OS que ele resolveu sozinho na própria reabertura. */
+function abrirDetalheOrdensAcertadasCop(nome) {
+    const detalhado = AuditoriaOperacionalEngine.contarOrdensAcertadasCopDetalhado(FiltroEngine.ordensFiltradas());
+    abrirModalOrdensAcertadasCopDetalhe(`Ordens acertadas pelo COP — ${nome}`, detalhado.get(nome) ?? []);
+}
+
+/** Mesmo modal genérico de detalhe do COP (título + lista), só que mostrando o tipo do achado em vez de um tempo. */
+function abrirModalOrdensAcertadasCopDetalhe(titulo, itens) {
+    document.getElementById("modalTmrCopDetalheTitulo").textContent = titulo;
+
+    const conteudo = document.getElementById("modalTmrCopDetalheConteudo");
+
+    conteudo.innerHTML = itens.length > 0 ? `
+        <div class="lista-tmr-detalhe">
+            ${itens.map(item => `
+                <div class="item-tmr">
+                    <button type="button" class="item-recorrencia-os" data-id="${escaparHtml(String(item.ordemId))}">${escaparHtml(String(item.ordemId))}</button>
+                    <span class="item-tmr-assunto">${escaparHtml(item.assunto ?? "sem assunto")}</span>
+                    <span class="item-tmr-valor">${escaparHtml(ROTULOS_TIPO_ACHADO_AUDITORIA[item.tipo] ?? item.tipo)}</span>
+                </div>
+            `).join("")}
+        </div>
+    ` : '<p class="alerta-vazio">Nenhuma OS encontrada.</p>';
+
+    conteudo.querySelectorAll(".item-recorrencia-os").forEach(botao => {
+        botao.addEventListener("click", () => abrirModalOS(botao.dataset.id, "modalTmrCopDetalhe"));
+    });
+
+    abrirModal("modalTmrCopDetalhe");
 }
 
 function abrirModalTmrCopDetalhe(titulo, itens) {

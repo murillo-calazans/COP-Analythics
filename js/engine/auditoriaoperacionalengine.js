@@ -109,6 +109,18 @@ const AuditoriaOperacionalEngine = {
     },
 
     /**
+     * OS de "ordem de estrutura" (ver ASSUNTOS_ORDEM_ESTRUTURA em
+     * js/config/regrasauditoria.js) — problema é da rede/infraestrutura,
+     * não do cliente, e nunca espera Próxima Tarefa preenchida, seja lá
+     * qual for o diagnóstico usado no fechamento.
+     */
+    assuntoEhOrdemDeEstrutura(assunto) {
+        if (!assunto) return false;
+        const assuntoNormalizado = normalizarTexto(assunto);
+        return ASSUNTOS_ORDEM_ESTRUTURA.some(chave => assuntoNormalizado.includes(normalizarTexto(chave)));
+    },
+
+    /**
      * Confere se a Próxima Tarefa informada satisfaz a regra: texto
      * EXATO (proximaTarefaEsperada) ou apenas CONTER uma das
      * palavras/trechos aceitos (proximaTarefaContemAlgum) — ver
@@ -408,6 +420,17 @@ const AuditoriaOperacionalEngine = {
                 continue;
             }
 
+            // Ordem de estrutura (ver ASSUNTOS_ORDEM_ESTRUTURA) — o
+            // diagnóstico do fechamento pode ser QUALQUER um (inclusive
+            // um diagnóstico de reparo normal, tipo ROMPIMENTO DE
+            // FIBRA), mas Próxima Tarefa nunca é esperada aqui. Checado
+            // pelo ASSUNTO da OS, não pelo diagnóstico — por isso fica
+            // fora de auditarFechamento (que só enxerga o fechamento).
+            if (this.assuntoEhOrdemDeEstrutura(ordem.assunto)) {
+                resumo.semRegraMapeada++;
+                continue;
+            }
+
             const resultado = this.auditarFechamento(fechamento);
 
             if (resultado.status === "sem-regra") {
@@ -468,6 +491,14 @@ const AuditoriaOperacionalEngine = {
                 ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.operadorReabertura, CONFIG_BASE.operadores.nome)
                 : null;
 
+            // Código (não nome) de quem fez o fechamento que corrigiu
+            // sozinho o problema (ver corrigidoAutomaticamente acima) —
+            // cru de propósito, pra quem for cruzar com "é do COP?"
+            // (IndicatorEngine.operadorEhDoCop só aceita o código, não o
+            // nome já resolvido — ver relatório de Ordens Acertadas do
+            // COP em js/ui/setorescop.js).
+            const operadorCorrecaoCodigo = corrigidoAutomaticamente ? (info.ultimoFechamento.operador ?? null) : null;
+
             achados.push({
                 ordemId: ordem.id,
                 login: ordem.login,
@@ -480,6 +511,7 @@ const AuditoriaOperacionalEngine = {
                 dataUltimoFechamento: info.ultimoFechamento?.data ?? null,
                 corrigido,
                 corrigidoAutomaticamente,
+                operadorCorrecaoCodigo,
                 corrigidoPor: correcaoManual?.corrigidoPor ?? null,
                 corrigidoEm: correcaoManual?.corrigidoEm ?? null
             });
@@ -552,6 +584,45 @@ const AuditoriaOperacionalEngine = {
     subcategoriaErroInconsistencia(info) {
         const mensagem = normalizarTexto(info?.mensagemReabertura ?? "");
         return mensagem.includes("DIAGNOSTICO") ? "erro_diagnostico" : "erro_proxima_tarefa";
+    },
+
+    /**
+     * "Ordens Acertadas" do COP — achados que ficaram OK sozinhos porque
+     * o PRÓPRIO fechamento da reabertura (não uma marcação manual) já
+     * resolveu o Diagnóstico x Próxima Tarefa (ver corrigidoAutomaticamente
+     * em auditar), quebrado por quem fez esse fechamento — só entra quem
+     * é do COP (mesmo critério do TMR de agendamento, ver
+     * IndicatorEngine.operadorEhDoCop e js/ui/setorescop.js). Usa o
+     * OPERADOR do fechamento (não o Colaborador Responsável, que não tem
+     * setor cadastrado — ver CONFIG_BASE.colaboradoresResponsaveis) pra
+     * bater com o mesmo critério de "é do COP?" usado ali.
+     *
+     * Correção MANUAL (corrigidoPor) fica de fora de propósito — é feita
+     * por quem está logado no COP Analytics, não necessariamente a mesma
+     * pessoa da planilha que reabriu/fechou a OS (ver conversa/decisão:
+     * "ordens acertadas" é sobre quem resolveu na própria reabertura).
+     */
+    contarOrdensAcertadasCopDetalhado(ordens) {
+        const relatorio = this.auditar(ordens);
+        const porColaborador = new Map();
+
+        for (const achado of relatorio.achados) {
+            if (!achado.corrigidoAutomaticamente) continue;
+            if (!IndicatorEngine.operadorEhDoCop(achado.operadorCorrecaoCodigo)) continue;
+
+            const nome = AuditEngine.resolverReferencia(
+                APP.referencias.operadores, achado.operadorCorrecaoCodigo, CONFIG_BASE.operadores.nome
+            );
+
+            if (!porColaborador.has(nome)) porColaborador.set(nome, []);
+            porColaborador.get(nome).push({
+                ordemId: achado.ordemId,
+                assunto: achado.assunto,
+                tipo: achado.tipo
+            });
+        }
+
+        return porColaborador;
     }
 
 };

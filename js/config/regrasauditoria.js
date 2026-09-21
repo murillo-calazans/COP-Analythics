@@ -208,5 +208,38 @@ const DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA = [
     "ORDEM CANCELADA PELO CLIENTE" // próximo passo varia demais conforme o tipo de visita cancelada
 ];
 
+/**
+ * Assuntos de "ordem de estrutura" — o problema é da REDE/infraestrutura
+ * (CTO, cabeamento, rota de fibra alarmada...), não do cliente. Diferente
+ * de DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA acima (que exclui pelo
+ * DIAGNÓSTICO do fechamento), aqui a exclusão é pelo ASSUNTO da OS —
+ * porque o diagnóstico usado nessas ordens pode ser QUALQUER diagnóstico
+ * de reparo normal (ex.: "ÁREA DE MANUTENÇÃO - ROTA ALARMADA" fecha na
+ * maioria das vezes com "ROMPIMENTO DE FIBRA"/"FIBRA ATENUADA" — os
+ * MESMOS diagnósticos que, numa OS de cliente comum, exigem Próxima
+ * Tarefa preenchida pela regra "reparo-campo-concluido" acima). Sem
+ * essa exclusão por assunto, toda ordem de estrutura com esses
+ * diagnósticos virava erro de "Próxima Tarefa ausente" por engano —
+ * confirmado nos dados reais: Próxima Tarefa vem 100% vazia nos 6
+ * assuntos abaixo (492 casos de ROTA ALARMADA, 68 de AJUSTE DE
+ * POTÊNCIA DA CTO etc.), e está certo assim.
+ *
+ * "EXCLUSÃO DE ACESSO E EQUIPAMENTOS" é ainda mais radical: nem
+ * diagnóstico nem Próxima Tarefa — o processo termina ali (confirmado:
+ * 3.274 de 3.300 fechamentos reais sem diagnóstico nenhum).
+ *
+ * Checada ANTES de tudo em AuditoriaOperacionalEngine.auditar() — a OS
+ * nem chega a passar por auditarFechamento.
+ */
+const ASSUNTOS_ORDEM_ESTRUTURA = [
+    "CONSTRUÇÃO DE REDE", // cobre também "CONSTRUÇÃO DE REDE FTTH" (contém)
+    "MELHORIA DE REDE",
+    "ÁREA DE MANUTENÇÃO - ROTA ALARMADA",
+    "AJUSTE DE POTÊNCIA DA CTO",
+    "ÁREA DE MANUTENÇÃO - PREVENTIVA",
+    "EXCLUSÃO DE ACESSO E EQUIPAMENTOS"
+];
+
 window.REGRAS_AUDITORIA_DIAGNOSTICO = REGRAS_AUDITORIA_DIAGNOSTICO;
 window.DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA = DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA;
+window.ASSUNTOS_ORDEM_ESTRUTURA = ASSUNTOS_ORDEM_ESTRUTURA;
