@@ -161,14 +161,22 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
         severidade: "erro",
         mensagem: "Diagnóstico indica equipamento não devolvido pelo cliente — a Próxima Tarefa deveria mencionar faturamento do equipamento (ex.: \"FATURAR EQUIPAMENTO NÃO DEVOLVIDO\")."
     },
-    // Comodato de equipamento novo (não troca de equipamento com
-    // defeito) — o passo seguinte é faturar o comodato.
+    // Troca de comodato — o caminho MAIS comum é faturar o comodato
+    // novo, mas às vezes a troca envolve devolver/trocar o equipamento
+    // físico de verdade, não só cobrar (ex.: OS 1826293 — assunto
+    // "RETIRADA DE EQUIPAMENTOS", fechada com "EQUIPAMENTO RECOLHIDO -
+    // IR PARA CONFERÊNCIA" — confirmado com o usuário que não é erro;
+    // batia com o 2º padrão mais comum nos dados reais, 15 dos 170
+    // casos). Mesmos caminhos aceitos da família de equipamento acima.
     {
         id: "comodato-realizado",
         diagnostico: "TROCA DE COMODO REALIZADA",
-        proximaTarefaContemAlgum: ["GERAR BOLETO TROCA DE COMODO", "GERAR BOLETO TROCA DE CÔMODO"],
+        proximaTarefaContemAlgum: [
+            "GERAR BOLETO TROCA DE COMODO", "GERAR BOLETO TROCA DE CÔMODO",
+            "EQUIPAMENTO RECOLHIDO", "EQUIPAMENTO TROCADO", "CONFERÊNCIA DE EQUIPAMENTOS"
+        ],
         severidade: "erro",
-        mensagem: "Diagnóstico indica troca de comodato realizada — a Próxima Tarefa esperada é gerar o boleto do novo comodato."
+        mensagem: "Diagnóstico indica troca de comodato realizada — a Próxima Tarefa esperada é gerar o boleto do novo comodato ou, se envolveu devolução do equipamento físico, mandar pra conferência."
     }
     // Novas exceções entram aqui. Ex.:
     // {
