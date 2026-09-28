@@ -519,6 +519,7 @@ function itensCategoriaAuditoriaHtml(itens) {
                 <span class="item-recorrencia-label">OS</span>
                 <button type="button" class="item-recorrencia-os" data-id="${escaparHtml(String(achado.ordemId))}">${escaparHtml(String(achado.ordemId))}</button>
                 <span class="item-recorrencia-assunto">${escaparHtml(achado.cliente ?? achado.login ?? "-")}</span>
+                ${achado.assunto ? `<span class="item-recorrencia-assunto">${escaparHtml(achado.assunto)}</span>` : ""}
             </div>
             ${ehReaberturaOutroColaborador ? `
                 <div class="item-recorrencia-lado">
@@ -562,7 +563,8 @@ function renderizarListaAchadosAuditoria(termo) {
         ? _achadosAuditoriaOperacionalCache.filter(achado =>
             normalizarTexto(String(achado.ordemId)).includes(termoNormalizado) ||
             normalizarTexto(achado.cliente ?? "").includes(termoNormalizado) ||
-            normalizarTexto(achado.login ?? "").includes(termoNormalizado)
+            normalizarTexto(achado.login ?? "").includes(termoNormalizado) ||
+            normalizarTexto(achado.assunto ?? "").includes(termoNormalizado)
         )
         : _achadosAuditoriaOperacionalCache;
 
@@ -580,6 +582,7 @@ function renderizarListaAchadosAuditoria(termo) {
                     <tr>
                         <th>OS</th>
                         <th>Cliente / Login</th>
+                        <th>Assunto</th>
                         <th>Tipo</th>
                         <th>Diagnóstico</th>
                         <th>Próxima Tarefa</th>
@@ -593,6 +596,7 @@ function renderizarListaAchadosAuditoria(termo) {
                         <tr data-id="${escaparHtml(String(achado.ordemId))}" class="linha-clicavel">
                             <td>${escaparHtml(String(achado.ordemId))}</td>
                             <td>${escaparHtml(achado.cliente ?? "-")} (${escaparHtml(achado.login ?? "-")})</td>
+                            <td>${escaparHtml(achado.assunto ?? "-")}</td>
                             <td>${escaparHtml(ROTULOS_TIPO_ACHADO_AUDITORIA[achado.tipo] ?? achado.tipo)}</td>
                             <td>${escaparHtml(achado.diagnostico ?? "-")}</td>
                             <td>${escaparHtml(achado.proximaTarefa ?? "-")}</td>
