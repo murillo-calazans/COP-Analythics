@@ -76,9 +76,16 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
         // qualquer alteração de equipamento; a Próxima Tarefa correta
         // aqui é faturar o comodato novo, não mandar pra conferência de
         // estoque). Confirmado com o usuário que isso não é erro.
+        //
+        // "FATURAR EQUIPAMENTO" é um 4º caminho válido: a troca foi
+        // tentada, mas o cliente não devolveu o equipamento antigo — vira
+        // cobrança, igual à família "equipamento-nao-devolvido" abaixo,
+        // só que aqui o diagnóstico já é "TROCA DE EQUIPAMENTO" (ex.: OS
+        // 1797211, fechada com "FATURAR EQUIPAMENTO NÃO DEVOLVIDO" —
+        // confirmado com o usuário que não é erro).
         proximaTarefaContemAlgum: [
             "RECOLHIDO", "RECOLHIDOS", "TROCA DE EQUIPAMENTO", "EQUIPAMENTO TROCADO",
-            "EQUIPAMENTOS TROCADOS", "CONFERÊNCIA DE EQUIPAMENTOS", "GERAR BOLETO"
+            "EQUIPAMENTOS TROCADOS", "CONFERÊNCIA DE EQUIPAMENTOS", "GERAR BOLETO", "FATURAR EQUIPAMENTO"
         ],
         severidade: "erro",
         mensagem: "Diagnóstico indica troca ou recolhimento de equipamento — a Próxima Tarefa deveria mencionar troca ou recolhimento de equipamento (ex.: abrir a conferência de estoque)."
