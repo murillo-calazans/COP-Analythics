@@ -123,7 +123,7 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
     {
         id: "reparo-campo-concluido",
         diagnosticoContemAlgum: [
-            "CABEAMENTO REMANEJADO", "CABO NA PORTA ERRADA", "CLIENTE AUSENTE",
+            "CABO NA PORTA ERRADA", "CLIENTE AUSENTE",
             "CONECTOR CTO", "CONFIGURAÇÃO DE ROTEADOR JUNTO A ONU",
             "EQUIPAMENTO DESLIGADO", "EQUIPAMENTO PESSOAL / IPTV", "FIBRA ATENUADA",
             "PROBLEMAS NO EQUIPAMENTO DO CLIENTE",
@@ -140,6 +140,23 @@ const REGRAS_AUDITORIA_DIAGNOSTICO = [
         ],
         severidade: "erro",
         mensagem: "Diagnóstico indica reparo de campo concluído — a Próxima Tarefa deveria ser o fechamento padrão de pós-atendimento (ex.: \"POS ATENDIMENTO\")."
+    },
+    // "CABEAMENTO REMANEJADO" saiu da família "reparo de campo" acima —
+    // diferente dos outros diagnósticos dela, remanejar cabeamento é uma
+    // tarefa que acontece MUITO junto de troca de comodato (ex.: OS
+    // 1934235, assunto "TROCA DE COMODO", fechada com "GERAR BOLETO
+    // TROCA DE COMODO" — confirmado com o usuário que não é erro), então
+    // tem um caminho válido a mais que os outros diagnósticos da família
+    // não têm confirmação de aceitar.
+    {
+        id: "cabeamento-remanejado",
+        diagnostico: "CABEAMENTO REMANEJADO",
+        proximaTarefaContemAlgum: [
+            "POS ATENDIMENTO", "PÓS ATENDIMENTO", "PESQUISA DE SATISFAÇÃO", "A.O.M",
+            "GERAR BOLETO TROCA DE COMODO", "GERAR BOLETO TROCA DE CÔMODO"
+        ],
+        severidade: "erro",
+        mensagem: "Diagnóstico indica cabeamento remanejado — a Próxima Tarefa deveria ser o fechamento padrão de pós-atendimento ou, se envolveu comodato, gerar o boleto da troca."
     },
     // Família "instalação/viabilidade não concluída" — cliente desistiu,
     // ou a instalação/transferência não pôde ser concluída por
