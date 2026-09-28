@@ -67,6 +67,11 @@
                 Auditoria
             </button>
 
+            <button data-secao="ordens">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Ordens
+            </button>
+
             <button data-secao="tecnicos">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 Técnicos
@@ -181,6 +186,37 @@
             </form>
 
             <div id="resultadosAuditoria"></div>
+        </div>
+    </section>
+
+    <section id="secao-ordens" class="secao">
+        <div class="placeholder-card auditoria-card">
+            <h2>📄 Ordens de Serviço</h2>
+            <p>
+                Lista de OS com Diagnóstico e Próxima Tarefa do fechamento efetivo — filtro
+                PRÓPRIO desta aba (Diagnóstico, período e busca), independente do Filtro Global (igual Alertas).
+            </p>
+
+            <div class="ordens-filtros">
+                <div class="seletor-multiplo-busca-wrap ordens-filtro-diagnostico">
+                    <input type="text" id="buscaDiagnosticoOrdens" class="seletor-multiplo-input" placeholder="Todos os diagnósticos" autocomplete="off">
+                    <div id="dropdownDiagnosticoOrdens" class="seletor-multiplo-dropdown" hidden></div>
+                </div>
+                <input type="text" id="buscaOrdens" class="seletor-multiplo-input" placeholder="Buscar por OS, cliente, login ou assunto...">
+            </div>
+
+            <div class="alertas-periodo">
+                <label>Data final de
+                    <input type="date" id="ordensDataInicio">
+                </label>
+                <label>até
+                    <input type="date" id="ordensDataFim">
+                </label>
+                <button type="button" id="btnLimparPeriodoOrdens" class="alertas-periodo-limpar">Limpar período</button>
+            </div>
+
+            <div id="resumoFiltroOrdens" class="resumo-filtro"></div>
+            <div id="listaOrdens"></div>
         </div>
     </section>
 
@@ -848,6 +884,7 @@
 <script src="js/ui/dashboard.js"></script>
 <script src="js/ui/indicadores.js"></script>
 <script src="js/ui/alertas.js"></script>
+<script src="js/ui/ordens.js"></script>
 <script src="js/ui/configuracoes.js"></script>
 <script src="js/ui/filtroglobal.js"></script><script src="js/ui/assuntosincluidoscancelamento.js"></script>
 <script src="js/ui/filtroperiodo.js"></script>

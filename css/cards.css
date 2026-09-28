@@ -230,6 +230,27 @@
 
 }
 
+.ordens-filtros {
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    margin-top: 16px;
+
+}
+
+/* Diagnóstico usa .seletor-multiplo-* (mesmo campo de busca+dropdown do
+   Setor do COP, ver css/modal.css) — aqui só o tamanho dentro da linha
+   de filtros; #buscaOrdens usa .seletor-multiplo-input também, pra
+   ficar com a mesma cara. */
+.ordens-filtros > * {
+
+    flex: 1;
+    min-width: 220px;
+
+}
+
 .resultados-contagem {
 
     margin-top: 16px;

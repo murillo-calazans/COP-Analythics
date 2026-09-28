@@ -22,6 +22,23 @@
 
 }
 
+/* Tabela de Ordens (js/ui/ordens.js) — 7 colunas com nomes/textos que
+   não podem quebrar no meio (ex.: nome do técnico, assunto) sem parecer
+   cortado. Em vez de deixar o layout automático da tabela espremer as
+   colunas, cada célula fica numa linha só e quem excede rola na
+   horizontal (ver .tabela-scroll acima) — nada de texto "cortado". */
+#listaOrdens .tabela-alertas {
+
+    min-width: 1100px;
+
+}
+
+#listaOrdens .tabela-alertas td {
+
+    white-space: nowrap;
+
+}
+
 .tabela-alertas th,
 .tabela-alertas td {
 

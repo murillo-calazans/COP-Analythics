@@ -26,6 +26,7 @@ function mostrarSecao(nome) {
 
     if (nome === "dashboard") renderizarDashboard();
     if (nome === "auditoria") renderizarPainelAuditoriaOperacional();
+    if (nome === "ordens") renderizarOrdens();
     if (nome === "tecnicos") renderizarSecaoTecnicos();
     if (nome === "indicadores") renderizarSecaoIndicadores();
     if (nome === "alertas") renderizarAlertas();
