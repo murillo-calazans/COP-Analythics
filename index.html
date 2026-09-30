@@ -172,6 +172,10 @@
                 <h2>📋 Auditoria Operacional</h2>
                 <p>Verifica automaticamente se o Diagnóstico do fechamento de cada OS é coerente com a Próxima Tarefa — respeita o Filtro Global.</p>
             </div>
+            <button type="button" id="btnRelatorioAuditoria" class="botao-secundario">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Relatório de auditoria
+            </button>
         </div>
 
         <div id="auditoriaOperacionalConteudo" class="dashboard-grid"></div>
@@ -191,11 +195,19 @@
 
     <section id="secao-ordens" class="secao">
         <div class="placeholder-card auditoria-card">
-            <h2>📄 Ordens de Serviço</h2>
-            <p>
-                Lista de OS com Diagnóstico e Próxima Tarefa do fechamento efetivo — filtro
-                PRÓPRIO desta aba (Diagnóstico, período e busca), independente do Filtro Global (igual Alertas).
-            </p>
+            <div class="dashboard-cabecalho">
+                <div>
+                    <h2>📄 Ordens de Serviço</h2>
+                    <p>
+                        Lista de OS com Diagnóstico e Próxima Tarefa do fechamento efetivo — filtro
+                        PRÓPRIO desta aba (Diagnóstico, período e busca), independente do Filtro Global (igual Alertas).
+                    </p>
+                </div>
+                <button type="button" id="btnRelatorioOrdens" class="botao-secundario">
+                    <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    Relatório das ordens filtradas
+                </button>
+            </div>
 
             <div class="ordens-filtros">
                 <div class="seletor-multiplo-busca-wrap ordens-filtro-diagnostico">
@@ -249,6 +261,10 @@
                 <h2>Indicadores</h2>
                 <p>Tendência ao longo do tempo e comparativos — respeita o Filtro Global</p>
             </div>
+            <button type="button" id="btnRelatorioIndicadores" class="botao-secundario">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Relatório de indicadores
+            </button>
         </div>
 
         <div id="indicadoresConteudo" class="dashboard-grid"></div>

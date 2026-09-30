@@ -1161,3 +1161,301 @@ function gerarRelatorioTecnicos() {
 
     baixarHtml(`relatorio-tecnicos-${carimboDataHora()}.html`, html);
 }
+
+/**
+ * Tabela com N colunas (não só {rotulo,valor}) — mesmo padrão visual/
+ * comportamento de tabelaOrdenavel (busca acima de LIMIAR_ITENS_BUSCA,
+ * ordenação por clique via data-sort em cada <td>, ver SCRIPT_RELATORIO),
+ * só parametrizada pra não repetir o bloco de busca/tabela a cada
+ * relatório novo (ver gerarRelatorioAuditoria/Ordens/Indicadores).
+ * `linhaHtml` recebe 1 item e devolve as <td> daquela linha (sem <tr>).
+ */
+function tabelaMultiColuna(idTabela, titulo, colunas, itens, linhaHtml) {
+    if (!itens || itens.length === 0) {
+        return `<p class="subtable-title">${escaparHtml(titulo)} (0)</p><p style="color:var(--text-muted);font-size:13px;">Sem dados.</p>`;
+    }
+
+    const mostrarBusca = itens.length > LIMIAR_ITENS_BUSCA;
+    const linhas = itens.map(item => `<tr>${linhaHtml(item)}</tr>`).join("");
+
+    return `
+        <p class="subtable-title">${escaparHtml(titulo)} (${itens.length})</p>
+        ${mostrarBusca ? `
+        <div class="table-tools">
+            <input type="search" class="table-search" placeholder="Buscar em ${itens.length} itens…" aria-label="Buscar em ${idTabela}">
+            <span class="table-count">${itens.length} itens · clique no cabeçalho para ordenar</span>
+        </div>` : ""}
+        <div class="table-scroll${mostrarBusca ? "" : " short"}">
+            <table class="data-table" id="${idTabela}">
+                <thead>
+                    <tr>${colunas.map((c, i) => `<th data-col="${i}">${escaparHtml(c)}<span class="sort-ind"></span></th>`).join("")}</tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+/** "Status" de um achado, em texto puro (sem botão — o relatório é só leitura). Ver celulaStatusAchado em js/ui/auditoriaoperacional.js pro equivalente vivo/clicável. */
+function statusAchadoRelatorioTexto(achado) {
+    if (!achado.corrigido) return "Pendente";
+    if (!achado.corrigidoPor) return "Corrigida na reabertura";
+    const quando = achado.corrigidoEm ? ` em ${formatarDataHora(new Date(achado.corrigidoEm))}` : "";
+    return `Corrigido${quando}${achado.corrigidoPor ? ` (${achado.corrigidoPor})` : ""}`;
+}
+
+/** Botão "Relatório de auditoria" (seção Auditoria). */
+function gerarRelatorioAuditoria() {
+    const ordens = FiltroEngine.ordensFiltradas();
+    const resultado = AuditoriaOperacionalEngine.auditar(ordens);
+    const { resumo, achados } = resultado;
+
+    const porTipoErro = resultado.porTipoErro.map(item => ({
+        rotulo: ROTULOS_TIPO_ACHADO_AUDITORIA[item.rotulo] ?? item.rotulo,
+        valor: item.valor
+    }));
+
+    const linhaAchado = achado => `
+        <td data-sort="${achado.ordemId}">${escaparHtml(String(achado.ordemId))}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(achado.cliente ?? achado.login ?? ""))}">${escaparHtml(achado.cliente ?? "-")} (${escaparHtml(achado.login ?? "-")})</td>
+        <td data-sort="${escaparHtml(normalizarTexto(achado.assunto ?? ""))}">${escaparHtml(achado.assunto ?? "-")}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(ROTULOS_TIPO_ACHADO_AUDITORIA[achado.tipo] ?? achado.tipo))}">${escaparHtml(ROTULOS_TIPO_ACHADO_AUDITORIA[achado.tipo] ?? achado.tipo)}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(achado.diagnostico ?? ""))}">${escaparHtml(achado.diagnostico ?? "-")}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(achado.proximaTarefa ?? ""))}">${escaparHtml(achado.proximaTarefa ?? "-")}</td>
+        <td>${escaparHtml((achado.proximaTarefaEsperada ?? []).join(" ou ") || "-")}</td>
+        <td>${escaparHtml(achado.motivo ?? "-")}</td>
+        <td data-sort="${achado.corrigido ? 1 : 0}">${escaparHtml(statusAchadoRelatorioTexto(achado))}</td>
+    `;
+
+    const nav = navRelatorio([
+        ["visao-geral", "Visão geral"],
+        ["tipos-erro", "Tipos de erro"],
+        ["sem-regra", "Sem regra mapeada"],
+        ["achados", "Todos os achados"]
+    ]);
+
+    const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório de Auditoria — COP Analytics</title>
+<style>${ESTILO_RELATORIO}</style>
+</head>
+<body>
+<div class="relatorio">
+    ${cabecalhoRelatorioHtml("Relatório de Auditoria", resumo.totalOS)}
+    ${nav}
+
+    <section class="bloco" id="visao-geral">
+        <div class="section-head"><h2>Visão geral</h2></div>
+        <div class="kpi-group">
+            <div class="kpi-grid">
+                <div class="kpi-tile"><span class="kpi-label">OS auditadas</span><strong class="kpi-value">${resumo.totalAuditadas}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Sem erro</span><strong class="kpi-value">${resumo.semErro}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Com erro</span><strong class="kpi-value">${resumo.comErro}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Já corrigidos</span><strong class="kpi-value">${resumo.corrigidos}</strong></div>
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-tile"><span class="kpi-label">Possíveis duplicidades</span><strong class="kpi-value">${resumo.duplicidades}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Reabertas por outro colaborador</span><strong class="kpi-value">${resumo.reaberturasOutroColaborador}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Sem regra mapeada</span><strong class="kpi-value">${resumo.semRegraMapeada}</strong></div>
+                <div class="kpi-tile"><span class="kpi-label">Ainda não finalizadas</span><strong class="kpi-value">${resumo.semFechamento}</strong></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="bloco" id="tipos-erro">
+        <div class="section-head"><h2>Tipos de erro encontrados</h2><a class="back-top" href="#top">↑ topo</a></div>
+        <div class="subtable">${tabelaOrdenavel("tbl-tipos-erro", "Achados por tipo", porTipoErro, "Tipo", "Quantidade")}</div>
+    </section>
+
+    <section class="bloco" id="sem-regra">
+        <div class="section-head"><h2>Diagnósticos sem regra mapeada</h2><a class="back-top" href="#top">↑ topo</a></div>
+        <p style="margin-top:0;color:var(--text-muted);font-size:12px;">Diagnósticos que ainda não têm uma regra de Próxima Tarefa cadastrada (ver js/config/regrasauditoria.js) — não contam como erro nem como ok.</p>
+        <div class="subtable">${tabelaOrdenavel("tbl-sem-regra", "Diagnósticos", resultado.semRegraDiagnosticos, "Diagnóstico", "Ocorrências")}</div>
+    </section>
+
+    <section class="bloco" id="achados">
+        <div class="section-head"><h2>Todos os achados</h2><a class="back-top" href="#top">↑ topo</a></div>
+        ${tabelaMultiColuna("tbl-achados", "Achados", ["OS", "Cliente / Login", "Assunto", "Tipo", "Diagnóstico", "Próxima Tarefa", "Esperado", "Motivo", "Status"], achados, linhaAchado)}
+    </section>
+
+    <footer class="relatorio-rodape">COP Analytics · Inteligência Operacional</footer>
+</div>
+<script>${SCRIPT_RELATORIO}<\/script>
+</body>
+</html>`;
+
+    baixarHtml(`relatorio-auditoria-${carimboDataHora()}.html`, html);
+}
+
+/** Botão "Relatório das ordens filtradas" (seção Ordens) — reflete o filtro PRÓPRIO da aba (Diagnóstico/período/busca), igual Alertas/Recorrência. */
+function gerarRelatorioOrdens() {
+    const linhas = linhasOrdensFiltradas();
+
+    const linhaOrdem = linha => `
+        <td data-sort="${linha.id}">${escaparHtml(String(linha.id))}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(linha.cliente ?? linha.login ?? ""))}">${escaparHtml(linha.cliente ?? "-")} (${escaparHtml(linha.login ?? "-")})</td>
+        <td data-sort="${escaparHtml(normalizarTexto(linha.assunto ?? ""))}">${escaparHtml(linha.assunto ?? "-")}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(linha.diagnostico ?? ""))}">${escaparHtml(linha.diagnostico ?? "-")}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(linha.proximaTarefa ?? ""))}">${escaparHtml(linha.proximaTarefa ?? "-")}</td>
+        <td data-sort="${escaparHtml(normalizarTexto(linha.tecnico ?? ""))}">${escaparHtml(linha.tecnico ?? "-")}</td>
+        <td data-sort="${linha.dataFinal ? linha.dataFinal.getTime() : -1}">${formatarDataHora(linha.dataFinal)}</td>
+    `;
+
+    const diagnosticoAtivo = document.getElementById("buscaDiagnosticoOrdens")?.value;
+    const buscaAtiva = document.getElementById("buscaOrdens")?.value;
+    const dataInicioAtiva = document.getElementById("ordensDataInicio")?.value;
+    const dataFimAtiva = document.getElementById("ordensDataFim")?.value;
+    const filtrosTexto = [
+        diagnosticoAtivo ? `diagnóstico: ${diagnosticoAtivo}` : null,
+        (dataInicioAtiva || dataFimAtiva) ? `período: ${dataInicioAtiva || "início"} até ${dataFimAtiva || "hoje"}` : null,
+        buscaAtiva ? `busca: "${buscaAtiva}"` : null
+    ].filter(Boolean).join(" · ");
+
+    const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório de Ordens — COP Analytics</title>
+<style>${ESTILO_RELATORIO}</style>
+</head>
+<body>
+<div class="relatorio">
+    <header class="relatorio-cabecalho" id="top">
+        <h1>Relatório de Ordens</h1>
+        <p>COP Analytics · Gerado em ${formatarDataHora(new Date())} por ${escaparHtml(APP.usuario?.email ?? "-")}</p>
+        <p>${linhas.length} ordem(ns) de serviço consideradas — independente do Filtro Global (filtro próprio da aba Ordens).</p>
+        ${filtrosTexto ? `<div class="relatorio-filtro">⚠ <span><strong>Filtro da aba ativo</strong> — ${escaparHtml(filtrosTexto)}</span></div>` : ""}
+    </header>
+
+    <section class="bloco" id="ordens">
+        ${tabelaMultiColuna("tbl-ordens", "Ordens de Serviço", ["ID", "Cliente / Login", "Assunto", "Diagnóstico", "Próxima Tarefa", "Técnico", "Data final"], linhas, linhaOrdem)}
+    </section>
+
+    <footer class="relatorio-rodape">COP Analytics · Inteligência Operacional</footer>
+</div>
+<script>${SCRIPT_RELATORIO}<\/script>
+</body>
+</html>`;
+
+    baixarHtml(`relatorio-ordens-${carimboDataHora()}.html`, html);
+}
+
+/** Botão "Relatório de indicadores" (seção Indicadores) — só o que NÃO está no Relatório Geral: bateria completa de TMS/TMA/TMR/TME por dimensão, TMR do COP e Funil de Assuntos. */
+function gerarRelatorioIndicadores() {
+    const ordens = FiltroEngine.ordensFiltradas();
+    const horas = v => formatarDuracaoHoras(v);
+
+    const nav = navRelatorio([
+        ["tempo", "Indicadores de Tempo"],
+        ["tmr-cop", "TMR do COP"],
+        ["funil", "Funil de Assuntos"]
+    ]);
+
+    const colunasTempoHtml = METRICAS_TEMPO.map(metrica => {
+        const dimensoes = ["cidade", "setor", ...(metrica.temTecnico ? ["tecnico"] : []), "assunto", "diagnostico"];
+        const rotulosColuna = { cidade: "Cidade", setor: "Setor", tecnico: "Técnico", assunto: "Assunto", diagnostico: "Diagnóstico" };
+
+        const tabelas = dimensoes.map(dim => {
+            const dados = FUNCOES_TEMPO_POR_DIMENSAO[metrica.chave][dim](ordens);
+            return `<div class="subtable">${tabelaOrdenavel(`tbl-tempo-${metrica.chave}-${dim}`, `${metrica.nome} ${ROTULOS_DIMENSAO_TEMPO[dim]}`, dados, rotulosColuna[dim], metrica.nome, horas)}</div>`;
+        }).join("");
+
+        return `
+            <div>
+                <p class="subtable-title" style="font-size:15px;">${escaparHtml(metrica.nome)} <span style="font-weight:400;color:var(--text-muted);">— ${escaparHtml(metrica.descricao)}</span></p>
+                ${tabelas}
+            </div>
+        `;
+    }).join("");
+
+    const setoresCop = APP.configuracoes.setoresCop ?? [];
+    let blocoTmrCop;
+    if (setoresCop.length === 0) {
+        blocoTmrCop = `<p style="color:var(--text-muted);font-size:13px;">Setor(es) do COP não configurado(s) — ver Configurações &gt; Setor do COP.</p>`;
+    } else {
+        const primeiroAgendamento = IndicatorEngine.calcularTmrPrimeiroAgendamentoCop(ordens);
+        const reagendamento = IndicatorEngine.calcularTmrReagendamentoCop(ordens);
+        const porColaboradorPrimeiro = IndicatorEngine.calcularTmrPrimeiroAgendamentoCopPorColaborador(ordens)
+            .map(item => ({ rotulo: item.rotulo, valor: item.valor }));
+        const porColaboradorReagendamento = IndicatorEngine.calcularTmrReagendamentoCopPorColaborador(ordens)
+            .map(item => ({ rotulo: item.rotulo, valor: item.valor }));
+        const ordensAcertadas = AuditoriaOperacionalEngine.contarOrdensAcertadasCopDetalhado(ordens);
+        const ordensAcertadasLista = [...ordensAcertadas.entries()]
+            .map(([rotulo, itens]) => ({ rotulo, valor: itens.length }))
+            .sort((a, b) => b.valor - a.valor);
+
+        blocoTmrCop = `
+            <p style="margin-top:0;color:var(--text-muted);font-size:12px;">Setor(es) considerado(s) como COP: ${escaparHtml(setoresCop.join(", "))}.</p>
+            <div class="kpi-group">
+                <div class="kpi-grid">
+                    <div class="kpi-tile"><span class="kpi-label">TMR Primeiro Agendamento do COP</span><strong class="kpi-value">${formatarDuracaoHoras(primeiroAgendamento.horas)}</strong></div>
+                    <div class="kpi-tile"><span class="kpi-label">TMR Reagendamento do COP</span><strong class="kpi-value">${formatarDuracaoHoras(reagendamento.horas)}</strong></div>
+                </div>
+            </div>
+            <div class="duas-colunas" style="margin-top:16px;">
+                <div>${tabelaOrdenavel("tbl-tmrcop-primeiro", "Primeiro Agendamento por Colaborador", porColaboradorPrimeiro, "Colaborador", "TMR (h)")}</div>
+                <div>${tabelaOrdenavel("tbl-tmrcop-reagend", "Reagendamento por Colaborador", porColaboradorReagendamento, "Colaborador", "TMR (h)")}</div>
+            </div>
+            <div class="subtable" style="margin-top:16px;">${tabelaOrdenavel("tbl-tmrcop-acertadas", "Ordens Acertadas por Colaborador", ordensAcertadasLista, "Colaborador", "Ordens acertadas")}</div>
+        `;
+    }
+
+    const configFunil = APP.configuracoes.funilAssuntos ?? { origem: [], destino: [] };
+    let blocoFunil;
+    if (configFunil.origem.length === 0 || configFunil.destino.length === 0) {
+        blocoFunil = `<p style="color:var(--text-muted);font-size:13px;">Assuntos de origem/destino não configurados — ver Configurações &gt; Funil de Assuntos.</p>`;
+    } else {
+        const resultadoFunil = IndicatorEngine.calcularFunilAssuntos(ordens);
+        const linhaFunil = o => `
+            <td data-sort="${escaparHtml(normalizarTexto(o.cliente ?? ""))}">${escaparHtml(o.cliente ?? "(sem nome)")}</td>
+            <td data-sort="${escaparHtml(normalizarTexto(o.login ?? ""))}">${escaparHtml(o.login ?? "-")}</td>
+            <td data-sort="${o.ordemOrigemId}">${escaparHtml(String(o.ordemOrigemId))} — ${escaparHtml(o.assuntoOrigem ?? "-")}</td>
+            <td data-sort="${o.ordemDestinoId}">${escaparHtml(String(o.ordemDestinoId))} — ${escaparHtml(o.assuntoDestino ?? "-")}</td>
+        `;
+        blocoFunil = `
+            <p style="margin-top:0;color:var(--text-muted);font-size:12px;">${escaparHtml(configFunil.origem.join(", "))} → ${escaparHtml(configFunil.destino.join(", "))} (até ${IndicatorEngine.LIMITE_DIAS_RECORRENCIA} dias depois) — ${resultadoFunil.totalClientes} cliente(s) afetado(s).</p>
+            ${tabelaMultiColuna("tbl-funil", "Ocorrências", ["Cliente", "Login", "OS de origem", "OS de destino"], resultadoFunil.ocorrencias, linhaFunil)}
+        `;
+    }
+
+    const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório de Indicadores — COP Analytics</title>
+<style>${ESTILO_RELATORIO}</style>
+</head>
+<body>
+<div class="relatorio">
+    ${cabecalhoRelatorioHtml("Relatório de Indicadores", ordens.size)}
+    <p style="margin:-8px 0 16px;color:var(--text-muted);font-size:12px;">Complementa o Relatório Geral (Dashboard) — só o que não está lá: bateria completa de tempos por dimensão, TMR do COP e Funil de Assuntos.</p>
+    ${nav}
+
+    <section class="bloco" id="tempo">
+        <div class="section-head"><h2>Indicadores de Tempo</h2></div>
+        ${colunasTempoHtml}
+    </section>
+
+    <section class="bloco" id="tmr-cop">
+        <div class="section-head"><h2>TMR de Agendamento (Controle de Operações)</h2><a class="back-top" href="#top">↑ topo</a></div>
+        ${blocoTmrCop}
+    </section>
+
+    <section class="bloco" id="funil">
+        <div class="section-head"><h2>Funil de Assuntos</h2><a class="back-top" href="#top">↑ topo</a></div>
+        ${blocoFunil}
+    </section>
+
+    <footer class="relatorio-rodape">COP Analytics · Inteligência Operacional</footer>
+</div>
+<script>${SCRIPT_RELATORIO}<\/script>
+</body>
+</html>`;
+
+    baixarHtml(`relatorio-indicadores-${carimboDataHora()}.html`, html);
+}

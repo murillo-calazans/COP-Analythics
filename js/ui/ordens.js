@@ -160,7 +160,13 @@ function selecionarDiagnosticoOrdens(valor) {
     aplicarFiltroOrdens();
 }
 
-function aplicarFiltroOrdens() {
+/**
+ * Linhas de _linhasOrdensCache que batem com o filtro PRÓPRIO desta aba
+ * agora (Diagnóstico + período + busca) — separado de aplicarFiltroOrdens
+ * pra também servir de base pro Relatório (ver gerarRelatorioOrdens em
+ * js/services/relatorios.js), sem duplicar a lógica de filtro.
+ */
+function linhasOrdensFiltradas() {
     const termoNormalizado = normalizarTexto(document.getElementById("buscaOrdens")?.value ?? "");
 
     // Período PRÓPRIO desta aba (igual Alertas) — filtra pela Data final
@@ -170,7 +176,7 @@ function aplicarFiltroOrdens() {
     const dataInicio = dataInicioBruta ? new Date(`${dataInicioBruta}T00:00:00`) : null;
     const dataFim = dataFimBruta ? new Date(`${dataFimBruta}T23:59:59`) : null;
 
-    const filtradas = _linhasOrdensCache.filter(linha => {
+    return _linhasOrdensCache.filter(linha => {
         if (_ordensDiagnosticoSelecionado && linha.diagnostico !== _ordensDiagnosticoSelecionado) return false;
 
         if (dataInicio || dataFim) {
@@ -188,7 +194,10 @@ function aplicarFiltroOrdens() {
 
         return true;
     });
+}
 
+function aplicarFiltroOrdens() {
+    const filtradas = linhasOrdensFiltradas();
     renderizarResumoFiltroOrdens(filtradas.length);
     renderizarTabelaOrdens(filtradas);
 }
