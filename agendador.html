@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agendamento · COP Analytics</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#eef1f6; --surface:#fff; --sunken:#f7f8fb; --border:#dfe4ec;
+  --text:#161d2b; --muted:#6b768c; --faint:#a8b0c0;
+  --accent:#173a68; --accent-strong:#0b2140; --on-accent:#fff;
+  --crit-bg:#fde8ea; --crit:#b4232f; --alta-bg:#fdf1de; --alta:#a9590a;
+  --ok-bg:#e2f4f1; --ok:#0d7a6c; --info-bg:#e6eefc; --info:#2c5bb8;
+  --roxo-bg:#f2ecfd; --roxo:#7139c9; --warn-bg:#fff6d6; --warn:#8a6300;
+  --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 16px -8px rgba(20,30,50,.12);
+}
+/* Tema escuro só quando escolhido no botão do topo. */
+:root[data-theme="dark"]{
+    --bg:#0e1420; --surface:#161d2c; --sunken:#111725; --border:#28324a;
+    --text:#e8ecf5; --muted:#93a0ba; --faint:#4b5670;
+    --accent:#6f9bef; --accent-strong:#a9c4fb; --on-accent:#0b1420;
+    --crit-bg:rgba(220,60,70,.18); --crit:#ff9aa2; --alta-bg:rgba(217,142,45,.16); --alta:#f0b876;
+    --ok-bg:rgba(20,166,148,.18); --ok:#6be0cc; --info-bg:rgba(80,130,240,.18); --info:#a9c4fb;
+    --roxo-bg:rgba(139,92,246,.2); --roxo:#c9b3fb; --warn-bg:rgba(230,180,40,.16); --warn:#f2d27a;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 20px -10px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"IBM Plex Sans",Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);padding:20px 24px 48px;font-size:14px}
+h1,h2,h3{font-family:"Barlow Condensed",Segoe UI,sans-serif;margin:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(120deg,#0b2140,#173a68);color:#fff;padding:14px 22px;border-radius:14px;margin-bottom:16px;box-shadow:var(--shadow)}
+.topbar h1{font-size:22px;letter-spacing:.01em}
+.topbar .sub{font-size:12px;opacity:.75}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.entrada{display:grid;grid-template-columns:1fr 1fr 220px auto;gap:14px;padding:16px;align-items:end;margin-bottom:12px}
+.campo > label:not(.drop){display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.drop{display:flex;align-items:center;gap:10px;border:1.5px dashed var(--border);border-radius:10px;padding:10px 12px;background:var(--sunken);cursor:pointer;min-height:46px}
+.drop:hover{border-color:var(--accent)}
+.drop.ok{border-style:solid;border-color:var(--ok);background:var(--ok-bg)}
+.drop input{display:none}
+.drop .nome{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drop .det{font-size:11px;color:var(--muted)}
+input[type=date],input[type=number],select,textarea{font-family:inherit;font-size:13px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--sunken);color:var(--text);width:100%}
+textarea{font-family:"IBM Plex Mono",monospace;font-size:12px;min-height:180px}
+button{font-family:inherit;border:none;border-radius:8px;padding:11px 18px;font-size:13px;font-weight:600;cursor:pointer;background:var(--accent);color:var(--on-accent)}
+button:hover{background:var(--accent-strong)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.sec{background:var(--sunken);color:var(--text);border:1px solid var(--border)}
+details.params{padding:0 16px;margin-bottom:16px}
+details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(--muted);font-size:13px}
+.params-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding-bottom:12px}
+.params-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding-bottom:16px}
+.hint{font-size:12px;color:var(--muted);line-height:1.45}
+.aviso{padding:12px 16px;margin-bottom:16px;border-radius:10px;background:var(--warn-bg);color:var(--warn);font-size:13px;line-height:1.45;display:none}
+.tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
+.tile{padding:12px 14px}
+.tile .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:600}
+.tile .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.barra{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px}
+.tabs button{background:transparent;color:var(--muted);padding:8px 14px}
+.tabs button.on{background:var(--accent);color:var(--on-accent)}
+.filtros{display:flex;gap:8px;align-items:center}
+.filtros select,.filtros input{width:auto}
+.grupo-titulo{display:flex;align-items:baseline;gap:10px;margin:22px 0 10px}
+.grupo-titulo h2{font-size:22px}
+.pill{font-size:11px;color:var(--muted);background:var(--sunken);border:1px solid var(--border);padding:2px 9px;border-radius:999px;font-weight:600}
+.rotas{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px;align-items:start}
+.rota-h{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);align-items:flex-start}
+.rota-h .nome{font-weight:700;font-size:15px}
+.rota-h .meta{font-size:12px;color:var(--muted);margin-top:2px}
+.rota-h a{font-size:12px;color:var(--accent);text-decoration:none;font-weight:600;white-space:nowrap}
+.carga{height:6px;border-radius:3px;background:var(--sunken);margin-top:8px;overflow:hidden;width:180px}
+.carga i{display:block;height:100%;background:var(--accent)}
+.vazia{padding:14px;color:var(--faint);font-size:13px;font-style:italic}
+table{width:100%;border-collapse:collapse}
+td,th{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);font-size:12.5px}
+th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;background:var(--sunken)}
+tr:last-child td{border-bottom:none}
+.hora{font-family:"IBM Plex Mono",monospace;font-weight:600;white-space:nowrap}
+.os-id{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted)}
+.cli{font-weight:600}
+.pequeno{font-size:11.5px;color:var(--muted)}
+.selos{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.selo{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
+.s-crit{background:var(--crit-bg);color:var(--crit)}
+.s-alta{background:var(--alta-bg);color:var(--alta)}
+.s-rec{background:var(--roxo-bg);color:var(--roxo)}
+.s-pref{background:var(--info-bg);color:var(--info)}
+.s-ag{background:var(--ok-bg);color:var(--ok)}
+.s-warn{background:var(--warn-bg);color:var(--warn)}
+.s-neu{background:var(--sunken);color:var(--muted);border:1px solid var(--border)}
+.paradas{display:flex;flex-direction:column}
+.parada{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:12px 14px;border-top:1px solid var(--border)}
+.lista .parada:first-child{border-top:none}
+.lista .parada{grid-template-columns:190px 1fr}
+.p-lado{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.p-num{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.p-num::before{content:"Parada "}
+.parada .hora{font-size:17px}
+.p-espera{font-size:11px;color:var(--warn)}
+.p-motivo{font-size:12px;color:var(--muted);line-height:1.35}
+.p-corpo{min-width:0}
+.p-topo{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.p-topo .cli{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-serv{font-size:12.5px;margin-top:2px}
+.p-local{font-size:12px;color:var(--muted)}
+.p-regiao{color:var(--accent);font-weight:600}
+.p-det{font-size:11px;color:var(--faint);margin-top:5px}
+.p-hist{font-size:11.5px;color:var(--roxo);margin-top:3px}
+.selos{margin-top:6px}
+.msg{font-size:11.5px;color:var(--muted);margin-top:5px;font-style:italic;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.real{font-size:11px;margin-top:3px}
+.real.bate{color:var(--ok)} .real.nao{color:var(--muted)}
+.lista.card{overflow-x:auto}
+.escondido{display:none}
+.resumo{font-size:15px;margin:4px 2px 14px}
+.resumo .fonte{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.lista-dia{margin-bottom:18px;overflow:hidden}
+.lista-dia h2{font-size:19px;padding:12px 16px 10px;border-bottom:1px solid var(--border)}
+.lista-dia h2 span{font-family:"IBM Plex Sans",sans-serif;font-size:12px;font-weight:500;color:var(--muted);margin-left:8px}
+.lista-dia table{width:100%;border-collapse:collapse}
+.lista-dia td{padding:10px 16px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
+.lista-dia tr.l-os{cursor:pointer}
+.lista-dia tr.l-os:hover td{background:var(--sunken)}
+.lista-dia .l-n{width:70px;color:var(--text);font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600}
+.lista-dia .l-cli{font-weight:600;width:38%}
+.lista-dia .l-bai{width:22%}
+.lista-dia .l-tec{color:var(--text)}
+.lista-dia .l-tec small{color:var(--muted);font-weight:400}
+.lista-dia .l-mot{color:var(--muted);font-size:13px}
+.lista-dia .l-bai{color:var(--muted)}
+.lista-dia .l-ass{color:var(--muted);font-size:13px}
+.lista-dia tr.l-tec-h td{background:#0b2140;font-weight:800;font-size:16px;color:#fff;padding:12px 16px 10px;border-top:2px solid var(--border);border-left:4px solid var(--accent)}
+.lista-dia tr.l-tec-h td small{font-size:13px;font-weight:600;color:#aebcd6}
+.tag-pri{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;margin-left:8px;vertical-align:1px}
+.tag-pri.crit{background:var(--crit-bg);color:var(--crit)}
+.tag-pri.alta{background:var(--alta-bg);color:var(--alta)}
+.lista-dia .l-vis{color:var(--text);font-weight:600}
+.ixc{font-size:12px;font-weight:600;white-space:nowrap}
+.ixc.ok{color:var(--ok)}
+.ixc.dif{color:var(--warn)}
+.lista-dia .l-mapa{float:right;font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none}
+.lista-dia .l-mapa:hover{text-decoration:underline}
+.lista-dia .l-tec-q{font-weight:500;color:var(--muted);font-size:12px;margin-left:10px}
+/* Cabeçalho do técnico em fundo escuro: contagem e link em cores claras (vêm depois das regras gerais
+   acima para vencê-las) e o fundo escuro preservado na impressão/PDF. */
+.lista-dia tr.l-tec-h .l-tec-q{color:#aebcd6}
+.lista-dia tr.l-tec-h .l-mapa{color:#8ab4ff}
+.lista-dia tr.l-tec-h td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lista-dia tr.l-det td{background:var(--sunken);font-size:12.5px;color:var(--muted);padding-top:6px}
+.ponto{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px;background:transparent}
+.ponto.crit{background:var(--crit)} .ponto.alta{background:var(--alta)}
+.aviso-l{color:var(--warn);font-weight:600}
+.vazio-estado{padding:40px;text-align:center;color:var(--muted)}
+@media (max-width:1000px){.entrada{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(3,1fr)}.rotas{grid-template-columns:1fr}.params-grid,.params-2{grid-template-columns:1fr 1fr}}
+@media print{
+  body{background:#fff;padding:0}
+  .entrada,details.params,.barra,.tiles,.aviso,.topbar button{display:none!important}
+  .rota{break-inside:avoid;box-shadow:none}
+  .rotas{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>Pré-agendamento técnico</h1>
+    <div class="sub" id="subtitulo">Cruza as OS pendentes com a escala do dia e sugere técnico, rota e horário</div>
+  </div>
+  <div style="display:flex;gap:8px"><button class="sec" id="btnTema">Tema escuro</button></div>
+</div>
+
+<div class="card entrada">
+  <div class="campo">
+    <label>Ordens de serviço (relatório IXC .xlsx)</label>
+    <label class="drop" id="dropOS"><input type="file" id="arqOS" accept=".xlsx,.xls,.csv">
+      <div><div class="nome">Escolher arquivo…</div><div class="det">Relatório de eventos por OS</div></div></label>
+  </div>
+  <div class="campo">
+    <label>Escala dos técnicos (.html exportado)</label>
+    <label class="drop" id="dropEsc"><input type="file" id="arqEsc" accept=".html,.htm">
+      <div><div class="nome">Escolher arquivo…</div><div class="det">Exportado da Escala Técnica</div></div></label>
+  </div>
+  <div class="campo">
+    <label>Dia do agendamento</label>
+    <input type="date" id="dataRef">
+  </div>
+  <div class="campo">
+    <button id="btnGerar" disabled>Gerar pré-agendamento</button>
+  </div>
+</div>
+
+<details class="card params">
+  <summary>Parâmetros e cidades atendidas</summary>
+  <div class="params-grid">
+    <div class="campo"><label>Instalação / transferência (min)</label><input type="number" data-p="durInstalacao"></div>
+    <div class="campo"><label>Manutenção (min)</label><input type="number" data-p="durManutencao"></div>
+    <div class="campo"><label>Troca de equipamento (min)</label><input type="number" data-p="durTroca"></div>
+    <div class="campo"><label>Recolhimento (min)</label><input type="number" data-p="durRecolhimento"></div>
+    <div class="campo"><label>Velocidade média (km/h)</label><input type="number" data-p="velocidadeKmh"></div>
+    <div class="campo"><label>Fator estrada × linha reta</label><input type="number" step="0.1" data-p="fatorEstrada"></div>
+    <div class="campo"><label>Almoço (min)</label><input type="number" data-p="almocoMin"></div>
+    <div class="campo"><label>Máximo de OS (manutenção)</label><input type="number" min="1" data-p="maxOS"></div>
+    <div class="campo"><label>Máximo de OS (instalação)</label><input type="number" min="1" data-p="maxOSInstalador"></div>
+    <div class="campo"><label>Distância para separar regiões (km)</label><input type="number" min="1" data-p="raioRegiaoKm"></div>
+    <div class="campo"><label>Máximo fora da rota (km)</label><input type="number" min="1" data-p="maxForaRotaKm"></div>
+  </div>
+  <div class="params-2">
+    <div class="campo">
+      <label>Cidade da OS = seções da escala que atendem</label>
+      <textarea id="mapa"></textarea>
+      <label style="margin-top:12px">Regiões: bairros que vão para o mesmo técnico</label>
+      <textarea id="regioes" style="min-height:90px"></textarea>
+    </div>
+    <div class="hint">
+      <p>Cidades com o mesmo nome de uma seção da escala são ligadas automaticamente. Use esta lista só para exceções. Separe várias seções com <b>;</b>.</p>
+      <p><b>Regiões</b> juntam bairros que devem ir para o mesmo técnico (até o limite de OS). Técnico escalado numa seção com nome de bairro, como Japuíba, começa pela região desse bairro.</p>
+      <p>Seções ligadas formam um único grupo de técnicos. Por exemplo, Cachoeiras, Japuíba e Papucaia dividem as OS de Cachoeiras e Itaboraí, e cada OS vai para quem estiver mais perto.</p>
+      <p><b>Como o sistema decide</b><br>
+      1. Só entram OS que não estão Finalizadas na data escolhida e que precisam de técnico no cliente (auditoria, exclusão de acesso, configuração e afins ficam de fora). Recolhimento e retirada de equipamento também ficam de fora.<br>
+      2. Instalação, transferência e serviços terceirizados vão para os instaladores; o resto vai para a manutenção.<br>
+      3. Ordem de prioridade: Crítica, depois Alta, depois já agendada, reagendamentos, dias em aberto e cliente recorrente.<br>
+      4. As OS são divididas em regiões, uma por técnico (no máximo o limite de OS por técnico). OS de Sem conexão vão de preferência para dupla de manutenção; em Nova Friburgo a dupla é obrigatória, nas demais cidades pode ir técnico sozinho. GPS a mais de 40 km da cidade é trocado pelo centro do bairro.<br>
+      5. Na rota, quem pediu manhã vai primeiro e quem pediu tarde ou "após X horas" vai por último, sempre pelo vizinho mais próximo.</p>
+      <p>O ponto de partida é o centro das OS do grupo, porque a escala ainda não informa a base de cada técnico.</p>
+    </div>
+  </div>
+</details>
+
+<div class="aviso" id="aviso"></div>
+
+<div id="resultado" class="escondido">
+  <div class="resumo" id="resumo"></div>
+
+  <div class="barra">
+    <div class="tabs">
+      <button data-aba="lista" class="on">OS do dia</button>
+      <button data-aba="rotas">Rotas por técnico</button>
+      <button data-aba="sem">Não cabem hoje <span id="nSem"></span></button>
+    </div>
+    <div class="filtros">
+      <select id="fGrupo"><option value="">Todas as cidades</option></select>
+      <input type="search" id="fBusca" placeholder="Buscar OS, cliente, bairro…">
+      <button id="btnHTML" title="Arquivo para enviar ao responsável pelo agendamento">Baixar HTML</button>
+      <button id="btnPDF" title="Abre a impressão; escolha “Salvar como PDF”">Gerar PDF</button>
+      <button class="sec" id="btnCSV">CSV</button>
+    </div>
+  </div>
+
+  <div id="abaLista"></div>
+  <div id="abaRotas" class="escondido"></div>
+  <div id="abaSem" class="escondido"></div>
+</div>
+
+<div id="vazioEstado" class="card vazio-estado">Escolha o relatório de OS e a escala do dia para gerar o pré-agendamento.</div>
+
+<script src="libs/xlsx.full.min.js"></script>
+<!-- Supabase só para LER o histórico de OS do COP Analytics (mesma sessão de login). -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.js"
+    integrity="sha384-OUpie84zd1LdwNlK9uJJQRwab0BLqo3eKYKFh7hSVL58FSk7wPp2l0kfUMIIoaQd"
+    crossorigin="anonymous"></script>
+<script src="js/config/supabase.js"></script>
+<!-- Suba o ?v= a cada alteração do motor para o navegador não usar a versão antiga em cache. -->
+<script src="js/agendador/mapa-regioes-dados.js?v=1"></script>
+<script src="js/agendador/motor.js?v=30"></script>
+<script>
+(function(){
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm = Motor.norm;
+
+const REGIOES_PADRAO = [
+  'Agro Brasil e Sambaetiba = Agro Brasil; Sambaetiba',
+  'Japuíba e Papucaia = Japuíba; Papucaia',
+  // A Região Sul de Friburgo no mapa junta dois lados da cidade: Olaria/Cônego e Ponte da Saudade/Mury
+  // ficam perto em linha reta, mas pela estrada é preciso atravessar o Centro.
+  'Sul - Mury / Ponte da Saudade = Ponte da Saudade; Mury; Stucky',
+].join('\n');
+// Lista padrão anterior: quem nunca editou as regiões recebe a nova automaticamente.
+const REGIOES_PADRAO_ANTIGO = 'Agro Brasil e Sambaetiba = Agro Brasil; Sambaetiba\nJapuíba e Papucaia = Japuíba; Papucaia';
+
+const MAPA_PADRAO = [
+  'Cachoeiras de Macacu = Cachoeiras de Macacu; Japuíba; Papucaia',
+  'Itaboraí = Cachoeiras de Macacu; Japuíba; Papucaia',
+  'Magé = Guapimirim',
+  'Cruzeiro = São Paulo',
+  'Guaratinguetá = São Paulo',
+  'Lavrinhas = São Paulo',
+  'Queluz = São Paulo',
+].join('\n');
+
+const store = {
+  get(k, d){ try { const v = localStorage.getItem('agendador.' + k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem('agendador.' + k, JSON.stringify(v)); } catch(e){} },
+};
+
+const params = Object.assign({}, Motor.PADRAO_PARAMS, store.get('params', {}));
+document.querySelectorAll('[data-p]').forEach(inp => {
+  inp.value = params[inp.dataset.p];
+  inp.addEventListener('change', () => { params[inp.dataset.p] = +inp.value || Motor.PADRAO_PARAMS[inp.dataset.p]; store.set('params', params); });
+});
+$('#mapa').value = store.get('mapa', MAPA_PADRAO);
+const regioesSalvas = store.get('regioes', null);
+$('#regioes').value = (regioesSalvas == null || regioesSalvas === REGIOES_PADRAO_ANTIGO) ? REGIOES_PADRAO : regioesSalvas;
+$('#regioes').addEventListener('change', () => store.set('regioes', $('#regioes').value));
+$('#mapa').addEventListener('change', () => store.set('mapa', $('#mapa').value));
+
+function aplicarTema(t){ if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme'); $('#btnTema').textContent = t === 'dark' ? 'Tema claro' : 'Tema escuro'; }
+aplicarTema(store.get('tema', 'light'));
+$('#btnTema').addEventListener('click', () => { const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; store.set('tema', t); aplicarTema(t); });
+
+let linhasOS = null, techs = null, escalaData = null, ultimo = null;
+
+function marcarDrop(el, nome, det){
+  el.classList.add('ok');
+  el.querySelector('.nome').textContent = nome;
+  el.querySelector('.det').textContent = det;
+}
+function habilitar(){ $('#btnGerar').disabled = !(linhasOS && techs); }
+
+$('#arqOS').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const wb = XLSX.read(new Uint8Array(rd.result), { type: 'array' });
+      linhasOS = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      const ids = new Set(linhasOS.map(r => r['ID OS'])).size;
+      marcarDrop($('#dropOS'), f.name, linhasOS.length.toLocaleString('pt-BR') + ' eventos · ' + ids.toLocaleString('pt-BR') + ' OS');
+    } catch(err){ alert('Não consegui ler a planilha: ' + err.message); linhasOS = null; }
+    habilitar();
+  };
+  rd.readAsArrayBuffer(f);
+});
+
+const MESES = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function lerEscala(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const lista = [];
+  doc.querySelectorAll('section.city-page').forEach(sec => {
+    const secao = (sec.querySelector('.city-heading h2') || {}).textContent || sec.getAttribute('data-cidade');
+    sec.querySelectorAll('.tech-row').forEach(tr => {
+      const card = tr.querySelector('.day-card');
+      if (!card || !(card.classList.contains('instalador') || card.classList.contains('manutencao'))) return;
+      const sub = (card.querySelector('.sub') || {}).textContent || '';
+      const tag = ((tr.querySelector('.tag-dupla') || {}).textContent || '').replace(/^\+\s*/, '').trim();
+      const m = sub.match(/Em dupla com (.+)/);
+      lista.push({
+        id: lista.length,
+        nome: tr.querySelector('.nome').textContent.trim(),
+        setor: card.classList.contains('instalador') ? 'instalador' : 'manutencao',
+        secao: secao.trim(),
+        horario: ((card.querySelector('.label') || {}).textContent || '').trim(),
+        dupla: m ? m[1].trim() : (/solo/i.test(sub) ? null : (tag || null)),
+        temporario: tr.querySelector('.tech-name-card').classList.contains('guest'),
+      });
+    });
+  });
+  const txt = norm((doc.querySelector('.topbar-date') || {}).textContent || '');
+  const d = txt.match(/(\d{1,2}) de ([a-z]+) de (\d{4})/);
+  const data = d && MESES.indexOf(d[2]) >= 0 ? new Date(+d[3], MESES.indexOf(d[2]), +d[1]) : null;
+  return { lista, data };
+}
+
+$('#arqEsc').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const r = lerEscala(rd.result);
+    if (!r.lista.length){ alert('Não encontrei técnicos escalados nesse arquivo.'); techs = null; habilitar(); return; }
+    techs = r.lista; escalaData = r.data;
+    const secoes = new Set(techs.map(t => t.secao)).size;
+    marcarDrop($('#dropEsc'), f.name, techs.length + ' equipes em ' + secoes + ' cidades' + (r.data ? ' · ' + r.data.toLocaleDateString('pt-BR') : ''));
+    if (r.data) $('#dataRef').value = r.data.toISOString().slice(0, 10);
+    habilitar();
+  };
+  rd.readAsText(f, 'utf-8');
+});
+
+$('#btnGerar').addEventListener('click', gerar);
+// Usado por testes automatizados para carregar dados sem o seletor de arquivo.
+window.Agendador = {
+  carregarOS(rows){ linhasOS = rows; habilitar(); },
+  carregarEscala(html){ const r = lerEscala(html); techs = r.lista; escalaData = r.data; if (r.data) $('#dataRef').value = r.data.toISOString().slice(0, 10); habilitar(); },
+  gerar(dataISO){ if (dataISO) $('#dataRef').value = dataISO; return gerar(); },
+  relatorio(){ return montarRelatorio(); },
+};
+
+// Mostrada no resumo para saber se o navegador está usando a página atual (e não uma cópia em cache).
+const VERSAO = '34 · 02/10';
+const URL_MAPA_REGIOES = 'https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html';
+let mapaCache = null;
+async function carregarMapaRegioes(){
+  if (mapaCache) return mapaCache;
+  try {
+    const resp = await fetch(URL_MAPA_REGIOES, { cache: 'no-store' });
+    const dados = resp.ok ? Motor.lerMapaRegioes(await resp.text()) : null;
+    if (dados) return (mapaCache = { fonte: 'site', idx: Motor.indiceMapa(dados) });
+  } catch (e) { /* sem internet ou site fora: usa a cópia */ }
+  return (mapaCache = { fonte: 'copia', idx: Motor.indiceMapa(window.MAPA_REGIOES_PADRAO || null) });
+}
+
+// Histórico das OS no COP Analytics (tabela "ordens"). Só SELECT: esta página não grava nada no
+// banco. Usa a sessão do COP Analytics (mesmo navegador); sem login, segue só com a planilha.
+async function buscarHistorico(logins, ref){
+  if (typeof supabaseClient === 'undefined' || !logins.length) return { ok: false, motivo: 'sem-conexao' };
+  let sessao = null;
+  try { sessao = (await supabaseClient.auth.getSession()).data.session; } catch(e){ return { ok: false, motivo: 'sem-conexao' }; }
+  if (!sessao) return { ok: false, motivo: 'sem-login' };
+  const desde = new Date(ref - 60 * 864e5).toISOString();
+  const todos = [];
+  for (let i = 0; i < logins.length; i += 150) {
+    const { data, error } = await supabaseClient.from('ordens')
+      .select('id, login, assunto, data_abertura, data_fechamento, status_atual, tecnico_responsavel')
+      .in('login', logins.slice(i, i + 150))
+      .gte('data_abertura', desde)
+      .limit(10000);
+    if (error) return { ok: false, motivo: 'erro', erro: error.message };
+    todos.push(...data);
+  }
+  // "tecnico_responsavel" é o ID do operador (ref_operadores, nome em dados.NOME). Troca pelo nome.
+  const ids = [...new Set(todos.map(o => o.tecnico_responsavel).filter(v => v != null && v !== ''))].map(String);
+  const nomes = {};
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await supabaseClient.from('ref_operadores').select('chave, dados').in('chave', ids.slice(i, i + 150));
+    if (error) break;
+    data.forEach(l => { const col = l.dados && Object.keys(l.dados).find(k => norm(k) === 'nome'); if (col && l.dados[col]) nomes[String(l.chave)] = l.dados[col]; });
+  }
+  todos.forEach(o => { const n = nomes[String(o.tecnico_responsavel)]; if (n) o.tecnico_responsavel = n; });
+  return { ok: true, dados: todos };
+}
+
+async function gerar(){
+  const v = $('#dataRef').value;
+  const ref = v ? new Date(v + 'T00:00:00') : (escalaData || new Date());
+  const btn = $('#btnGerar');
+  btn.disabled = true; btn.textContent = 'Calculando…';
+  try {
+    const mapaReg = await carregarMapaRegioes();
+    const { os, stats } = Motor.montarOS(linhasOS, ref, params, mapaReg.idx);
+    const logins = [...new Set(os.filter(o => o.campo && o.login).map(o => o.login))];
+    const hist = await buscarHistorico(logins, ref);
+    if (hist.ok) Motor.aplicarHistorico(os, hist.dados, ref);
+    const plano = Motor.planejar(os, techs, $('#mapa').value, params, ref, $('#regioes').value);
+    ultimo = { os, plano, ref, hist, mapaReg, stats };
+    mostrarResultado();
+  } finally {
+    btn.disabled = false; btn.textContent = 'Gerar pré-agendamento';
+  }
+}
+
+function mostrarResultado(){
+  const { os, plano, ref, hist, mapaReg, stats } = ultimo;
+  const aviso = [];
+  const fonte = [];
+  fonte.push('Mapa de regiões ' + (mapaReg.fonte === 'site' ? 'lido do site' : 'da cópia de 30/09 (site fora do ar)'));
+  if (hist.ok) fonte.push('histórico do COP Analytics consultado (' + hist.dados.length + ' OS)');
+  else if (hist.motivo === 'sem-login') fonte.push('sem histórico (entre no COP Analytics para usar)');
+  else if (hist.motivo === 'erro') fonte.push('histórico indisponível');
+  if (stats && stats.fechadasPorDiagnostico) fonte.push(stats.fechadasPorDiagnostico + ' OS ignoradas por já terem diagnóstico de fechamento');
+  // Modo teste só quando o dia escolhido já passou; eventos de hoje cedo não contam como teste.
+  const hoje0 = new Date(); hoje0.setHours(0, 0, 0, 0);
+  const temReal = ref < hoje0 && os.some(o => o.realExec);
+  if (temReal) aviso.push('<b>Modo teste:</b> a planilha tem eventos depois de ' + ref.toLocaleDateString('pt-BR') + ', então cada OS mostra quem realmente atendeu. Use isso para conferir as sugestões.');
+  if (escalaData && Math.abs(escalaData - ref) > 864e5 / 2) aviso.push('A escala é de ' + escalaData.toLocaleDateString('pt-BR') + ' e o agendamento está sendo feito para ' + ref.toLocaleDateString('pt-BR') + '.');
+  const campo = os.filter(o => o.campo).length;
+  if (campo < 10) aviso.push('Só ' + campo + ' OS de campo estavam pendentes nessa data. Confira se a planilha é a visão de OS em aberto.');
+  $('#aviso').innerHTML = aviso.join('<br>');
+  $('#aviso').style.display = aviso.length ? 'block' : 'none';
+
+  const atr = plano.rotas.reduce((s, r) => s + r.paradas.length, 0);
+  const naRua = plano.rotas.filter(r => r.paradas.length).length;
+  const comp = plano.rotas.flatMap(r => r.paradas.map(p => comparaIxc(p.os, r.tech))).filter(c => c && c.a.tecnico);
+  const ixc = comp.length ? ' · <b>' + comp.filter(c => c.tecnicoOk).length + ' de ' + comp.length + '</b> agendadas no IXC com o mesmo técnico' : '';
+  $('#resumo').innerHTML = '<b>' + atr + '</b> OS podem ser feitas hoje · <b>' + plano.semTecnico.length + '</b> não cabem hoje · ' +
+    naRua + ' de ' + plano.rotas.length + ' equipes com OS' + ixc + '<span class="fonte">' + esc(fonte.join(' · ')) + '. Clique numa OS para ver o serviço e os detalhes. · versão ' + VERSAO + '</span>';
+  $('#nSem').textContent = '(' + plano.semTecnico.length + ')';
+  $('#subtitulo').textContent = 'Agendamento para ' + ref.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+
+  const grupos = [...new Set(plano.rotas.map(r => r.grupo))];
+  $('#fGrupo').innerHTML = '<option value="">Todas as cidades</option>' + grupos.map(g => '<option>' + esc(g) + '</option>').join('');
+  $('#resultado').classList.remove('escondido');
+  $('#vazioEstado').classList.add('escondido');
+  render();
+}
+
+function selos(o){
+  const s = [];
+  const p = norm(o.prioridade);
+  if (p === 'critica') s.push('<span class="selo s-crit">Crítica</span>');
+  else if (p === 'alta') s.push('<span class="selo s-alta">Alta</span>');
+  if (norm(o.status) === 'agendada') s.push('<span class="selo s-ag">Agendada' + (o.agendadaEm ? ' em ' + o.agendadaEm.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '') + '</span>');
+  if (o.recorrencia30 >= 2) s.push('<span class="selo s-rec">' + o.recorrencia30 + 'ª OS em 30 dias</span>');
+  if (o.reagendamentos) s.push('<span class="selo s-warn">Reagendada ' + o.reagendamentos + '×</span>');
+  if (o.pref.janela === 'manha') s.push('<span class="selo s-pref">Prefere manhã</span>');
+  if (o.pref.janela === 'tarde' && o.pref.aPartir == null) s.push('<span class="selo s-pref">Prefere tarde</span>');
+  if (o.pref.janela === 'qualquer') s.push('<span class="selo s-neu">Qualquer horário</span>');
+  if (o.pref.aPartir != null) s.push('<span class="selo s-pref">Em casa a partir das ' + Motor.hhmm(o.pref.aPartir) + '</span>');
+  if (o.pref.diaPedido) s.push('<span class="selo s-warn">Pediu o dia ' + o.pref.diaPedido.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + '</span>');
+  if (o.pref.fdsOnly) s.push('<span class="selo s-warn">Só fim de semana</span>');
+  else if (o.pref.fdsMencao) s.push('<span class="selo s-neu">Citou sábado</span>');
+  if (o.pref.ausencias) s.push('<span class="selo s-warn">Ausente ' + o.pref.ausencias + '×</span>');
+  if (o.fallbackSetor) s.push('<span class="selo s-warn">Sem ' + (o.setor === 'instalador' ? 'instalador' : 'manutenção') + ' na escala</span>');
+  return s.length ? '<div class="selos">' + s.join('') + '</div>' : '';
+}
+
+function bateReal(o, tech){
+  if (!o.realExec) return null;
+  const real = norm(o.realExec);
+  const nomes = [tech.nome, tech.dupla].filter(Boolean).map(n => norm(n.replace(/\(.*?\)/g, '')).split(' ').filter(w => w.length > 2));
+  return nomes.some(tk => tk.length && tk.every(w => real.includes(w)));
+}
+
+function textoPref(o){
+  const t = o.pref.texto || '';
+  const quando = o.pref.textoData ? o.pref.textoData.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ': ' : '';
+  return t ? '<div class="msg" title="' + esc(t) + '">' + quando + '“' + esc(t) + '”</div>' : '';
+}
+
+function passaFiltro(o){
+  const b = norm($('#fBusca').value);
+  if (!b) return true;
+  return [o.id, o.cliente, o.bairro, o.cidade, o.assunto, o.login].some(x => norm(x).includes(b));
+}
+
+// Uma OS em bloco: coluna estreita à esquerda (horário ou motivo) e o conteúdo à direita.
+function blocoOS(o, lado, extra){
+  const det = [o.plano, o.idadeDias + (o.idadeDias === 1 ? ' dia' : ' dias') + ' em aberto'];
+  if (o.coordFonte && o.coordFonte !== 'gps') det.push('local aproximado pelo ' + o.coordFonte);
+  if (o.gpsForaDaCidade) det.push('GPS do IXC fora da cidade, corrigir cadastro');
+  if (o.statusAcesso && !/^ativo$/i.test(o.statusAcesso)) det.push('acesso: ' + o.statusAcesso);
+  const u = o.ultimoAtendimento;
+  const hist = u ? '<div class="p-hist">Último atendimento: <b>' + esc(u.tecnico) + '</b> em ' + u.data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' (há ' + u.dias + ' dia' + (u.dias === 1 ? '' : 's') + ') · ' + esc(u.assunto || '') + '</div>' : '';
+  return '<div class="parada"><div class="p-lado">' + lado + '</div><div class="p-corpo">' +
+    '<div class="p-topo"><span class="cli">' + esc(o.cliente) + '</span><span class="os-id" title="Login ' + esc(o.login) + '">OS ' + esc(o.id) + '</span></div>' +
+    '<div class="p-serv">' + esc(o.assunto) + '</div>' +
+    '<div class="p-local">' + esc([o.bairro, o.cidade].filter(Boolean).join(' · ')) + (o.regiaoMapa ? ' · <span class="p-regiao">' + esc(o.regiaoMapa.nome) + '</span>' : '') + '</div>' +
+    selos(o) + textoPref(o) + '<div class="p-det">' + esc(det.filter(Boolean).join(' · ')) + '</div>' + hist + (extra || '') +
+    '</div></div>';
+}
+
+// Link do Google Maps com as paradas na ordem da rota (o Maps aceita até 10 pontos no link).
+function linkMapa(r){
+  const pts = r.paradas.filter(p => p.os.lat != null).slice(0, 10).map(p => p.os.lat.toFixed(6) + ',' + p.os.lng.toFixed(6));
+  return pts.length ? '<a class="l-mapa" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/' + pts.join('/') + '">Abrir rota no mapa ↗</a>' : '';
+}
+
+function nomeTecnico(t){
+  return esc(t.nome) + (t.dupla ? ' <small>+ ' + esc(t.dupla) + '</small>' : '');
+}
+
+function detalheOS(p, r, semAssunto){
+  const o = p.os;
+  const partes = [];
+  // Na lista por técnico a hora e o bairro já estão na linha; aqui vai o complemento.
+  partes.push((p.chegada ? [o.cidade] : [o.bairro, o.cidade]).filter(Boolean).join(', ') + (o.regiaoMapa ? ' (' + o.regiaoMapa.nome + ')' : ''));
+  if (!semAssunto) partes.push(o.assunto);
+  if (norm(o.prioridade) !== 'normal') partes.push('Prioridade ' + o.prioridade);
+  if (o.pref.aPartir != null) partes.push('em casa a partir das ' + Motor.hhmm(o.pref.aPartir));
+  else if (o.pref.janela === 'manha') partes.push('prefere manhã');
+  else if (o.pref.janela === 'tarde') partes.push('prefere tarde');
+  if (o.recorrencia30 >= 2) partes.push(o.recorrencia30 + 'ª OS em 30 dias');
+  if (o.ultimoAtendimento) partes.push('último atendimento: ' + o.ultimoAtendimento.tecnico);
+  if (o.agendaIxc) partes.push('agendada no IXC para ' + (o.agendaIxc.tecnico || 'colaborador ' + o.agendaIxc.colab) + (o.agendaIxc.dia ? ' (dia ' + o.agendaIxc.dia.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ')' : '') + ' em ' + o.agendaIxc.em.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+  if (r && r.tech.setor === 'manutencao' && !r.tech.dupla && /sem conexao/.test(norm(o.assunto))) partes.push('Sem conexão com técnico sozinho (sem dupla com vaga hoje)');
+  if (o.mesmoTecnico) partes.push('mesmo técnico da visita anterior (' + o.mesmoTecnico + ')');
+  else if (o.visitantes && o.visitantes.length) partes.push('já visitado por ' + o.visitantes.join(', '));
+  const avisos = [p.alerta, p.foraRota].filter(Boolean);
+  return esc(partes.join(' · ')) + (avisos.length ? ' · <span class="aviso-l">' + esc(avisos.join(' · ')) + '</span>' : '') + ' · OS ' + esc(o.id);
+}
+
+// Compara com o agendamento ativo no IXC (só informação; o pré-agendamento agenda por cima).
+function comparaIxc(o, tech){
+  const a = o.agendaIxc;
+  if (!a) return null;
+  const tecnicoOk = a.tecnico ? Motor.nomeBate(a.tecnico, tech) : null;
+  const ref = ultimo.ref;
+  const diaOk = a.dia ? a.dia.toDateString() === ref.toDateString() : null;
+  return { tecnicoOk, diaOk, a };
+}
+function marcaIxc(o, tech){
+  const c = comparaIxc(o, tech);
+  if (!c) return '';
+  const dd = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  if (c.tecnicoOk && c.diaOk !== false) return ' <span class="ixc ok" title="Agendada no IXC para ' + esc(c.a.tecnico) + '">· ✓ igual ao IXC</span>';
+  const partes = [];
+  if (c.tecnicoOk === false) partes.push(esc(c.a.tecnico.split(' - ')[0]));
+  else if (c.tecnicoOk === null) partes.push('colaborador ' + esc(c.a.colab));
+  if (c.diaOk === false) partes.push('dia ' + dd(c.a.dia));
+  return ' <span class="ixc dif" title="Agendamento no IXC: ' + esc((c.a.tecnico || 'colaborador ' + c.a.colab) + (c.a.dia ? ', dia ' + dd(c.a.dia) : '')) + '">· IXC: ' + partes.join(', ') + '</span>';
+}
+
+// Assunto sem os códigos do IXC: "SEM CONEXÃO / LOS (14)" -> "Sem conexão / LOS".
+function assuntoCurto(a){
+  const s = String(a || '').replace(/\s*\(\d+\)/g, '').trim().toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/\blos\b/g, 'LOS');
+}
+
+// Lista enxuta: por cidade e por técnico, na ordem da rota. Cada linha: hora, cliente e bairro.
+// Os técnicos com OS mais prioritária aparecem primeiro.
+function htmlLista(g){
+  const { plano } = ultimo;
+  const porGrupo = {};
+  plano.rotas.filter(r => !g || r.grupo === g).forEach(r => {
+    const paradas = r.paradas.filter(p => passaFiltro(p.os));
+    if (paradas.length) (porGrupo[r.grupo] = porGrupo[r.grupo] || []).push({ r, paradas });
+  });
+  let html = '';
+  for (const [grupo, equipes] of Object.entries(porGrupo)) {
+    const total = equipes.reduce((s, e) => s + e.paradas.length, 0);
+    equipes.sort((a, b) => Math.max(...b.paradas.map(p => p.os.score)) - Math.max(...a.paradas.map(p => p.os.score)));
+    html += '<div class="card lista-dia"><h2>' + esc(grupo) + '<span>' + total + ' OS · ' + equipes.length + ' técnicos</span></h2><table>';
+    for (const { r, paradas } of equipes) {
+      html += '<tr class="l-tec-h"><td colspan="4">' + nomeTecnico(r.tech) + '<span class="l-tec-q">' + paradas.length + ' OS</span>' + linkMapa(r) + '</td></tr>';
+      paradas.forEach(p => {
+        const pr = norm(p.os.prioridade);
+        const prioridade = (pr === 'critica' ? ' <span class="tag-pri crit">Crítica</span>' : pr === 'alta' ? ' <span class="tag-pri alta">Alta</span>' : '') +
+          (p.os.prioritaria && pr !== 'critica' ? ' <span class="tag-pri crit">Prioritária</span>' : '');
+        const alerta = p.foraRota ? ' <span class="aviso-l" title="' + esc(p.foraRota) + '">⚠</span>' : '';
+        html += '<tr class="l-os"><td class="l-n">' + p.chegada + '</td><td class="l-cli">' + esc(p.os.cliente) + prioridade + alerta + '</td><td class="l-bai">' + esc(p.os.bairro || '') + '</td><td class="l-ass">' + esc(assuntoCurto(p.os.assunto)) + (p.os.visitas ? ' <span class="l-vis">· ' + p.os.visitas + (p.os.visitas === 1 ? ' visita' : ' visitas') + '</span>' : '') + marcaIxc(p.os, r.tech) + (p.os.terceiroUltimoCaso ? ' <span class="ixc dif" title="Transferência deve ser feita por técnico próprio; sem vaga na equipe própria hoje">· terceirizado (último caso)</span>' : '') + '</td></tr>' +
+          '<tr class="l-det escondido"><td></td><td colspan="3">' + detalheOS(p, r, true) + '</td></tr>';
+      });
+    }
+    html += '</table></div>';
+  }
+  return html || '<div class="card vazio-estado">Nenhuma OS nesse filtro.</div>';
+}
+
+function htmlNaoCabem(g){
+  const sem = ultimo.plano.semTecnico.filter(s => passaFiltro(s.os) && (!g || grupoDaCidade(s.os.cidade) === g))
+    .sort((a, b) => b.os.score - a.os.score);
+  if (!sem.length) return '<div class="card vazio-estado">Todas as OS de campo couberam na escala.</div>';
+  return '<div class="card lista-dia"><h2>Não cabem hoje<span>' + sem.length + ' OS</span></h2><table>' +
+    sem.map((s, i) => '<tr class="l-os"><td class="l-n">' + (i + 1) + '</td><td class="l-cli">' + esc(s.os.cliente) + '</td><td class="l-mot">' + esc(s.motivo) + '</td></tr>' +
+      '<tr class="l-det escondido"><td></td><td colspan="2">' + detalheOS({ os: s.os }, null) + '</td></tr>').join('') +
+    '</table></div>';
+}
+
+function render(){
+  const g = $('#fGrupo').value;
+  const { plano } = ultimo;
+  $('#abaLista').innerHTML = htmlLista(g);
+  $('#abaSem').innerHTML = htmlNaoCabem(g);
+
+  // Por técnico
+  const porGrupo = {};
+  plano.rotas.filter(r => !g || r.grupo === g).forEach(r => { (porGrupo[r.grupo] = porGrupo[r.grupo] || []).push(r); });
+  let html = '', bate = 0, comReal = 0;
+  for (const [grupo, rotas] of Object.entries(porGrupo)) {
+    const n = rotas.reduce((s, r) => s + r.paradas.length, 0);
+    html += '<div class="grupo-titulo"><h2>' + esc(grupo) + '</h2><span class="pill">' + rotas.length + ' equipes · ' + n + ' OS</span></div><div class="rotas">';
+    rotas.sort((a, b) => a.tech.setor.localeCompare(b.tech.setor) || b.paradas.length - a.paradas.length);
+    for (const r of rotas) {
+      const paradas = r.paradas.filter(p => passaFiltro(p.os));
+      const usado = r.paradas.reduce((s, p) => s + p.os.dur, 0);
+      const pct = Math.min(100, Math.round(usado / r.cap * 100));
+      const pts = r.paradas.filter(p => p.os.lat != null).slice(0, 10).map(p => p.os.lat.toFixed(6) + ',' + p.os.lng.toFixed(6));
+      const mapa = pts.length ? '<a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/' + pts.join('/') + '">Abrir rota no mapa ↗</a>' : '';
+      html += '<div class="card rota"><div class="rota-h"><div><div class="nome">' + esc(r.tech.nome) + (r.tech.dupla ? ' <span class="pequeno">+ ' + esc(r.tech.dupla) + '</span>' : '') + '</div>' +
+        '<div class="meta">' + (r.tech.setor === 'instalador' ? 'Instalador' : 'Manutenção') + ' · ' + esc(r.tech.horario) + ' · ' + esc(r.tech.secao) + (r.tech.temporario ? ' · temporário' : '') + '</div>' +
+        (r.paradas.length ? '<div class="meta">Região: ' + esc([...new Set(r.paradas.map(p => p.os.regiaoMapa ? p.os.regiaoMapa.nome : 'sem região no mapa'))].join(', ')) + '</div>' : '') +
+        '<div class="meta">' + r.paradas.length + ' OS' + (r.km >= 1 ? ' · ~' + Math.round(r.km * params.fatorEstrada) + ' km' : '') + (r.paradas.length ? ' · termina ~' + r.termino : '') + (r.foraDaRota ? ' · <b style="color:var(--warn)">' + r.foraDaRota + ' fora da rota</b>' : '') + '</div>' +
+        '<div class="carga" title="' + pct + '% da jornada em serviço"><i style="width:' + pct + '%"></i></div></div>' + mapa + '</div>';
+      if (!paradas.length) { html += '<div class="vazia">' + (r.paradas.length ? 'Nenhuma OS nesta busca.' : 'Sem OS sugeridas para esta equipe.') + '</div></div>'; continue; }
+      html += '<div class="paradas">';
+      paradas.forEach((p, i) => {
+        const b = bateReal(p.os, r.tech);
+        if (b !== null) { comReal++; if (b) bate++; }
+        const real = p.os.realExec ? '<div class="real ' + (b ? 'bate' : 'nao') + '">' + (b ? '✓ ' : '') + 'Real: ' + esc(p.os.realExec) + '</div>' : '';
+        const avisos = [p.alerta, p.foraRota].filter(Boolean);
+        const alerta = avisos.length ? '<div class="selos">' + avisos.map(a => '<span class="selo s-warn">' + esc(a) + '</span>').join('') + '</div>' : '';
+        const espera = p.espera > 5 ? '<div class="p-espera">aguarda ' + Math.round(p.espera) + ' min</div>' : '';
+        html += blocoOS(p.os, '<div class="p-num">' + (i + 1) + '</div><div class="hora">' + p.chegada + '</div>' + espera, real + alerta);
+      });
+      html += '</div></div>';
+    }
+    html += '</div>';
+  }
+  if (comReal) html = '<div class="card" style="padding:12px 16px;margin-top:6px"><b>Conferência com o que aconteceu:</b> em ' + bate + ' de ' + comReal + ' OS (' + Math.round(bate / comReal * 100) + '%) o técnico sugerido foi o mesmo que atendeu de verdade. <span class="pequeno">Serve de referência, não de meta: a sugestão pode ser melhor que a rota real.</span></div>' + html;
+  $('#abaRotas').innerHTML = html || '<div class="card vazio-estado">Nenhuma equipe nesse filtro.</div>';
+
+}
+
+function grupoDaCidade(cidade){
+  const r = ultimo.plano.rotas.find(r => r.paradas.some(p => norm(p.os.cidade) === norm(cidade)));
+  return r ? r.grupo : null;
+}
+
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $('#abaLista').classList.toggle('escondido', b.dataset.aba !== 'lista');
+  $('#abaRotas').classList.toggle('escondido', b.dataset.aba !== 'rotas');
+  $('#abaSem').classList.toggle('escondido', b.dataset.aba !== 'sem');
+}));
+document.addEventListener('click', e => {
+  const tr = e.target.closest('tr.l-os');
+  if (tr && tr.nextElementSibling) tr.nextElementSibling.classList.toggle('escondido');
+});
+$('#fGrupo').addEventListener('change', render);
+$('#fBusca').addEventListener('input', render);
+
+
+// Relatório para quem vai agendar: HTML autônomo (abre em qualquer navegador) com as rotas do
+// filtro atual e a lista de OS sem técnico. O PDF é esse mesmo relatório pela impressão do navegador.
+function montarRelatorio(){
+  const { ref, plano } = ultimo;
+  const g = $('#fGrupo').value;
+  const css = document.querySelector('style').textContent;
+  const atr = plano.rotas.filter(r => !g || r.grupo === g).reduce((s, r) => s + r.paradas.length, 0);
+  const titulo = 'Pré-agendamento ' + ref.toLocaleDateString('pt-BR') + (g ? ' · ' + g : '');
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>' + esc(titulo) + '</title>' + (document.querySelector('link[href*="fonts.googleapis"]') || {}).outerHTML + '<style>' + css + '\n.rel-sec{margin:28px 0 8px}\n@media print{.rotas{grid-template-columns:1fr}.rota{break-inside:avoid-page}}</style></head><body>' +
+    '<div class="topbar"><div><h1>Pré-agendamento técnico</h1><div class="sub">' +
+    esc(ref.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })) + (g ? ' · ' + esc(g) : ' · todas as cidades') +
+    ' · ' + atr + ' OS pré-agendadas · gerado em ' + esc(new Date().toLocaleString('pt-BR')) + '</div></div></div>' +
+    '<div class="aviso" style="display:block">Sugestão gerada automaticamente. Confirme o horário com o cliente antes de fechar o agendamento.</div>' +
+    (document.querySelector('.tabs button.on').dataset.aba === 'rotas' ? $('#abaRotas').innerHTML : htmlLista(g).replace(/ escondido"/g, '"')) +
+    htmlNaoCabem(g).replace(/ escondido"/g, '"') +
+    '</body></html>';
+}
+
+function baixar(nome, conteudo, tipo){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+  a.download = nome;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function nomeArquivo(ext){
+  const g = $('#fGrupo').value;
+  return 'pre-agendamento_' + ultimo.ref.toISOString().slice(0, 10) + (g ? '_' + norm(g).replace(/[^a-z0-9]+/g, '-') : '') + '.' + ext;
+}
+
+$('#btnHTML').addEventListener('click', () => { if (ultimo) baixar(nomeArquivo('html'), montarRelatorio(), 'text/html;charset=utf-8'); });
+
+$('#btnPDF').addEventListener('click', () => {
+  if (!ultimo) return;
+  const html = montarRelatorio().replace('</body>', '<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body>');
+  const w = window.open(URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' })), '_blank');
+  if (!w) alert('O navegador bloqueou a janela. Libere pop-ups para esta página e tente de novo.');
+});
+
+$('#btnCSV').addEventListener('click', () => {
+  if (!ultimo) return;
+  const L = [['Grupo', 'Técnico', 'Dupla', 'Setor', 'Ordem', 'Chegada prevista', 'OS', 'Cliente', 'Login', 'Cidade', 'Bairro', 'Assunto', 'Prioridade', 'Status', 'Preferência', 'Em casa a partir de', 'OS em 30 dias', 'Reagendamentos', 'Latitude', 'Longitude', 'Observação']];
+  const pref = o => o.pref.fdsOnly ? 'só fim de semana' : (o.pref.janela || '');
+  ultimo.plano.rotas.forEach(r => r.paradas.forEach((p, i) => L.push([r.grupo, r.tech.nome, r.tech.dupla || '', r.tech.setor, i + 1, p.chegada, p.os.id, p.os.cliente, p.os.login, p.os.cidade, p.os.bairro, p.os.assunto, p.os.prioridade, p.os.status, pref(p.os), p.os.pref.aPartir != null ? Motor.hhmm(p.os.pref.aPartir) : '', p.os.recorrencia30, p.os.reagendamentos, p.os.lat, p.os.lng, [p.alerta, p.foraRota].filter(Boolean).join(' · ')])));
+  ultimo.plano.semTecnico.forEach(s => L.push(['', 'SEM TÉCNICO', '', s.os.setor, '', '', s.os.id, s.os.cliente, s.os.login, s.os.cidade, s.os.bairro, s.os.assunto, s.os.prioridade, s.os.status, pref(s.os), s.os.pref.aPartir != null ? Motor.hhmm(s.os.pref.aPartir) : '', s.os.recorrencia30, s.os.reagendamentos, s.os.lat, s.os.lng, s.motivo]));
+  const csv = '﻿' + L.map(l => l.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'pre-agendamento_' + ultimo.ref.toISOString().slice(0, 10) + '.csv';
+  a.click();
+});
+})();
+</script>
+</body>
+</html>
