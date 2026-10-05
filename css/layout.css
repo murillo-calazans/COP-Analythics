@@ -58,7 +58,8 @@ header{
 
 }
 
-.menu button{
+.menu button,
+.menu a.menu-link{
 
     position: relative;
 
@@ -80,7 +81,16 @@ header{
 
 }
 
-.menu button:hover{
+/* Link do agendador (abre outra página) com a mesma cara dos botões do menu. */
+.menu a.menu-link{
+
+    text-decoration: none;
+    font-family: inherit;
+
+}
+
+.menu button:hover,
+.menu a.menu-link:hover{
 
     background: rgba(255, 255, 255, 0.08);
 

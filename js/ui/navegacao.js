@@ -13,11 +13,6 @@ function registrarNavegacao() {
     botoes.forEach(botao => {
         botao.addEventListener("click", () => mostrarSecao(botao.dataset.secao));
     });
-
-    // O agendador é uma página à parte (agendador.html): lê planilha + escala e exporta, sem gravar nada.
-    document.getElementById("btnAgendador")?.addEventListener("click", () => {
-        window.open("agendador.html", "_blank", "noopener");
-    });
 }
 
 function mostrarSecao(nome) {
