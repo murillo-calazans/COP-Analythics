@@ -653,9 +653,61 @@
         }
       }
 
+      melhorarTrocas(equipes, { cabe, capDe, nfObrigaDupla, regioes, raio: params.raioRegiaoKm, base, params, viagemMin });
+
       for (const e of equipes) rotas.push({ ...e, grupo: nomeGrupo, base });
     }
     return { rotas, semTecnico, foraCampo, fimDeSemana };
+  }
+
+  // Ajuste fino entre técnicos do mesmo setor: passa uma OS para outro técnico (se ele tiver vaga) ou
+  // troca uma OS de cada um quando isso encurta as duas rotas juntas. Resolve o caso de um técnico que
+  // já está no bairro e a OS de lá ir para outro (ex.: dois técnicos cruzando Amparo e São Geraldo).
+  // Mantém limite de OS, jornada, janela do cliente, dupla obrigatória e quem já visitou o cliente.
+  function melhorarTrocas(equipes, ctx) {
+    const { cabe, capDe, nfObrigaDupla, regioes, raio, base, params, viagemMin } = ctx;
+    // Custo da rota: caminho entre as paradas (sem a saída da base, que é só o centro do grupo)
+    // e uma penalidade por parada fora da rota.
+    const custo = e => {
+      if (!e.paradas || !e.paradas.length) return 0;
+      marcarForaDaRota(e, regioes, raio);
+      let km = 0;
+      for (let i = 1; i < e.paradas.length; i++) km += distKm(e.paradas[i - 1].os, e.paradas[i].os);
+      return km + e.foraDaRota * raio;
+    };
+    // OS do técnico que já visitou o cliente só sai dele se estiver fora da rota dele.
+    const foraNa = (o, e) => (e.paradas || []).some(p => p.os === o && p.foraRota);
+    const podeSair = (o, de) => !o.mesmoTecnico || foraNa(o, de);
+    const aceita = (o, e) => !(nfObrigaDupla && e.tech.setor === 'manutencao' && precisaDupla(o) && !e.tech.dupla);
+    const ajustarVisitante = e => e.stops.forEach(o => { if (o.mesmoTecnico && !nomeBate(o.mesmoTecnico, e.tech)) o.mesmoTecnico = null; });
+    const testar = (a, b, novoA, novoB) => {
+      const antes = custo(a) + custo(b);
+      const velhoA = a.stops, velhoB = b.stops;
+      a.stops = novoA; b.stops = novoB;
+      if (cabe(a) && cabe(b) && custo(a) + custo(b) < antes - 0.3) { ajustarVisitante(a); ajustarVisitante(b); return true; }
+      a.stops = velhoA; b.stops = velhoB;
+      sequenciar(a, base, params, viagemMin); sequenciar(b, base, params, viagemMin);
+      marcarForaDaRota(a, regioes, raio); marcarForaDaRota(b, regioes, raio);
+      return false;
+    };
+    for (let volta = 0; volta < 8; volta++) {
+      let mexeu = false;
+      for (const a of equipes) for (const b of equipes) {
+        if (a === b || a.tech.setor !== b.tech.setor) continue;
+        for (const o of a.stops.slice()) {
+          if (!a.stops.includes(o) || !aceita(o, b) || !podeSair(o, a)) continue;
+          // Passa a OS para B, se B tiver vaga.
+          if (b.stops.length < capDe(b.tech.setor) && testar(a, b, a.stops.filter(x => x !== o), [...b.stops, o])) { mexeu = true; continue; }
+          // Troca com uma OS de B.
+          for (const p of b.stops.slice()) {
+            if (!aceita(p, a) || !podeSair(p, b)) continue;
+            if (testar(a, b, [...a.stops.filter(x => x !== o), p], [...b.stops.filter(x => x !== p), o])) { mexeu = true; break; }
+          }
+        }
+      }
+      if (!mexeu) break;
+    }
+    for (const e of equipes) { sequenciar(e, base, params, viagemMin); marcarForaDaRota(e, regioes, raio); }
   }
 
   const centro = pts => ({ lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length });
