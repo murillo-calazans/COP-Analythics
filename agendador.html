@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agendamento · COP Analytics</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
 :root{
@@ -175,6 +176,18 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
 .escondido{display:none!important}
 .vazio-estado{padding:40px;text-align:center;color:var(--muted);margin-top:16px}
 
+/* ---------- mapa ---------- */
+.mapa-box{display:grid;grid-template-columns:minmax(0,1fr) 270px;overflow:hidden}
+#mapaRotas{height:640px;background:var(--sunken)}
+#mapaLegenda{border-left:1px solid var(--border);overflow:auto;max-height:640px;padding:8px}
+.leg-tec{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;color:var(--text);border:1px solid transparent;border-radius:10px;padding:8px 10px;font-weight:600;font-size:13px}
+.leg-tec:hover{background:var(--soft)}
+.leg-tec.on{border-color:var(--accent);background:var(--soft)}
+.leg-tec i{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.leg-tec small{display:block;color:var(--muted);font-weight:500;font-size:11.5px}
+.pino{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;color:#fff;font:700 11px Inter,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.leaflet-popup-content{font:13px/1.4 Inter,sans-serif}
+@media (max-width:860px){.mapa-box{grid-template-columns:1fr}#mapaRotas{height:460px}#mapaLegenda{border-left:0;border-top:1px solid var(--border);max-height:none}}
 @media (max-width:860px){
   .entrada{grid-template-columns:1fr}
   .kpis{grid-template-columns:1fr 1fr}
@@ -246,7 +259,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
     <div class="campo"><label>Velocidade média (km/h)</label><input type="number" data-p="velocidadeKmh"></div>
     <div class="campo"><label>Fator estrada × linha reta</label><input type="number" step="0.1" data-p="fatorEstrada"></div>
     <div class="campo"><label>Almoço (min)</label><input type="number" data-p="almocoMin"></div>
-    <div class="campo"><label>Máximo de OS (manutenção)</label><input type="number" min="1" data-p="maxOS"></div>
+    <div class="campo"><label>Máximo de OS (reparo)</label><input type="number" min="1" data-p="maxOS"></div>
     <div class="campo"><label>Máximo de OS (instalação)</label><input type="number" min="1" data-p="maxOSInstalador"></div>
     <div class="campo"><label>Distância para separar regiões (km)</label><input type="number" min="1" data-p="raioRegiaoKm"></div>
     <div class="campo"><label>Máximo fora da rota (km)</label><input type="number" min="1" data-p="maxForaRotaKm"></div>
@@ -283,6 +296,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
     <div class="tabs">
       <button data-aba="lista" class="on">OS do dia</button>
       <button data-aba="rotas">Rotas por técnico</button>
+      <button data-aba="mapa">Mapa</button>
       <button data-aba="sem">Não cabem hoje <span id="nSem"></span></button>
     </div>
     <div class="filtros">
@@ -297,6 +311,10 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
   <div id="abaLista"></div>
   <div id="abaRotas" class="escondido"></div>
   <div id="abaSem" class="escondido"></div>
+  <div id="abaMapa" class="escondido">
+    <div class="mapa-box card"><div id="mapaRotas"></div><div id="mapaLegenda"></div></div>
+    <p class="fonte">Bairros e regiões do mapa logístico do COP (pontos coloridos por região). Cada cor de linha é um técnico e os números seguem a ordem da rota. Clique num técnico da lista para destacar a rota dele.</p>
+  </div>
 </div>
 
 <div id="vazioEstado" class="card vazio-estado">Escolha o relatório de OS e a escala do dia para gerar o pré-agendamento.</div>
@@ -304,6 +322,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
 </div>
 
 <script src="libs/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Supabase só para LER o histórico de OS do COP Analytics (mesma sessão de login). -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.js"
     integrity="sha384-OUpie84zd1LdwNlK9uJJQRwab0BLqo3eKYKFh7hSVL58FSk7wPp2l0kfUMIIoaQd"
@@ -311,7 +330,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
 <script src="js/config/supabase.js"></script>
 <!-- Suba o ?v= a cada alteração do motor para o navegador não usar a versão antiga em cache. -->
 <script src="js/agendador/mapa-regioes-dados.js?v=1"></script>
-<script src="js/agendador/motor.js?v=32"></script>
+<script src="js/agendador/motor.js?v=33"></script>
 <script>
 (function(){
 'use strict';
@@ -345,6 +364,13 @@ const store = {
 };
 
 const params = Object.assign({}, Motor.PADRAO_PARAMS, store.get('params', {}));
+// 07/10: limites passaram a 8 reparos e 5 instalações por técnico; quem tinha os antigos salvos recebe os novos.
+if (store.get('paramsVer', 0) < 2) {
+  const salvos = store.get('params', {});
+  delete salvos.maxOS; delete salvos.maxOSInstalador;
+  store.set('params', salvos); store.set('paramsVer', 2);
+  params.maxOS = Motor.PADRAO_PARAMS.maxOS; params.maxOSInstalador = Motor.PADRAO_PARAMS.maxOSInstalador;
+}
 document.querySelectorAll('[data-p]').forEach(inp => {
   inp.value = params[inp.dataset.p];
   inp.addEventListener('change', () => { params[inp.dataset.p] = +inp.value || Motor.PADRAO_PARAMS[inp.dataset.p]; store.set('params', params); });
@@ -439,7 +465,7 @@ window.Agendador = {
 };
 
 // Mostrada no resumo para saber se o navegador está usando a página atual (e não uma cópia em cache).
-const VERSAO = '37 · 07/10';
+const VERSAO = '38 · 07/10';
 const URL_MAPA_REGIOES = 'https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html';
 let mapaCache = null;
 async function carregarMapaRegioes(){
@@ -672,7 +698,7 @@ function htmlLista(g){
     for (const { r, paradas } of equipes) {
       const t = r.tech;
       html += '<section class="tech"><div class="th"><div class="av">' + esc(iniciais(t.nome)) + '</div><div><h3>' + nomeTecnico(t) + '</h3><small>' +
-        paradas.length + ' OS · ' + (t.setor === 'instalador' ? 'Instalação' : 'Manutenção') + (t.horario ? ' · ' + esc(t.horario) : '') + '</small></div>' + linkMapa(r) + '</div>';
+        paradas.length + ' OS · ' + (t.setor === 'instalador' ? 'Instalação' : 'Reparo') + (t.horario ? ' · ' + esc(t.horario) : '') + '</small></div>' + linkMapa(r) + '</div>';
       paradas.forEach(p => {
         const pr = norm(p.os.prioridade);
         const tags = (pr === 'critica' ? '<span class="tag t-crit">Crítica</span>' : pr === 'alta' ? '<span class="tag t-alta">Alta</span>' : '') +
@@ -721,7 +747,7 @@ function render(){
       const pts = r.paradas.filter(p => p.os.lat != null).slice(0, 10).map(p => p.os.lat.toFixed(6) + ',' + p.os.lng.toFixed(6));
       const mapa = pts.length ? '<a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/' + pts.join('/') + '">Abrir rota no mapa ↗</a>' : '';
       html += '<div class="card rota"><div class="rota-h"><div><div class="nome">' + esc(r.tech.nome) + (r.tech.dupla ? ' <span class="pequeno">+ ' + esc(r.tech.dupla) + '</span>' : '') + '</div>' +
-        '<div class="meta">' + (r.tech.setor === 'instalador' ? 'Instalador' : 'Manutenção') + ' · ' + esc(r.tech.horario) + ' · ' + esc(r.tech.secao) + (r.tech.temporario ? ' · temporário' : '') + '</div>' +
+        '<div class="meta">' + (r.tech.setor === 'instalador' ? 'Instalador' : 'Reparo') + ' · ' + esc(r.tech.horario) + ' · ' + esc(r.tech.secao) + (r.tech.temporario ? ' · temporário' : '') + '</div>' +
         (r.paradas.length ? '<div class="meta">Região: ' + esc([...new Set(r.paradas.map(p => p.os.regiaoMapa ? p.os.regiaoMapa.nome : 'sem região no mapa'))].join(', ')) + '</div>' : '') +
         '<div class="meta">' + r.paradas.length + ' OS' + (r.km >= 1 ? ' · ~' + Math.round(r.km * params.fatorEstrada) + ' km' : '') + (r.paradas.length ? ' · termina ~' + r.termino : '') + (r.foraDaRota ? ' · <b style="color:var(--warn)">' + r.foraDaRota + ' fora da rota</b>' : '') + '</div>' +
         '<div class="carga" title="' + pct + '% da jornada em serviço"><i style="width:' + pct + '%"></i></div></div>' + mapa + '</div>';
@@ -742,8 +768,62 @@ function render(){
   }
   if (comReal) html = '<div class="card" style="padding:12px 16px;margin-top:6px"><b>Conferência com o que aconteceu:</b> em ' + bate + ' de ' + comReal + ' OS (' + Math.round(bate / comReal * 100) + '%) o técnico sugerido foi o mesmo que atendeu de verdade. <span class="pequeno">Serve de referência, não de meta: a sugestão pode ser melhor que a rota real.</span></div>' + html;
   $('#abaRotas').innerHTML = html || '<div class="card vazio-estado">Nenhuma equipe nesse filtro.</div>';
+  if (!$('#abaMapa').classList.contains('escondido')) renderMapa();
 
 }
+
+// Mapa: bairros do mapa logístico (cor da região) e a rota de cada técnico em ordem, numerada.
+const CORES_TEC = ['#2f5bff','#e5334b','#12a36b','#d9480f','#7b5cff','#0891b2','#b7791f','#db2777','#4d7c0f','#9333ea','#0f766e','#c2410c','#1d4ed8','#be123c','#65a30d','#6d28d9'];
+const CORES_REG = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+let mapa = null, camadaMapa = null, destaque = null;
+function renderMapa(){
+  if (!ultimo) return;
+  if (typeof L === 'undefined') { $('#mapaRotas').innerHTML = '<div class="vazio-estado">Mapa indisponível (sem internet para carregar o mapa).</div>'; return; }
+  const g = $('#fGrupo').value;
+  const rotas = ultimo.plano.rotas.filter(r => (!g || r.grupo === g) && r.paradas.length);
+  if (!mapa) {
+    mapa = L.map('mapaRotas');
+    L.tileLayer('https://{s}.basemap.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap · © CARTO' }).addTo(mapa);
+  }
+  setTimeout(() => mapa.invalidateSize(), 0);
+  if (camadaMapa) camadaMapa.remove();
+  camadaMapa = L.layerGroup().addTo(mapa);
+  const pts = [];
+  // Bairros das cidades das rotas, coloridos pela região do mapa logístico.
+  const cidades = new Set(rotas.flatMap(r => r.paradas.map(p => norm(p.os.cidade))));
+  const idx = ultimo.mapaReg && ultimo.mapaReg.idx;
+  if (idx) {
+    const corReg = {}; let n = 0;
+    idx.itens.filter(it => cidades.has(norm(it.regiao.cidade)) && it.lat != null).forEach(it => {
+      const c = corReg[it.regiao.id] || (corReg[it.regiao.id] = CORES_REG[n++ % CORES_REG.length]);
+      L.circleMarker([it.lat, it.lng], { radius: 3, color: c, weight: 0, fillOpacity: .5 }).bindTooltip(it.regiao.nome).addTo(camadaMapa);
+    });
+  }
+  const leg = [];
+  rotas.forEach((r, i) => {
+    const cor = CORES_TEC[i % CORES_TEC.length];
+    const ativo = !destaque || destaque === r.tech.nome;
+    const linha = r.paradas.filter(p => p.os.lat != null).map(p => [p.os.lat, p.os.lng]);
+    if (linha.length > 1) L.polyline(linha, { color: cor, weight: ativo ? 4 : 2, opacity: ativo ? .9 : .15 }).addTo(camadaMapa);
+    r.paradas.forEach((p, k) => {
+      if (p.os.lat == null) return;
+      pts.push([p.os.lat, p.os.lng]);
+      L.marker([p.os.lat, p.os.lng], { opacity: ativo ? 1 : .3, zIndexOffset: ativo ? 1000 : 0, icon: L.divIcon({ className: '', html: '<div class="pino" style="background:' + cor + '">' + (k + 1) + '</div>', iconSize: [24, 24], iconAnchor: [12, 12] }) })
+        .bindPopup('<b>' + esc(r.tech.nome) + '</b> · parada ' + (k + 1) + '<br>' + p.chegada + ' · ' + esc(p.os.cliente) + '<br>' + esc(p.os.bairro || '') + ' · ' + esc(assuntoCurto(p.os.assunto)))
+        .addTo(camadaMapa);
+    });
+    leg.push('<button class="leg-tec' + (destaque === r.tech.nome ? ' on' : '') + '" data-tec="' + esc(r.tech.nome) + '"><i style="background:' + cor + '"></i><span>' + esc(r.tech.nome) +
+      '<small>' + r.paradas.length + ' OS · ' + (r.tech.setor === 'instalador' ? 'Instalação' : 'Reparo') + ' · ' + esc([...new Set(r.paradas.map(p => p.os.bairro).filter(Boolean))].slice(0, 3).join(', ')) + '</small></span></button>');
+  });
+  $('#mapaLegenda').innerHTML = leg.join('') || '<div class="vazia">Nenhuma rota nesse filtro.</div>';
+  if (pts.length) mapa.fitBounds(pts, { padding: [30, 30] });
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.leg-tec');
+  if (!b) return;
+  destaque = destaque === b.dataset.tec ? null : b.dataset.tec;
+  renderMapa();
+});
 
 function grupoDaCidade(cidade){
   const r = ultimo.plano.rotas.find(r => r.paradas.some(p => norm(p.os.cidade) === norm(cidade)));
@@ -755,6 +835,8 @@ document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click
   $('#abaLista').classList.toggle('escondido', b.dataset.aba !== 'lista');
   $('#abaRotas').classList.toggle('escondido', b.dataset.aba !== 'rotas');
   $('#abaSem').classList.toggle('escondido', b.dataset.aba !== 'sem');
+  $('#abaMapa').classList.toggle('escondido', b.dataset.aba !== 'mapa');
+  if (b.dataset.aba === 'mapa') renderMapa();
 }));
 document.addEventListener('click', e => {
   if (e.target.closest('a')) return;

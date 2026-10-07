@@ -48,7 +48,7 @@
 
   const PADRAO_PARAMS = {
     durInstalacao: 90, durManutencao: 60, durTroca: 45, durRecolhimento: 30,
-    velocidadeKmh: 30, fatorEstrada: 1.4, almocoMin: 60, maxOS: 5, maxOSInstalador: 4, raioRegiaoKm: 5, maxForaRotaKm: 8,
+    velocidadeKmh: 30, fatorEstrada: 1.4, almocoMin: 60, maxOS: 8, maxOSInstalador: 5, raioRegiaoKm: 5, maxForaRotaKm: 8,
   };
 
   // Infraestrutura de rede (área de manutenção, expansão/melhoria de rede, rearranjo, CTO sem potência,
@@ -529,7 +529,7 @@
           transfParaTerceiro.length = 0;
         }
         if (!eqs.length) continue;
-        // Instalação tem limite próprio (padrão 4); manutenção usa o limite geral (padrão 5).
+        // Instalação tem limite próprio (padrão 5); reparo usa o limite geral (padrão 8).
         const cap = setor === 'instalador' ? (params.maxOSInstalador || params.maxOS) : params.maxOS;
         // Sem vaga na equipe própria, transferência ainda tenta o terceirizado; o resto fica sem técnico.
         const naoCabe = (o, motivo) => (setor === 'manutencao' && ehTransf(o) && porSetor('instalador').length)
