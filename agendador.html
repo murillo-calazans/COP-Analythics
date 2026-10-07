@@ -311,7 +311,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
 <script src="js/config/supabase.js"></script>
 <!-- Suba o ?v= a cada alteração do motor para o navegador não usar a versão antiga em cache. -->
 <script src="js/agendador/mapa-regioes-dados.js?v=1"></script>
-<script src="js/agendador/motor.js?v=31"></script>
+<script src="js/agendador/motor.js?v=32"></script>
 <script>
 (function(){
 'use strict';
@@ -435,10 +435,11 @@ window.Agendador = {
   carregarEscala(html){ const r = lerEscala(html); techs = r.lista; escalaData = r.data; if (r.data) $('#dataRef').value = r.data.toISOString().slice(0, 10); habilitar(); },
   gerar(dataISO){ if (dataISO) $('#dataRef').value = dataISO; return gerar(); },
   relatorio(){ return montarRelatorio(); },
+  resultado(){ return ultimo; },
 };
 
 // Mostrada no resumo para saber se o navegador está usando a página atual (e não uma cópia em cache).
-const VERSAO = '36 · 07/10';
+const VERSAO = '37 · 07/10';
 const URL_MAPA_REGIOES = 'https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html';
 let mapaCache = null;
 async function carregarMapaRegioes(){

@@ -660,31 +660,39 @@
     return { rotas, semTecnico, foraCampo, fimDeSemana };
   }
 
-  // Ajuste fino entre técnicos do mesmo setor: passa uma OS para outro técnico (se ele tiver vaga) ou
-  // troca uma OS de cada um quando isso encurta as duas rotas juntas. Resolve o caso de um técnico que
-  // já está no bairro e a OS de lá ir para outro (ex.: dois técnicos cruzando Amparo e São Geraldo).
-  // Mantém limite de OS, jornada, janela do cliente, dupla obrigatória e quem já visitou o cliente.
+  // Ajuste fino entre técnicos do mesmo setor: passa OS (uma ou o bairro inteiro) para outro técnico
+  // com vaga, ou troca uma OS de cada um. Regra: o técnico que vai a um bairro fica com o máximo de
+  // OS de lá (até o limite), em vez de dois técnicos dividirem o bairro, desde que isso não alongue
+  // as rotas. Mantém limite de OS, jornada, janela do cliente e dupla obrigatória.
   function melhorarTrocas(equipes, ctx) {
     const { cabe, capDe, nfObrigaDupla, regioes, raio, base, params, viagemMin } = ctx;
-    // Custo da rota: caminho entre as paradas (sem a saída da base, que é só o centro do grupo)
-    // e uma penalidade por parada fora da rota.
-    const custo = e => {
+    // Custo de cada rota: caminho entre as paradas (sem a saída da base, que é só o centro do grupo)
+    // e penalidade por parada fora da rota. Quem já visitou o cliente tem uma pequena preferência.
+    const custoRota = e => {
       if (!e.paradas || !e.paradas.length) return 0;
       marcarForaDaRota(e, regioes, raio);
       let km = 0;
       for (let i = 1; i < e.paradas.length; i++) km += distKm(e.paradas[i - 1].os, e.paradas[i].os);
-      return km + e.foraDaRota * raio;
+      const visitou = e.stops.filter(o => (o.visitantes || []).some(n => nomeBate(n, e.tech))).length;
+      return km + e.foraDaRota * raio - visitou * 1.5;
     };
-    // OS do técnico que já visitou o cliente só sai dele se estiver fora da rota dele.
-    const foraNa = (o, e) => (e.paradas || []).some(p => p.os === o && p.foraRota);
-    const podeSair = (o, de) => !o.mesmoTecnico || foraNa(o, de);
+    // Bairro atendido por mais de um técnico do mesmo setor custa ~5 km por técnico a mais.
+    const PESO_DIVIDIDO = 5;
+    const divididos = setor => {
+      const porBairro = {};
+      equipes.filter(e => e.tech.setor === setor).forEach((e, i) => e.stops.forEach(o => { (porBairro[chaveBairro(o.bairro)] = porBairro[chaveBairro(o.bairro)] || new Set()).add(i); }));
+      return Object.values(porBairro).reduce((s, x) => s + x.size - 1, 0);
+    };
+    const custo = (a, b) => custoRota(a) + custoRota(b) + PESO_DIVIDIDO * divididos(a.tech.setor);
+    const podeSair = () => true;
     const aceita = (o, e) => !(nfObrigaDupla && e.tech.setor === 'manutencao' && precisaDupla(o) && !e.tech.dupla);
     const ajustarVisitante = e => e.stops.forEach(o => { if (o.mesmoTecnico && !nomeBate(o.mesmoTecnico, e.tech)) o.mesmoTecnico = null; });
     const testar = (a, b, novoA, novoB) => {
-      const antes = custo(a) + custo(b);
+      const antes = custo(a, b);
       const velhoA = a.stops, velhoB = b.stops;
       a.stops = novoA; b.stops = novoB;
-      if (cabe(a) && cabe(b) && custo(a) + custo(b) < antes - 0.3) { ajustarVisitante(a); ajustarVisitante(b); return true; }
+      const ca = cabe(a), cb = cabe(b), depois = (ca && cb) ? custo(a, b) : null;
+      if (ca && cb && depois < antes - 0.3) { ajustarVisitante(a); ajustarVisitante(b); return true; }
       a.stops = velhoA; b.stops = velhoB;
       sequenciar(a, base, params, viagemMin); sequenciar(b, base, params, viagemMin);
       marcarForaDaRota(a, regioes, raio); marcarForaDaRota(b, regioes, raio);
@@ -694,6 +702,15 @@
       let mexeu = false;
       for (const a of equipes) for (const b of equipes) {
         if (a === b || a.tech.setor !== b.tech.setor) continue;
+        // Bairro inteiro de A para B, quando B também atende esse bairro e tem vaga para todas.
+        const bairrosB = new Set(b.stops.map(o => chaveBairro(o.bairro)));
+        for (const chave of [...new Set(a.stops.map(o => chaveBairro(o.bairro)))]) {
+          if (!bairrosB.has(chave)) continue;
+          const grupo = a.stops.filter(o => chaveBairro(o.bairro) === chave);
+          if (grupo.length === a.stops.length && a.stops.length > b.stops.length) continue;
+          if (b.stops.length + grupo.length > capDe(b.tech.setor) || !grupo.every(o => aceita(o, b))) continue;
+          if (testar(a, b, a.stops.filter(o => !grupo.includes(o)), [...b.stops, ...grupo])) mexeu = true;
+        }
         for (const o of a.stops.slice()) {
           if (!a.stops.includes(o) || !aceita(o, b) || !podeSair(o, a)) continue;
           // Passa a OS para B, se B tiver vaga.
