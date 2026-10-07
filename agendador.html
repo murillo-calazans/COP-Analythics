@@ -465,7 +465,7 @@ window.Agendador = {
 };
 
 // Mostrada no resumo para saber se o navegador está usando a página atual (e não uma cópia em cache).
-const VERSAO = '38 · 07/10';
+const VERSAO = '39 · 07/10';
 const URL_MAPA_REGIOES = 'https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html';
 let mapaCache = null;
 async function carregarMapaRegioes(){
@@ -783,7 +783,8 @@ function renderMapa(){
   const rotas = ultimo.plano.rotas.filter(r => (!g || r.grupo === g) && r.paradas.length);
   if (!mapa) {
     mapa = L.map('mapaRotas');
-    L.tileLayer('https://{s}.basemap.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '© OpenStreetMap · © CARTO' }).addTo(mapa);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Esri, HERE, Garmin, © OpenStreetMap' }).addTo(mapa);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 }).addTo(mapa);
   }
   setTimeout(() => mapa.invalidateSize(), 0);
   if (camadaMapa) camadaMapa.remove();
