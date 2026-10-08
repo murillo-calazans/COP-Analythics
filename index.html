@@ -276,6 +276,16 @@
 
             <div id="resultadosTecnicos"></div>
         </div>
+        <div class="placeholder-card auditoria-card regiao-atuacao-card">
+            <div class="dashboard-cabecalho">
+                <div>
+                    <h2>📍 Região de atuação</h2>
+                    <p>Bairros onde cada técnico mais fecha OS de campo. Base para definir a região de cada um na Escala. Respeita o Filtro Global (período, cidade, setor…) e a busca acima.</p>
+                </div>
+                <select id="filtroCidadeRegiao" aria-label="Cidade"></select>
+            </div>
+            <div id="regiaoAtuacaoTecnicos"></div>
+        </div>
     </section>
 
     <section id="secao-indicadores" class="secao">
@@ -885,6 +895,7 @@
 <script src="js/config/regrasauditoria.js"></script>
 <script src="js/config/assuntosequivalentes.js"></script>
 <script src="js/config/motivosreabertura.js"></script>
+<script src="js/config/regiaoatuacao.js"></script>
 <script src="js/config/supabase.js"></script>
 
 <script src="js/models/Movimentacao.js"></script>
@@ -904,6 +915,7 @@
 <script src="js/engine/auditoriaoperacionalengine.js"></script>
 <script src="js/engine/bairroengine.js"></script>
 <script src="js/engine/assuntoengine.js"></script>
+<script src="js/engine/regiaoatuacaoengine.js"></script>
 
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>

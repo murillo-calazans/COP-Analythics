@@ -24,13 +24,95 @@ function registrarBuscaTecnicos() {
     }
 
     if (input) {
-        input.addEventListener("input", () => renderizarResultadosTecnicos(input.value.trim()));
+        input.addEventListener("input", () => {
+            renderizarResultadosTecnicos(input.value.trim());
+            renderizarRegiaoAtuacao(input.value.trim());
+        });
+    }
+
+    const cidade = document.getElementById("filtroCidadeRegiao");
+    if (cidade) {
+        cidade.addEventListener("change", () => renderizarRegiaoAtuacao(input ? input.value.trim() : "", false));
     }
 }
 
 function renderizarSecaoTecnicos() {
     const input = document.getElementById("buscaTecnicos");
     renderizarResultadosTecnicos(input ? input.value.trim() : "");
+    renderizarRegiaoAtuacao(input ? input.value.trim() : "");
+}
+
+/* ---------------------------------------------------------
+ * Região de atuação (calculada pelo RegiaoAtuacaoEngine)
+ * ------------------------------------------------------- */
+
+let _regiaoAtuacaoCache = [];
+
+function renderizarRegiaoAtuacao(termo, recalcular = true) {
+    const container = document.getElementById("regiaoAtuacaoTecnicos");
+    const seletor = document.getElementById("filtroCidadeRegiao");
+    if (!container) return;
+
+    if (!APP.status.baseCarregada || APP.dados.ordens.size === 0) {
+        container.innerHTML = '<p class="alerta-vazio">Importe dados pra ver a região de atuação dos técnicos.</p>';
+        return;
+    }
+
+    if (recalcular) {
+        _regiaoAtuacaoCache = RegiaoAtuacaoEngine.calcular(FiltroEngine.ordensFiltradas());
+        if (seletor) {
+            const atual = seletor.value;
+            const cidades = RegiaoAtuacaoEngine.cidades(_regiaoAtuacaoCache);
+            seletor.innerHTML = '<option value="">Todas as cidades</option>' +
+                cidades.map(c => `<option${c === atual ? " selected" : ""}>${escaparHtml(c)}</option>`).join("");
+        }
+    }
+
+    const cidade = seletor ? seletor.value : "";
+    const termoNormalizado = normalizarTexto(termo ?? "");
+    const fichas = _regiaoAtuacaoCache.filter(f =>
+        (!cidade || f.cidadePrincipal === cidade) &&
+        (!termoNormalizado || normalizarTexto(f.nome).includes(termoNormalizado)));
+
+    if (fichas.length === 0) {
+        container.innerHTML = `<p class="alerta-vazio">Nenhum técnico com pelo menos ${CONFIG_REGIAO_ATUACAO.minimoOS} OS de campo finalizadas nesse recorte.</p>`;
+        return;
+    }
+
+    const porcentagem = valor => `${Math.round(valor * 100)}%`;
+    const linhas = fichas.map(f => `
+        <tr>
+            <td>${textoFiltravel("operadores", f.nome)}</td>
+            <td>${textoFiltravel("cidades", f.cidadePrincipal)}${f.percentualCidade < 1 ? ` <small class="regiao-sub">${porcentagem(f.percentualCidade)}</small>` : ""}</td>
+            <td>${f.total}</td>
+            <td>
+                <div class="regiao-concentracao" title="Parte das OS nos ${CONFIG_REGIAO_ATUACAO.bairrosNaConcentracao} bairros mais frequentes">
+                    <div class="regiao-barra"><i class="perfil-${f.perfil.chave}" style="width:${porcentagem(f.concentracao)}"></i></div>
+                    <span>${porcentagem(f.concentracao)}</span>
+                </div>
+            </td>
+            <td><span class="regiao-perfil perfil-${f.perfil.chave}">${escaparHtml(f.perfil.rotulo)}</span></td>
+            <td><div class="regiao-bairros">${f.bairros.slice(0, CONFIG_REGIAO_ATUACAO.bairrosExibidos).map(b => `
+                <span class="regiao-bairro">${textoFiltravel("bairros", b.bairro)}${b.cidade !== f.cidadePrincipal ? ` <small class="regiao-sub">(${escaparHtml(b.cidade)})</small>` : ""} <b>${porcentagem(b.percentual)}</b></span>`).join("")}
+            </div></td>
+        </tr>
+    `).join("");
+
+    container.innerHTML = `
+        <table class="tabela-alertas tabela-regiao-atuacao">
+            <thead>
+                <tr>
+                    <th>Técnico</th>
+                    <th>Cidade</th>
+                    <th>OS de campo</th>
+                    <th>Concentração</th>
+                    <th>Perfil</th>
+                    <th>Bairros onde mais fecha OS</th>
+                </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+        </table>
+    `;
 }
 
 function renderizarResultadosTecnicos(termo) {

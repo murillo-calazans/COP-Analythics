@@ -108,3 +108,106 @@
     color: #DC2626;
 
 }
+
+/*
+ * Quadro "Região de atuação" (aba Técnicos) — ver
+ * js/engine/regiaoatuacaoengine.js. Verde = região definida,
+ * âmbar = mista, cinza = sem região fixa (coringa).
+ */
+.regiao-atuacao-card{
+
+    margin-top: 20px;
+
+}
+
+.regiao-atuacao-card .dashboard-cabecalho select{
+
+    padding: 8px 12px;
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+    background: var(--cor-fundo-card);
+    color: var(--cor-texto);
+
+}
+
+.tabela-regiao-atuacao td{
+
+    vertical-align: middle;
+
+}
+
+.regiao-sub{
+
+    color: var(--cor-texto-suave);
+
+}
+
+.regiao-concentracao{
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+
+}
+
+.regiao-barra{
+
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--cor-borda);
+    overflow: hidden;
+
+}
+
+.regiao-barra i{
+
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+
+}
+
+.regiao-barra i.perfil-definida{ background: #12a36b; }
+.regiao-barra i.perfil-mista{ background: #d39b22; }
+.regiao-barra i.perfil-coringa{ background: var(--cor-texto-suave); }
+
+.regiao-perfil{
+
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+
+}
+
+.regiao-perfil.perfil-definida{ background: color-mix(in srgb, #12a36b 15%, transparent); color: #12a36b; }
+.regiao-perfil.perfil-mista{ background: color-mix(in srgb, #d39b22 18%, transparent); color: #b7791f; }
+.regiao-perfil.perfil-coringa{ background: color-mix(in srgb, var(--cor-texto-suave) 15%, transparent); color: var(--cor-texto-suave); }
+
+.regiao-bairros{
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+}
+
+.regiao-bairro{
+
+    padding: 2px 8px;
+    border: 1px solid var(--cor-borda);
+    border-radius: 999px;
+    font-size: 12px;
+    white-space: nowrap;
+
+}
+
+.regiao-bairro b{
+
+    color: var(--cor-primaria);
+
+}
