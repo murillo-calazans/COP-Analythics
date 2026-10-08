@@ -52,9 +52,10 @@
   };
 
   // Infraestrutura de rede (área de manutenção, expansão/melhoria de rede, rearranjo, CTO sem potência,
-  // ajuste de potência, CTO sem vaga, verificar viabilidade) e "Pós terceirizada", eSIM e licitação (ordens internas do COP) também
+  // ajuste de potência, CTO sem vaga, verificar viabilidade) e "Pós terceirizada", eSIM, licitação e inviabilidade
+  // (ex.: "INVIABILIDADE - ÁREA DE RISCO", fica no setor do COP — 08/10) também
   // não entra: não é visita a cliente.
-  const NAO_CAMPO = /auditoria|exclusao de acesso|instalacao nao concluida|mudanca de tecnologia nao concluida|nova tentativa de instalacao|configurar conexao|configuracao telefonia|verificar troca de plano|chip|orcamento|remocao telefonia|area de manutencao|expansao de rede|rearranjo|cto sem potencia|ajuste de potencia|melhoria de rede|cto sem vaga|verificar viabilidade|pos terceirizada|esim|licitacao/;
+  const NAO_CAMPO = /auditoria|exclusao de acesso|instalacao nao concluida|mudanca de tecnologia nao concluida|nova tentativa de instalacao|configurar conexao|configuracao telefonia|verificar troca de plano|chip|orcamento|remocao telefonia|area de manutencao|expansao de rede|rearranjo|cto sem potencia|ajuste de potencia|melhoria de rede|cto sem vaga|verificar viabilidade|pos terceirizada|esim|licitacao|inviabilidade/;
 
   const RE_VISITANTE = /Usu[aá]rio\s+(.+?)\s*,\s*(?:iniciou o deslocamento|executou)/i;
 

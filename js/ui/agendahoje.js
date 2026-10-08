@@ -17,6 +17,7 @@
 let agendaHojeData = null;       // dia exibido (Date à meia-noite)
 let agendaCache = null;          // { iso, linha } — pra trocar filtro sem buscar de novo
 let agendaFiltro = "todos";      // todos | instalador | manutencao | jornada | sem
+let agendaAssunto = null;        // rótulo do assunto escolhido no quadro "Assuntos agendados no dia"
 const agendaTecnicosAbertos = new Set();
 const AGENDA_PARADAS_VISIVEIS = 5;
 
@@ -154,16 +155,31 @@ async function renderizarAgendaHoje(usarCache = false) {
     const chip = (id, conteudo) => `<button type="button" class="agenda-chip${agendaFiltro === id ? " ativo" : ""}" data-filtro-agenda="${id}" aria-pressed="${agendaFiltro === id}">${conteudo}</button>`;
 
     let corpo;
+    const ehDoAssunto = p => rotuloAssunto(p.assunto) === agendaAssunto;
     if (agendaFiltro === "sem") {
-        corpo = htmlSemTecnicoAgenda(semTecnico);
+        if (agendaAssunto && !semTecnico.some(ehDoAssunto)) agendaAssunto = null;
+        corpo = htmlAssuntosAgenda(semTecnico, "Assuntos que não vão hoje", "sem") +
+            htmlSemTecnicoAgenda(agendaAssunto ? semTecnico.filter(ehDoAssunto) : semTecnico);
     } else {
         const filtradas = rotas.filter(r =>
             agendaFiltro === "todos" ? true :
             agendaFiltro === "jornada" ? r.passaJornada :
             r.setor === agendaFiltro);
-        corpo = filtradas.length
-            ? `<div class="escala-cidades">${filtradas.map(cartaoRotaAgenda).join("")}</div>`
-            : '<p class="alerta-vazio">Nenhum técnico nesse filtro.</p>';
+
+        // Assunto escolhido: cada cartão fica só com as OS dele (e some quem não tem nenhuma).
+        if (agendaAssunto && !filtradas.some(r => r.paradas.some(ehDoAssunto))) agendaAssunto = null;
+        const visiveis = agendaAssunto
+            ? filtradas
+                .map(r => ({ ...r, totalOS: r.paradas.length, paradas: r.paradas.filter(ehDoAssunto) }))
+                .filter(r => r.paradas.length)
+            : filtradas;
+
+        corpo = `<div class="agenda-assuntos-grade">
+                ${htmlAssuntosAgenda(filtradas.flatMap(r => r.paradas), "Assuntos agendados no dia", "todos")}
+                ${htmlAssuntosAgenda(semTecnico, "Assuntos que não vão hoje", "sem")}
+            </div>` + (visiveis.length
+            ? `<div class="escala-cidades">${visiveis.map(cartaoRotaAgenda).join("")}</div>`
+            : '<p class="alerta-vazio">Nenhum técnico nesse filtro.</p>');
     }
 
     const publicadoEm = new Date(linha.atualizado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -192,6 +208,16 @@ async function renderizarAgendaHoje(usarCache = false) {
         agendaFiltro = agendaFiltro === alvo && alvo !== "todos" ? "todos" : alvo;
         renderizarAgendaHoje(true);
     }));
+    container.querySelectorAll("[data-assunto-agenda]").forEach(botao => botao.addEventListener("click", () => {
+        const assunto = botao.dataset.assuntoAgenda || null;
+        const paraSem = botao.dataset.assuntoDestino === "sem";
+        const mesmaVisao = paraSem === (agendaFiltro === "sem");
+        // "Não vão hoje" leva pra lista de quem não coube; "agendados" volta pros cartões.
+        if (paraSem) { agendaFiltro = "sem"; agendaProblema = null; }
+        else if (agendaFiltro === "sem") agendaFiltro = "todos";
+        agendaAssunto = mesmaVisao && agendaAssunto === assunto ? null : assunto;
+        renderizarAgendaHoje(true);
+    }));
     container.querySelectorAll("[data-problema-agenda]").forEach(botao => botao.addEventListener("click", () => {
         const id = botao.dataset.problemaAgenda || null;
         agendaProblema = agendaProblema === id ? null : id;
@@ -203,6 +229,69 @@ async function renderizarAgendaHoje(usarCache = false) {
         else agendaTecnicosAbertos.add(tecnico);
         renderizarAgendaHoje(true);
     }));
+}
+
+/**
+ * Quadros de assuntos: OS por assunto (rótulo limpo, então
+ * "INSTALAÇÃO NOVO CLIENTE" e a versão "- TERCEIRIZADO" contam juntas).
+ * destino "todos" = agendadas (filtra os cartões dos técnicos);
+ * destino "sem" = não vão hoje (abre/filtra a lista de "Não couberam").
+ */
+function htmlAssuntosAgenda(itens, titulo, destino) {
+    const contagem = new Map();
+    for (const p of itens) {
+        const rotulo = rotuloAssunto(p.assunto) || "Sem assunto";
+        const atual = contagem.get(rotulo) ?? { rotulo, tipo: tipoAssunto(p.assunto), total: 0 };
+        atual.total++;
+        contagem.set(rotulo, atual);
+    }
+    const lista = [...contagem.values()].sort((a, b) => b.total - a.total);
+    const total = lista.reduce((s, a) => s + a.total, 0);
+    const maior = lista[0]?.total ?? 1;
+    const ativoAqui = agendaAssunto && (destino === "sem") === (agendaFiltro === "sem");
+
+    return `
+        <div class="grafico-card agenda-assuntos agenda-assuntos-${destino}">
+            <div class="agenda-assuntos-topo">
+                <h3>${titulo} <span class="escala-pilula">${total} OS</span></h3>
+                ${ativoAqui
+                    ? `<button type="button" class="escala-ver-mais" data-assunto-agenda="" data-assunto-destino="${destino}">Só "${escaparHtml(agendaAssunto)}" · ver todos</button>`
+                    : ""}
+            </div>
+            ${lista.length ? `
+            <div class="agenda-assuntos-lista">
+                ${lista.map(a => `
+                    <button type="button" class="agenda-assunto${ativoAqui && agendaAssunto === a.rotulo ? " ativo" : ""}" data-assunto-agenda="${escaparHtml(a.rotulo)}" data-assunto-destino="${destino}" title="${destino === "sem" ? "Ver as OS desse assunto que não couberam" : "Ver só as OS desse assunto nos técnicos"}">
+                        <span class="agenda-assunto-nome">${escaparHtml(a.rotulo)}</span>
+                        <span class="agenda-assunto-barra"><i class="barra-${destino === "sem" ? "fora" : a.tipo}" style="width:${Math.max(3, Math.round(a.total / maior * 100))}%"></i></span>
+                        <span class="agenda-assunto-qtd">${a.total}<em>${Math.round(a.total / total * 100)}%</em></span>
+                    </button>`).join("")}
+            </div>` : `<p class="alerta-vazio">${destino === "sem" ? "Todas as OS couberam no dia. 🎉" : "Nenhuma OS agendada nesse filtro."}</p>`}
+        </div>`;
+}
+
+/**
+ * Etiquetas da OS: há quanto tempo está aberta e quantas vezes já foi
+ * reagendada/visitada (publicado pelo pré-agendamento a partir de 08/10 —
+ * agenda antiga não tem e fica sem etiqueta). soAlertas: só mostra o que
+ * chama atenção (usado nos cartões das agendadas, pra não poluir).
+ */
+function htmlSinaisOS(p, soAlertas = false) {
+    const sinais = [];
+    if (p.idadeDias != null) {
+        const nivel = p.idadeDias >= 7 ? "alto" : p.idadeDias >= 3 ? "medio" : "baixo";
+        const texto = p.idadeDias === 0 ? "aberta hoje" : `aberta há ${p.idadeDias} ${p.idadeDias === 1 ? "dia" : "dias"}`;
+        if (!soAlertas || nivel === "alto") {
+            sinais.push(`<span class="agenda-sinal sinal-${nivel}" title="${p.abertura ? `Aberta em ${new Date(p.abertura).toLocaleDateString("pt-BR")}` : ""}">${texto}</span>`);
+        }
+    }
+    if (p.reagendamentos > 0) {
+        sinais.push(`<span class="agenda-sinal sinal-${p.reagendamentos >= 2 ? "alto" : "medio"}">reagendada ${p.reagendamentos}×</span>`);
+    }
+    if (p.visitas > 0 && !soAlertas) {
+        sinais.push(`<span class="agenda-sinal sinal-baixo">${p.visitas} ${p.visitas === 1 ? "visita" : "visitas"}</span>`);
+    }
+    return sinais.length ? `<div class="agenda-sinais">${sinais.join("")}</div>` : "";
 }
 
 function cartaoRotaAgenda(rota) {
@@ -220,7 +309,7 @@ function cartaoRotaAgenda(rota) {
                 <h3>${escaparHtml(nome)}${rota.dupla ? `<span class="escala-dupla"> + ${escaparHtml(nomeCurto(rota.dupla))}</span>` : ""}</h3>
                 ${terceira ? `<span class="escala-tag">${terceira}</span>` : ""}
             </div>
-            <p class="agenda-rota-sub">${escaparHtml([rota.grupo, rota.setor === "instalador" ? "instalador" : "manutenção", `${rota.paradas.length} OS`].filter(Boolean).join(" · "))}${rota.passaJornada ? ` · <span class="agenda-passa">termina ~${escaparHtml(rota.termino ?? "")}, passa da jornada</span>` : ""}</p>
+            <p class="agenda-rota-sub">${escaparHtml([rota.grupo, rota.setor === "instalador" ? "instalador" : "manutenção", rota.totalOS ? `${rota.paradas.length} de ${rota.totalOS} OS` : `${rota.paradas.length} OS`].filter(Boolean).join(" · "))}${rota.passaJornada ? ` · <span class="agenda-passa">termina ~${escaparHtml(rota.termino ?? "")}, passa da jornada</span>` : ""}</p>
             <div class="agenda-barra${rota.passaJornada ? " passa" : ""}" title="${escaparHtml(tituloBarra)}"><i style="width:${rota.carga}%"></i></div>
             <ul class="agenda-paradas">
                 ${visiveis.map(p => `
@@ -232,6 +321,7 @@ function cartaoRotaAgenda(rota) {
                                 <span>${escaparHtml(p.bairro || p.cidade || "")}</span>
                                 ${p.assunto ? `<span class="agenda-tag tag-${tipoAssunto(p.assunto)}" title="${escaparHtml(p.assunto)}">${escaparHtml(rotuloAssunto(p.assunto))}</span>` : ""}
                             </div>
+                            ${htmlSinaisOS(p, true)}
                             ${p.observacao ? `<div class="agenda-alerta">${escaparHtml(p.observacao)}</div>` : ""}
                         </div>
                     </li>`).join("")}
@@ -302,6 +392,7 @@ function htmlSemTecnicoAgenda(semTecnico) {
                         <strong>${escaparHtml(p.titulo)}</strong>
                         ${p.acao ? `<span>${escaparHtml(p.acao)}</span>` : ""}
                         <em>${escaparHtml(resumoCidades(p.itens))}</em>
+                        ${resumoUrgencia(p.itens)}
                     </span>
                 </button>`).join("")}
         </div>
@@ -318,7 +409,7 @@ function htmlSemTecnicoAgenda(semTecnico) {
                     <span class="escala-pilula">${porCidade.get(cidade).length} OS</span>
                 </div>
                 <ul class="agenda-paradas agenda-sem">
-                    ${porCidade.get(cidade).map(p => `
+                    ${ordenarPorUrgencia(porCidade.get(cidade)).map(p => `
                         <li>
                             <div>
                                 <div class="agenda-os"><strong>OS ${escaparHtml(String(p.os ?? ""))}</strong> · ${escaparHtml(p.cliente ?? "")}</div>
@@ -326,11 +417,27 @@ function htmlSemTecnicoAgenda(semTecnico) {
                                     <span>${escaparHtml(p.bairro || "")}</span>
                                     ${p.assunto ? `<span class="agenda-tag tag-${tipoAssunto(p.assunto)}" title="${escaparHtml(p.assunto)}">${escaparHtml(rotuloAssunto(p.assunto))}</span>` : ""}
                                 </div>
+                                ${htmlSinaisOS(p)}
                                 ${p.observacao ? `<div class="agenda-alerta">${escaparHtml(p.observacao)}</div>` : ""}
                             </div>
                         </li>`).join("")}
                 </ul>
             </div>`).join("")}</div>`;
+}
+
+/** Mais antiga primeiro; empate = mais reagendada primeiro. */
+function ordenarPorUrgencia(itens) {
+    return [...itens].sort((a, b) => (b.idadeDias ?? -1) - (a.idadeDias ?? -1) || (b.reagendamentos ?? 0) - (a.reagendamentos ?? 0));
+}
+
+/** "8 já reagendadas · mais antiga aberta há 21 dias" (vazio em agenda antiga, sem esses dados). */
+function resumoUrgencia(itens) {
+    const reagendadas = itens.filter(i => i.reagendamentos > 0).length;
+    const idades = itens.map(i => i.idadeDias).filter(d => d != null);
+    const partes = [];
+    if (reagendadas) partes.push(`${reagendadas} já ${reagendadas === 1 ? "reagendada" : "reagendadas"}`);
+    if (idades.length) partes.push(`mais antiga aberta há ${Math.max(...idades)} dias`);
+    return partes.length ? `<em class="agenda-urgencia">${partes.join(" · ")}</em>` : "";
 }
 
 /** "Nova Friburgo (12), Cabo Frio (5) e mais 3 cidades". */
