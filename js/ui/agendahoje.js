@@ -192,6 +192,11 @@ async function renderizarAgendaHoje(usarCache = false) {
         agendaFiltro = agendaFiltro === alvo && alvo !== "todos" ? "todos" : alvo;
         renderizarAgendaHoje(true);
     }));
+    container.querySelectorAll("[data-problema-agenda]").forEach(botao => botao.addEventListener("click", () => {
+        const id = botao.dataset.problemaAgenda || null;
+        agendaProblema = agendaProblema === id ? null : id;
+        renderizarAgendaHoje(true);
+    }));
     container.querySelectorAll("[data-ver-mais-agenda]").forEach(botao => botao.addEventListener("click", () => {
         const tecnico = botao.dataset.verMaisAgenda;
         if (agendaTecnicosAbertos.has(tecnico)) agendaTecnicosAbertos.delete(tecnico);
@@ -235,37 +240,106 @@ function cartaoRotaAgenda(rota) {
         </div>`;
 }
 
+/**
+ * Motivos do pré-agendamento (js/agendador/motor.js, semTecnico[].motivo)
+ * agrupados em problemas — o texto original traz cidade e números
+ * ("Técnicos já estão com 8 OS em Nova Friburgo"), aqui vira uma causa
+ * só com contagem e o que dá pra fazer. Motivo novo que não bater com
+ * nenhum padrão aparece com o próprio texto.
+ */
+const PROBLEMAS_AGENDA = [
+    { id: "capacidade", padrao: /^Técnicos já estão com/i, titulo: "Técnicos no limite de OS", acao: "Falta técnico nessas cidades: escalar mais gente ou remanejar de outra cidade.", tipo: "falta" },
+    { id: "dupla-cheia", padrao: /exige dupla e as duplas já estão/i, titulo: "LOS exige dupla e as duplas estão cheias", acao: "Formar mais duplas de manutenção na escala do dia.", tipo: "falta" },
+    { id: "sem-dupla", padrao: /exige dupla e não há/i, titulo: "LOS exige dupla e não há dupla na cidade", acao: "Montar uma dupla de manutenção na escala dessa cidade.", tipo: "falta" },
+    { id: "jornada", padrao: /^Não coube na jornada/i, titulo: "Não coube na jornada / janela do cliente", acao: "Horário pedido pelo cliente não encaixa na rota: rever janela ou estender jornada.", tipo: "falta" },
+    { id: "longe", padrao: /^Longe das rotas/i, titulo: "Longe das rotas do dia", acao: "OS isolada: agendar junto com outra visita na região ou num dia com rota por lá.", tipo: "rota" },
+    { id: "cidade-sem-equipe", padrao: /^Cidade sem equipe na escala/i, titulo: "Cidade sem equipe na escala", acao: "Escalar alguém nessa cidade ou atender por remanejamento.", tipo: "falta" },
+    { id: "grupo-sem-tecnico", padrao: /^Nenhum técnico escalado/i, titulo: "Nenhum técnico escalado no grupo de cidades", acao: "Conferir a escala do dia para esse grupo de cidades.", tipo: "falta" },
+    { id: "sem-local", padrao: /^Sem coordenada/i, titulo: "OS sem localização", acao: "Corrigir o bairro ou a coordenada do cliente na OS.", tipo: "cadastro" },
+    { id: "fim-de-semana", padrao: /fim de semana/i, titulo: "Cliente só recebe no fim de semana", acao: "Não é problema: agendar para sábado/domingo.", tipo: "cliente" },
+    { id: "dia-pedido", padrao: /^Cliente pediu o dia/i, titulo: "Cliente pediu outro dia", acao: "Não é problema: agendar no dia pedido.", tipo: "cliente" }
+];
+
+let agendaProblema = null; // id do problema aberto na lista de "Não couberam"
+
+function problemaDoMotivo(motivo) {
+    const texto = String(motivo ?? "").trim();
+    const conhecido = PROBLEMAS_AGENDA.find(p => p.padrao.test(texto));
+    if (conhecido) return conhecido;
+    const titulo = texto || "Sem motivo informado";
+    return { id: `outro:${titulo}`, titulo, acao: "", tipo: "outro" };
+}
+
 function htmlSemTecnicoAgenda(semTecnico) {
     if (!semTecnico.length) return '<p class="alerta-vazio">Todas as OS couberam no dia. 🎉</p>';
 
-    const porCidade = new Map();
+    // Agrupa por problema.
+    const problemas = new Map();
     for (const item of semTecnico) {
+        const problema = problemaDoMotivo(item.observacao);
+        if (!problemas.has(problema.id)) problemas.set(problema.id, { ...problema, itens: [] });
+        problemas.get(problema.id).itens.push(item);
+    }
+    const lista = [...problemas.values()].sort((a, b) => b.itens.length - a.itens.length);
+    if (agendaProblema && !problemas.has(agendaProblema)) agendaProblema = null;
+
+    const selecionados = agendaProblema ? problemas.get(agendaProblema).itens : semTecnico;
+
+    const porCidade = new Map();
+    for (const item of selecionados) {
         const cidade = item.cidade || "Sem cidade";
         if (!porCidade.has(cidade)) porCidade.set(cidade, []);
         porCidade.get(cidade).push(item);
     }
     const cidades = [...porCidade.keys()].sort((a, b) => porCidade.get(b).length - porCidade.get(a).length);
 
-    return `<div class="escala-cidades">${cidades.map(cidade => `
-        <div class="escala-cidade agenda-rota">
-            <div class="escala-cidade-topo">
-                <h3>${escaparHtml(cidade)}</h3>
-                <span class="escala-pilula">${porCidade.get(cidade).length} OS</span>
-            </div>
-            <ul class="agenda-paradas agenda-sem">
-                ${porCidade.get(cidade).map(p => `
-                    <li>
-                        <div>
-                            <div class="agenda-os"><strong>OS ${escaparHtml(String(p.os ?? ""))}</strong> · ${escaparHtml(p.cliente ?? "")}</div>
-                            <div class="agenda-detalhe">
-                                <span>${escaparHtml(p.bairro || "")}</span>
-                                ${p.assunto ? `<span class="agenda-tag tag-${tipoAssunto(p.assunto)}" title="${escaparHtml(p.assunto)}">${escaparHtml(rotuloAssunto(p.assunto))}</span>` : ""}
+    return `
+        <div class="agenda-problemas" role="group" aria-label="Por que não couberam">
+            ${lista.map(p => `
+                <button type="button" class="agenda-problema problema-${p.tipo}${agendaProblema === p.id ? " ativo" : ""}" data-problema-agenda="${escaparHtml(p.id)}" aria-pressed="${agendaProblema === p.id}">
+                    <span class="agenda-problema-qtd">${p.itens.length}</span>
+                    <span class="agenda-problema-texto">
+                        <strong>${escaparHtml(p.titulo)}</strong>
+                        ${p.acao ? `<span>${escaparHtml(p.acao)}</span>` : ""}
+                        <em>${escaparHtml(resumoCidades(p.itens))}</em>
+                    </span>
+                </button>`).join("")}
+        </div>
+
+        <div class="agenda-problemas-lista-topo">
+            <h3>${agendaProblema ? escaparHtml(problemas.get(agendaProblema).titulo) : "Todas as OS que não couberam"} <span class="escala-pilula">${selecionados.length} OS</span></h3>
+            ${agendaProblema ? '<button type="button" class="escala-ver-mais" data-problema-agenda="">Ver todas</button>' : '<span class="admin-dica">Clique num problema acima para ver só as OS dele.</span>'}
+        </div>
+
+        <div class="escala-cidades">${cidades.map(cidade => `
+            <div class="escala-cidade agenda-rota">
+                <div class="escala-cidade-topo">
+                    <h3>${escaparHtml(cidade)}</h3>
+                    <span class="escala-pilula">${porCidade.get(cidade).length} OS</span>
+                </div>
+                <ul class="agenda-paradas agenda-sem">
+                    ${porCidade.get(cidade).map(p => `
+                        <li>
+                            <div>
+                                <div class="agenda-os"><strong>OS ${escaparHtml(String(p.os ?? ""))}</strong> · ${escaparHtml(p.cliente ?? "")}</div>
+                                <div class="agenda-detalhe">
+                                    <span>${escaparHtml(p.bairro || "")}</span>
+                                    ${p.assunto ? `<span class="agenda-tag tag-${tipoAssunto(p.assunto)}" title="${escaparHtml(p.assunto)}">${escaparHtml(rotuloAssunto(p.assunto))}</span>` : ""}
+                                </div>
+                                ${p.observacao ? `<div class="agenda-alerta">${escaparHtml(p.observacao)}</div>` : ""}
                             </div>
-                            ${p.observacao ? `<div class="agenda-alerta">${escaparHtml(p.observacao)}</div>` : ""}
-                        </div>
-                    </li>`).join("")}
-            </ul>
-        </div>`).join("")}</div>`;
+                        </li>`).join("")}
+                </ul>
+            </div>`).join("")}</div>`;
+}
+
+/** "Nova Friburgo (12), Cabo Frio (5) e mais 3 cidades". */
+function resumoCidades(itens) {
+    const contagem = new Map();
+    for (const item of itens) contagem.set(item.cidade || "Sem cidade", (contagem.get(item.cidade || "Sem cidade") ?? 0) + 1);
+    const ordenadas = [...contagem].sort((a, b) => b[1] - a[1]);
+    const texto = ordenadas.slice(0, 3).map(([c, n]) => `${c} (${n})`).join(", ");
+    return ordenadas.length > 3 ? `${texto} e mais ${ordenadas.length - 3} cidade(s)` : texto;
 }
 
 function registrarAgendaHoje() {

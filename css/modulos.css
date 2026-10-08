@@ -1389,3 +1389,110 @@ html[data-tema="dark"] .terceiras-status.aberto{ background: rgba(245, 158, 11, 
     }
 
 }
+
+/* "Não couberam no dia": problemas agrupados (js/ui/agendahoje.js, PROBLEMAS_AGENDA). */
+.agenda-problemas{
+
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+
+}
+
+.agenda-problema{
+
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--cor-borda);
+    border-left: 4px solid var(--escala-laranja);
+    background: var(--cor-fundo-card);
+    color: var(--cor-texto);
+
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+}
+
+.agenda-problema:hover{
+
+    background: var(--cor-fundo-elevado);
+
+}
+
+.agenda-problema.ativo{
+
+    outline: 2px solid var(--escala-azul);
+    outline-offset: -1px;
+
+}
+
+.agenda-problema.problema-falta{ border-left-color: #EF4444; }
+.agenda-problema.problema-rota{ border-left-color: var(--escala-laranja); }
+.agenda-problema.problema-cadastro{ border-left-color: #A855F7; }
+.agenda-problema.problema-cliente{ border-left-color: var(--escala-verde); }
+.agenda-problema.problema-outro{ border-left-color: #94A3B8; }
+
+.agenda-problema-qtd{
+
+    min-width: 42px;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+
+}
+
+.agenda-problema-texto{
+
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 14px;
+
+}
+
+.agenda-problema-texto strong{
+
+    font-size: 15px;
+
+}
+
+.agenda-problema-texto span{
+
+    color: var(--cor-texto-suave);
+
+}
+
+.agenda-problema-texto em{
+
+    font-style: normal;
+    font-size: 12px;
+    color: var(--cor-texto-suave);
+
+}
+
+.agenda-problemas-lista-topo{
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+
+}
+
+.agenda-problemas-lista-topo h3{
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+
+}
