@@ -27,6 +27,7 @@ const MODULO_DA_SECAO = {
     "auditoria-ia": "auditoria",
     "agenda-hoje": "agendador",
     "escala-hoje": "escala",
+    "usuarios": "admin",
     "configuracoes": "admin"
 };
 
@@ -103,6 +104,7 @@ function mostrarSecao(nome) {
     if (nome === "alertas") renderizarAlertas();
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "agenda-hoje") renderizarAgendaHoje();
+    if (nome === "usuarios") renderizarAdminUsuarios();
     if (nome === "configuracoes") {
         preencherFormularioConfig();
         renderizarResumoFiltroAssuntos();

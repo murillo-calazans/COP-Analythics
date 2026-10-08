@@ -631,3 +631,149 @@ html[data-tema="dark"] #secao-escala-hoje{
     }
 
 }
+
+/* ---------- Painel de Administrador: Usuários ---------- */
+
+.admin-kpis{
+
+    margin-bottom: 20px;
+
+}
+
+.admin-usuarios-barra{
+
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+
+}
+
+.admin-usuarios-barra input{
+
+    flex: 1;
+    min-width: 240px;
+
+}
+
+.admin-dica{
+
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--cor-texto-suave);
+
+}
+
+.admin-usuarios{
+
+    min-width: 980px;
+
+}
+
+.admin-usuarios td{
+
+    vertical-align: middle;
+
+}
+
+.admin-usuarios input,
+.admin-usuarios select{
+
+    width: 100%;
+    min-width: 120px;
+    padding: 8px 10px;
+
+    border: 1px solid var(--cor-borda);
+    border-radius: 10px;
+    background: var(--cor-fundo-elevado);
+    color: var(--cor-texto);
+
+    font: inherit;
+    font-size: 14px;
+
+}
+
+.admin-usuarios input:focus,
+.admin-usuarios select:focus{
+
+    outline: 2px solid var(--cor-primaria);
+    outline-offset: 0;
+
+}
+
+.admin-usuarios select:disabled{
+
+    opacity: .7;
+    cursor: not-allowed;
+
+}
+
+.admin-email{
+
+    font-weight: 600;
+    word-break: break-all;
+
+}
+
+.admin-voce{
+
+    padding: 1px 7px;
+    border-radius: 999px;
+
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+    color: var(--cor-texto-suave);
+    font-size: 11px;
+    font-weight: 500;
+
+}
+
+.admin-badge-sem-acesso{
+
+    display: inline-block;
+    margin-top: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+
+    background: #FEF3C7;
+    color: #92400E;
+    font-size: 11px;
+    font-weight: 600;
+
+}
+
+.admin-sem-acesso td{
+
+    background: var(--cor-fundo-elevado);
+
+}
+
+.admin-ultimo-acesso{
+
+    white-space: nowrap;
+    color: var(--cor-texto-suave);
+    font-size: 13px;
+
+}
+
+.admin-acoes{
+
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+
+}
+
+.admin-acoes button{
+
+    padding: 8px 14px;
+    white-space: nowrap;
+
+}
+
+.admin-acoes button:disabled{
+
+    opacity: .45;
+    cursor: default;
+
+}

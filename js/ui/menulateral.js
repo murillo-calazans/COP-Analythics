@@ -40,7 +40,7 @@
         { id: "agendador", titulo: "Agendador IA",            href: "index.html#agenda-hoje",   secao: "agenda-hoje" },
         { id: "escala",    titulo: "Escala",                  href: "index.html#escala-hoje",   secao: "escala-hoje" },
         { id: "alertas",   titulo: "Alertas",                 href: "index.html#alertas",       secao: "alertas" },
-        { id: "admin",     titulo: "Painel de Administrador", href: "index.html#configuracoes", secao: "configuracoes" }
+        { id: "admin",     titulo: "Painel de Administrador", href: "index.html#usuarios",      secao: "usuarios" }
     ];
 
     const CSS = `
