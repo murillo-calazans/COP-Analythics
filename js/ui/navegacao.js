@@ -14,16 +14,24 @@
  */
 
 const MODULO_DA_SECAO = {
+    "inicio": "inicio",
     "dashboard": "ordens",
+    "tempos": "ordens",
+    "indicadores": "ordens",
+    "gestao-cop": "ordens",
+    "alertas": "ordens",
     "ordens": "ordens",
     "tecnicos": "ordens",
-    "indicadores": "ordens",
     "terceiras": "terceiras",
     "auditoria": "auditoria",
     "auditoria-ia": "auditoria",
-    "alertas": "alertas",
+    "agenda-hoje": "agendador",
+    "escala-hoje": "escala",
     "configuracoes": "admin"
 };
+
+// Tempos, Indicadores e Gestão COP saem do mesmo cálculo (js/ui/indicadores.js).
+const SECOES_INDICADORES = ["tempos", "indicadores", "gestao-cop"];
 
 function registrarNavegacao() {
     const botoes = document.querySelectorAll("[data-secao]");
@@ -32,7 +40,24 @@ function registrarNavegacao() {
     });
 
     window.addEventListener("hashchange", abrirSecaoDoEndereco);
-    atualizarMenuDoModulo("dashboard");
+    atualizarMenuDoModulo("inicio");
+
+    // Clicar na logo volta pra tela inicial.
+    const logo = document.querySelector("header .logo");
+    if (logo) {
+        logo.style.cursor = "pointer";
+        logo.title = "Início";
+        logo.addEventListener("click", () => mostrarSecao("inicio"));
+    }
+}
+
+function secaoAtiva() {
+    return document.querySelector("section.secao.ativa")?.id.replace("secao-", "") ?? "inicio";
+}
+
+/** Redesenha a seção aberta — usado quando os dados terminam de carregar. */
+function renderizarSecaoAtiva() {
+    mostrarSecao(secaoAtiva());
 }
 
 /**
@@ -67,14 +92,17 @@ function mostrarSecao(nome) {
     });
 
     atualizarMenuDoModulo(nome);
-    if (location.hash.slice(1) !== nome) history.replaceState(null, "", `#${nome}`);
+    if (location.hash.slice(1) !== nome) history.replaceState(null, "", nome === "inicio" ? location.pathname : `#${nome}`);
 
+    if (nome === "inicio") renderizarInicio();
     if (nome === "dashboard") renderizarDashboard();
     if (nome === "auditoria") renderizarPainelAuditoriaOperacional();
     if (nome === "ordens") renderizarOrdens();
     if (nome === "tecnicos") renderizarSecaoTecnicos();
-    if (nome === "indicadores") renderizarSecaoIndicadores();
+    if (SECOES_INDICADORES.includes(nome)) renderizarSecaoIndicadores();
     if (nome === "alertas") renderizarAlertas();
+    if (nome === "escala-hoje") renderizarEscalaHoje();
+    if (nome === "agenda-hoje") renderizarAgendaHoje();
     if (nome === "configuracoes") {
         preencherFormularioConfig();
         renderizarResumoFiltroAssuntos();

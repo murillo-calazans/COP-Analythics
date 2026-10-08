@@ -86,10 +86,15 @@ function mostrarAppAutenticado() {
             ? APP.usuario.papel
             : "leitor";
         const setor = APP.usuario.setor ? ` (${APP.usuario.setor})` : "";
-        rotulo.textContent = `${APP.usuario.email} · ${papel}${setor}`;
+        rotulo.textContent = `${APP.usuario.nome || APP.usuario.email} · ${papel}${setor}`;
+        rotulo.title = APP.usuario.email;
     }
 
     aplicarGateDePapel();
+    if (typeof atualizarMenuLateralAdmin === "function") atualizarMenuLateralAdmin();
+
+    // Saudação já aparece; os números do mês entram quando os dados chegarem.
+    if (secaoAtiva() === "inicio") renderizarInicio();
 }
 
 /**

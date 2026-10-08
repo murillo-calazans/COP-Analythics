@@ -20,6 +20,7 @@
 (function () {
 
     const ICONES = {
+        inicio: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
         ordens: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
         terceiras: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
         auditoria: '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>',
@@ -29,13 +30,15 @@
         admin: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'
     };
 
-    // secao: seção do index.html aberta pelo módulo (sem secao = outra página).
+    // secao: seção do index.html aberta pelo módulo. Escala e Agendador
+    // abrem a visão do dia; editar/pré-agendar é numa guia nova, de lá.
     const MODULOS = [
+        { id: "inicio",    titulo: "Início",                  href: "index.html",               secao: "inicio" },
         { id: "ordens",    titulo: "Gestão de Ordens",        href: "index.html#dashboard",     secao: "dashboard" },
         { id: "terceiras", titulo: "Gestão de Terceiras",     href: "index.html#terceiras",     secao: "terceiras" },
         { id: "auditoria", titulo: "Auditoria",               href: "index.html#auditoria",     secao: "auditoria" },
-        { id: "agendador", titulo: "Agendador IA",            href: "agendador.html" },
-        { id: "escala",    titulo: "Escala",                  href: "escala.html" },
+        { id: "agendador", titulo: "Agendador IA",            href: "index.html#agenda-hoje",   secao: "agenda-hoje" },
+        { id: "escala",    titulo: "Escala",                  href: "index.html#escala-hoje",   secao: "escala-hoje" },
         { id: "alertas",   titulo: "Alertas",                 href: "index.html#alertas",       secao: "alertas" },
         { id: "admin",     titulo: "Painel de Administrador", href: "index.html#configuracoes", secao: "configuracoes" }
     ];
@@ -165,7 +168,7 @@ body.menu-lateral-aberto .menu-lateral-fundo{ opacity:1; pointer-events:auto; }
         host.prepend(botao);
 
         const itens = MODULOS.map(m =>
-            (m.id === "admin" ? '<div class="separador" role="presentation"></div>' : "") +
+            (m.id === "admin" || m.id === "ordens" ? '<div class="separador" role="presentation"></div>' : "") +
             `<a href="${m.href}" data-modulo="${m.id}"${m.secao ? ` data-secao-modulo="${m.secao}"` : ""}>${svg(ICONES[m.id])}<span>${m.titulo}</span><span class="menu-lateral-badge" hidden></span></a>`
         ).join("");
 

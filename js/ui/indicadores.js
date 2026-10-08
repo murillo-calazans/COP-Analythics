@@ -139,19 +139,28 @@ function renderizarColunaTempo(metrica, ordensFiltradas, meses) {
     }
 }
 
+/**
+ * Desenha as três abas de indicadores da Gestão de Ordens de uma vez
+ * (Indicadores, Tempos e Gestão COP) — saem dos mesmos cálculos, e os
+ * gráficos são achados por id, então não importa qual aba está aberta.
+ */
 function renderizarSecaoIndicadores() {
     const container = document.getElementById("indicadoresConteudo");
-    if (!container) return;
+    const containerTempos = document.getElementById("temposConteudo");
+    const containerCop = document.getElementById("gestaoCopConteudo");
+    if (!container || !containerTempos || !containerCop) return;
+
+    const todos = [container, containerTempos, containerCop];
 
     if (!APP.status.baseCarregada || APP.dados.ordens.size === 0) {
-        container.innerHTML = '<p class="alerta-vazio">Importe dados pra ver os indicadores.</p>';
+        todos.forEach(c => { c.innerHTML = '<p class="alerta-vazio">Importe dados pra ver os indicadores.</p>'; });
         return;
     }
 
     const ordensFiltradas = FiltroEngine.ordensFiltradas();
 
     if (ordensFiltradas.size === 0) {
-        container.innerHTML = '<p class="alerta-vazio">Nenhuma OS bate com o Filtro Global atual.</p>';
+        todos.forEach(c => { c.innerHTML = '<p class="alerta-vazio">Nenhuma OS bate com o Filtro Global atual.</p>'; });
         return;
     }
 
@@ -270,10 +279,39 @@ function renderizarSecaoIndicadores() {
 
         </div>
 
-        <div class="indicadores-secao-titulo">Indicadores de Tempo</div>
+        <div class="indicadores-secao-titulo">Funil de Assuntos</div>
+
+        <div class="grafico-card">
+            <div class="grafico-cabecalho">
+                <div>
+                    <div class="grafico-titulo">Clientes com problema após instalação/transferência</div>
+                    <div class="grafico-subtitulo" id="funilAssuntosSubtitulo">Configure os assuntos de origem e destino</div>
+                </div>
+                <button type="button" class="grafico-toggle-tabela" id="btnConfigurarFunilAssuntos">Configurar</button>
+            </div>
+            <div id="funilAssuntosConteudo"></div>
+        </div>
+    `;
+
+    containerTempos.innerHTML = `
+        <div class="indicadores-secao-titulo">TMA · TMS · TME · TMR</div>
 
         <div class="indicadores-tempo-colunas">
             ${METRICAS_TEMPO.map(construirColunaTempo).join("")}
+        </div>
+    `;
+
+    containerCop.innerHTML = `
+        <div class="indicadores-secao-titulo">Produção do COP no mês</div>
+
+        <div class="grafico-card">
+            <div class="grafico-cabecalho">
+                <div>
+                    <div class="grafico-titulo">Aberturas, agendamentos e reagendamentos por colaborador</div>
+                    <div class="grafico-subtitulo" id="producaoCopSubtitulo">Mês atual, sem o Filtro Global</div>
+                </div>
+            </div>
+            <div id="producaoCopConteudo"></div>
         </div>
 
         <div class="indicadores-secao-titulo">TMR de Agendamento (Controle de Operações)</div>
@@ -288,20 +326,9 @@ function renderizarSecaoIndicadores() {
             </div>
             <div id="tmrCopConteudo"></div>
         </div>
-
-        <div class="indicadores-secao-titulo">Funil de Assuntos</div>
-
-        <div class="grafico-card">
-            <div class="grafico-cabecalho">
-                <div>
-                    <div class="grafico-titulo">Clientes com problema após instalação/transferência</div>
-                    <div class="grafico-subtitulo" id="funilAssuntosSubtitulo">Configure os assuntos de origem e destino</div>
-                </div>
-                <button type="button" class="grafico-toggle-tabela" id="btnConfigurarFunilAssuntos">Configurar</button>
-            </div>
-            <div id="funilAssuntosConteudo"></div>
-        </div>
     `;
+
+    renderizarProducaoCop();
 
     renderizarGraficoBarras("mensalVolume",
         meses.map(m => ({ rotulo: m.rotulo, valor: m.totalFinalizadas })),
@@ -396,4 +423,38 @@ function renderizarSecaoIndicadores() {
     if (botaoConfigurarSetoresCop) botaoConfigurarSetoresCop.addEventListener("click", abrirModalSetoresCop);
 
     renderizarTmrAgendamentoCop();
+}
+
+/** Tabela da produção do mês de quem é do(s) setor(es) do COP. */
+function renderizarProducaoCop() {
+    const container = document.getElementById("producaoCopConteudo");
+    if (!container) return;
+
+    if ((APP.configuracoes.setoresCop ?? []).length === 0) {
+        container.innerHTML = '<p class="alerta-vazio">Configure o(s) setor(es) do COP (botão "Configurar" no TMR abaixo).</p>';
+        return;
+    }
+
+    const linhas = [...ProducaoEngine.doMesAtual().values()]
+        .filter(item => IndicatorEngine.operadorEhDoCop(item.codigo))
+        .map(item => ({ ...item, total: item.aberturas + item.agendamentos + item.reagendamentos }))
+        .filter(item => item.total > 0)
+        .sort((a, b) => b.total - a.total);
+
+    if (linhas.length === 0) {
+        container.innerHTML = '<p class="alerta-vazio">Nenhuma movimentação do COP neste mês ainda.</p>';
+        return;
+    }
+
+    const n = v => v.toLocaleString("pt-BR");
+    const soma = campo => n(linhas.reduce((s, l) => s + l[campo], 0));
+
+    container.innerHTML = `
+        <table class="tabela-alertas">
+            <thead><tr><th>Colaborador</th><th>Aberturas</th><th>Agendamentos</th><th>Reagendamentos</th><th>Total</th></tr></thead>
+            <tbody>
+                ${linhas.map(l => `<tr><td>${escaparHtml(l.nome)}</td><td>${n(l.aberturas)}</td><td>${n(l.agendamentos)}</td><td>${n(l.reagendamentos)}</td><td><strong>${n(l.total)}</strong></td></tr>`).join("")}
+            </tbody>
+            <tfoot><tr><td><strong>Total</strong></td><td>${soma("aberturas")}</td><td>${soma("agendamentos")}</td><td>${soma("reagendamentos")}</td><td><strong>${soma("total")}</strong></td></tr></tfoot>
+        </table>`;
 }

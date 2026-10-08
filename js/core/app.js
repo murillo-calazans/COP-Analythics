@@ -28,6 +28,8 @@ async function iniciarSistema() {
 
     registrarEventos();
     registrarNavegacao();
+    registrarEscalaHoje();
+    registrarAgendaHoje();
     registrarTema();
     registrarFormularioConfig();
     registrarFiltroAssuntos();
@@ -141,6 +143,7 @@ async function inicializarDadosAutenticado() {
 
     renderizarDashboard();
     abrirSecaoDoEndereco();
+    if (secaoAtiva() === "inicio") renderizarInicio();
 }
 
 function registrarEventos() {

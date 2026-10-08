@@ -1,0 +1,633 @@
+/*
+ * Telas dos módulos do menu lateral: Início, Escala de hoje e
+ * Agenda do dia (js/ui/inicio.js, escalahoje.js, agendahoje.js).
+ * Reaproveitam kpi-row/stat-tile/grafico-card do dashboard; aqui
+ * só o que é próprio delas.
+ */
+
+.dashboard-cabecalho-acoes [hidden]{
+
+    display: none;
+
+}
+
+.dashboard-cabecalho-acoes a.botao-primario{
+
+    text-decoration: none;
+
+}
+
+/* ---------- Início ---------- */
+
+.inicio-saudacao{
+
+    padding: 28px 30px;
+    margin-bottom: 8px;
+
+    border-radius: var(--raio-card);
+    background: linear-gradient(120deg, #0F172A, #1E3A8A 55%, #2563EB);
+    color: white;
+
+}
+
+.inicio-saudacao h2{
+
+    font-size: 26px;
+    line-height: 1.2;
+
+}
+
+.inicio-saudacao p{
+
+    margin-top: 6px;
+    color: #CBD5E1;
+
+}
+
+.stat-tile-link{
+
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+}
+
+.stat-tile-link:hover{
+
+    border-color: var(--cor-primaria);
+
+}
+
+.stat-tile-link:focus-visible{
+
+    outline: 2px solid var(--cor-primaria);
+    outline-offset: 2px;
+
+}
+
+/* ---------- Escala de hoje ---------- */
+
+#secao-escala-hoje{
+
+    --escala-azul: #3B82F6;
+    --escala-verde: #16A34A;
+    --escala-laranja: #D97706;
+    --escala-laranja-fundo: #FEF3C7;
+    --escala-tag-fundo: #F1F5F9;
+    --escala-ativo-fundo: #DBEAFE;
+    --escala-ativo-texto: #1D4ED8;
+
+}
+
+html[data-tema="dark"] #secao-escala-hoje{
+
+    --escala-azul: #3B82F6;
+    --escala-verde: #22C55E;
+    --escala-laranja: #F59E0B;
+    --escala-laranja-fundo: rgba(245, 158, 11, .16);
+    --escala-tag-fundo: rgba(255, 255, 255, .07);
+    --escala-ativo-fundo: rgba(37, 99, 235, .22);
+    --escala-ativo-texto: #93C5FD;
+
+}
+
+.escala-topo{
+
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+
+    margin-bottom: 20px;
+
+}
+
+.escala-topo h2{
+
+    font-size: 26px;
+    line-height: 1.2;
+
+}
+
+.escala-topo p{
+
+    margin-top: 4px;
+    color: var(--cor-texto-suave);
+
+}
+
+.escala-topo-acoes{
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+
+}
+
+.escala-segmentado{
+
+    display: flex;
+    border: 1px solid var(--cor-borda);
+    border-radius: 12px;
+    overflow: hidden;
+
+}
+
+.escala-segmentado button,
+.escala-botao-icone{
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 44px;
+    height: 42px;
+    padding: 0 14px;
+
+    background: transparent;
+    color: var(--cor-texto);
+    border: none;
+
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+
+}
+
+.escala-segmentado button + button{
+
+    border-left: 1px solid var(--cor-borda);
+
+}
+
+.escala-segmentado button:hover,
+.escala-botao-icone:hover{
+
+    background: var(--cor-fundo-elevado);
+
+}
+
+.escala-segmentado button.ativo{
+
+    font-weight: 600;
+
+}
+
+.escala-botao-icone{
+
+    border: 1px solid var(--cor-borda);
+    border-radius: 12px;
+
+}
+
+.escala-segmentado svg,
+.escala-botao-icone svg,
+.escala-botao-editar svg{
+
+    width: 18px;
+    height: 18px;
+
+}
+
+.escala-botao-editar{
+
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    height: 42px;
+    padding: 0 18px;
+    border-radius: 12px;
+
+    background: #2563EB;
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+
+}
+
+.escala-botao-editar:hover{
+
+    background: #1D4ED8;
+
+}
+
+.escala-botao-editar[hidden]{
+
+    display: none;
+
+}
+
+/* Cartões do topo: contagem e filtro (clicar filtra, clicar de novo volta pra todos). */
+.escala-kpis{
+
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+
+    margin-bottom: 20px;
+
+}
+
+.escala-kpi{
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--cor-texto);
+
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background .15s;
+
+}
+
+.escala-kpi:hover{
+
+    background: var(--cor-fundo-elevado);
+
+}
+
+.escala-kpi.ativo{
+
+    background: var(--escala-ativo-fundo);
+    color: var(--escala-ativo-texto);
+
+}
+
+.escala-kpi:focus-visible{
+
+    outline: 2px solid var(--cor-primaria);
+    outline-offset: 2px;
+
+}
+
+.escala-kpi-icone svg{
+
+    display: block;
+    width: 22px;
+    height: 22px;
+
+}
+
+.kpi-instalador .escala-kpi-icone{ color: var(--escala-azul); }
+.kpi-manutencao .escala-kpi-icone{ color: var(--escala-verde); }
+.kpi-todos .escala-kpi-icone,
+.kpi-fora .escala-kpi-icone{ color: var(--cor-texto-suave); }
+
+.escala-kpi-rotulo{
+
+    display: block;
+    font-size: 14px;
+    color: inherit;
+    opacity: .85;
+
+}
+
+.escala-kpi-valor{
+
+    display: block;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.15;
+
+}
+
+.escala-cidades{
+
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 18px;
+
+}
+
+.escala-cidade{
+
+    padding: 20px 24px 16px;
+    border-radius: 18px;
+    border: 1px solid var(--cor-borda);
+    background: var(--cor-fundo-card);
+
+}
+
+.escala-cidade-topo{
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    margin-bottom: 8px;
+
+}
+
+.escala-cidade-topo h3{
+
+    font-size: 18px;
+    font-weight: 600;
+
+}
+
+.escala-pilula{
+
+    flex-shrink: 0;
+    padding: 3px 12px;
+    border-radius: 999px;
+
+    background: var(--escala-tag-fundo);
+    color: var(--cor-texto-suave);
+    font-size: 13px;
+    white-space: nowrap;
+
+}
+
+.escala-lista{
+
+    list-style: none;
+    margin: 0;
+    padding: 0;
+
+}
+
+.escala-lista li{
+
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+
+    padding: 9px 0;
+
+}
+
+.escala-ponto{
+
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+
+}
+
+.ponto-instalador{ background: var(--escala-azul); }
+.ponto-manutencao{ background: var(--escala-verde); }
+.ponto-folga{ background: #94A3B8; }
+.ponto-ferias{ background: #EF4444; }
+.ponto-atestado{ background: #F59E0B; }
+.ponto-outras{ background: #06B6D4; }
+
+.escala-nome{
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+
+    min-width: 0;
+    font-size: 15px;
+
+}
+
+.escala-nome strong{
+
+    font-weight: 600;
+
+}
+
+.escala-dupla{
+
+    color: var(--cor-texto-suave);
+
+}
+
+.escala-tag{
+
+    padding: 1px 8px;
+    border-radius: 6px;
+
+    background: var(--escala-tag-fundo);
+    color: var(--cor-texto-suave);
+    font-size: 13px;
+
+}
+
+.escala-tag-temp{
+
+    background: var(--escala-laranja-fundo);
+    color: var(--escala-laranja);
+
+}
+
+.escala-horario{
+
+    font-variant-numeric: tabular-nums;
+    color: var(--cor-texto-suave);
+    white-space: nowrap;
+
+}
+
+.escala-horario-fora{
+
+    color: var(--escala-laranja);
+    font-weight: 600;
+
+}
+
+.escala-ver-mais{
+
+    margin-top: 4px;
+    padding: 4px 0;
+
+    background: none;
+    border: none;
+    color: var(--escala-azul);
+
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+
+}
+
+.escala-ver-mais:hover{
+
+    text-decoration: underline;
+
+}
+
+.escala-legenda{
+
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+
+    margin-top: 20px;
+    font-size: 14px;
+    color: var(--cor-texto-suave);
+
+}
+
+.escala-legenda span{
+
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+}
+
+.escala-atualizada{
+
+    margin-left: auto;
+    font-size: 12px;
+
+}
+
+.aviso-modulo{
+
+    padding: 12px 16px;
+    margin-bottom: 16px;
+
+    border-radius: 12px;
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+
+}
+
+.rodape-modulo{
+
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--cor-texto-suave);
+
+}
+
+@media (max-width: 900px){
+
+    .escala-kpis{
+
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    }
+
+}
+
+@media (max-width: 600px){
+
+    .escala-cidades{
+
+        grid-template-columns: 1fr;
+
+    }
+
+    .escala-cidade{
+
+        padding: 16px 16px 12px;
+
+    }
+
+    .escala-atualizada{
+
+        margin-left: 0;
+
+    }
+
+}
+
+.agenda-tecnicos{
+
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+
+}
+
+.agenda-paradas,
+.agenda-sem-tecnico{
+
+    list-style: none;
+    margin: 0;
+    padding: 0;
+
+}
+
+/* ---------- Agenda do dia ---------- */
+
+.agenda-paradas li{
+
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 10px;
+
+    padding: 10px 0;
+    border-top: 1px solid var(--cor-borda);
+
+}
+
+.agenda-paradas li:first-child{
+
+    border-top: none;
+
+}
+
+.agenda-hora{
+
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--cor-primaria);
+
+}
+
+.agenda-detalhe{
+
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+
+}
+
+.agenda-alerta{
+
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--cor-erro);
+
+}
+
+.agenda-sem-tecnico li{
+
+    padding: 8px 0;
+    border-top: 1px solid var(--cor-borda);
+
+}
+
+.agenda-sem-tecnico li:first-child{
+
+    border-top: none;
+
+}
+
+@media (max-width: 600px){
+
+    .escala-cidades,
+    .agenda-tecnicos{
+
+        grid-template-columns: 1fr;
+
+    }
+
+    .inicio-saudacao{
+
+        padding: 22px 20px;
+
+    }
+
+}

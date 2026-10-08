@@ -14,11 +14,12 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/tabela.css">
     <link rel="stylesheet" href="css/modal.css">
+    <link rel="stylesheet" href="css/modulos.css">
     <link rel="stylesheet" href="css/responsive.css">
 
 </head>
 
-<body data-modulo="ordens">
+<body data-modulo="inicio">
 
     <div id="telaLogin" class="tela-login">
         <div class="tela-login-card">
@@ -58,9 +59,32 @@
 
         <nav class="menu">
 
-            <button data-secao="dashboard" class="ativo">
+            <!-- Abas só do módulo aberto (ver MODULO_DA_SECAO em js/ui/navegacao.js); a tela inicial não tem abas. -->
+
+            <button data-secao="dashboard">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 Dashboard
+            </button>
+
+            <button data-secao="tempos">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                TMA · TMS · TME · TMR
+            </button>
+
+            <button data-secao="indicadores">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                Indicadores
+            </button>
+
+            <button data-secao="gestao-cop">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Gestão COP
+            </button>
+
+            <button data-secao="alertas">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                Alertas
+                <span id="badgeAlertas" class="badge-alertas" hidden>0</span>
             </button>
 
             <button data-secao="auditoria">
@@ -78,23 +102,10 @@
                 Técnicos
             </button>
 
-            <button data-secao="indicadores">
-                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                Indicadores
-            </button>
-
             <button data-secao="auditoria-ia">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
                 Auditor IA
             </button>
-
-            <button data-secao="alertas">
-                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                Alertas
-                <span id="badgeAlertas" class="badge-alertas" hidden>0</span>
-            </button>
-
-            <!-- Agendador IA e Escala são páginas próprias, abertas pelo menu lateral. -->
 
         </nav>
 
@@ -150,7 +161,57 @@
 
     <main id="conteudo">
 
-    <section id="secao-dashboard" class="secao ativa">
+    <section id="secao-inicio" class="secao ativa">
+        <div id="inicioConteudo"></div>
+    </section>
+
+    <section id="secao-escala-hoje" class="secao">
+        <div class="escala-topo">
+            <div>
+                <h2 id="escalaHojeTitulo">Escala de hoje</h2>
+                <p id="escalaHojeData"></p>
+            </div>
+            <div class="escala-topo-acoes">
+                <div class="escala-segmentado" role="group" aria-label="Escolher o dia">
+                    <button type="button" id="btnEscalaDiaAnterior" title="Dia anterior" aria-label="Dia anterior">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button type="button" id="btnEscalaHoje">Hoje</button>
+                    <button type="button" id="btnEscalaProximoDia" title="Próximo dia" aria-label="Próximo dia">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                </div>
+                <button type="button" id="btnAtualizarEscala" class="escala-botao-icone" title="Buscar de novo no banco" aria-label="Atualizar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+                </button>
+                <!-- Edição na escala.html, numa guia nova; só admin vê (js/ui/escalahoje.js). -->
+                <a id="btnEditarEscala" class="escala-botao-editar" href="escala.html" target="_blank" rel="noopener" hidden>
+                    Editar escala
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+            </div>
+        </div>
+        <div id="escalaHojeConteudo"></div>
+    </section>
+
+    <section id="secao-agenda-hoje" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2 id="agendaHojeTitulo">Agenda do dia</h2>
+                <p>Rotas e horários publicados pelo pré-agendamento.</p>
+            </div>
+            <div class="dashboard-cabecalho-acoes">
+                <button type="button" id="btnAgendaDiaAnterior" class="botao-secundario" title="Dia anterior" aria-label="Dia anterior">◀</button>
+                <button type="button" id="btnAgendaHoje" class="botao-secundario">Hoje</button>
+                <button type="button" id="btnAgendaProximoDia" class="botao-secundario" title="Próximo dia" aria-label="Próximo dia">▶</button>
+                <!-- Pré-agendamento numa guia nova; só admin vê (js/ui/agendahoje.js). -->
+                <a id="btnAbrirPreAgendamento" class="botao-primario" href="agendador.html" target="_blank" rel="noopener" hidden>Pré-agendamento ↗</a>
+            </div>
+        </div>
+        <div id="agendaHojeConteudo"></div>
+    </section>
+
+    <section id="secao-dashboard" class="secao">
 
         <div class="dashboard-cabecalho">
             <div>
@@ -295,6 +356,26 @@
 
         <div id="indicadoresConteudo" class="dashboard-grid"></div>
 
+    </section>
+
+    <section id="secao-tempos" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>Tempos de atendimento</h2>
+                <p>TMA, TMS, TME e TMR por mês, por técnico e por assunto — respeita o Filtro Global</p>
+            </div>
+        </div>
+        <div id="temposConteudo" class="dashboard-grid"></div>
+    </section>
+
+    <section id="secao-gestao-cop" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>Gestão COP</h2>
+                <p>Produção e tempo de resposta do Controle de Operações</p>
+            </div>
+        </div>
+        <div id="gestaoCopConteudo" class="dashboard-grid"></div>
     </section>
 
     <section id="secao-terceiras" class="secao">
@@ -924,6 +1005,7 @@
 <script src="js/engine/bairroengine.js"></script>
 <script src="js/engine/assuntoengine.js"></script>
 <script src="js/engine/regiaoatuacaoengine.js"></script>
+<script src="js/engine/producaoengine.js"></script>
 
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
@@ -945,6 +1027,9 @@
 <script src="js/ui/dashboard.js"></script>
 <script src="js/ui/indicadores.js"></script>
 <script src="js/ui/alertas.js"></script>
+<script src="js/ui/escalahoje.js"></script>
+<script src="js/ui/agendahoje.js"></script>
+<script src="js/ui/inicio.js"></script>
 <script src="js/ui/ordens.js"></script>
 <script src="js/ui/configuracoes.js"></script>
 <script src="js/ui/filtroglobal.js"></script><script src="js/ui/assuntosincluidoscancelamento.js"></script>

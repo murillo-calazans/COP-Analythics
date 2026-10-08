@@ -48,7 +48,7 @@ async function sair() {
 async function carregarUsuarioAtual(sessao) {
     const { data, error } = await supabaseClient
         .from("perfis")
-        .select("papel, setor")
+        .select("*") // "*" e não "papel, setor, nome": "nome" só existe depois do patch-15
         .eq("id", sessao.user.id)
         .maybeSingle();
 
@@ -63,8 +63,20 @@ async function carregarUsuarioAtual(sessao) {
         id: sessao.user.id,
         email: sessao.user.email,
         papel: data.papel,
-        setor: data.setor
+        setor: data.setor,
+        nome: data.nome?.trim() || nomeDoEmail(sessao.user.email)
     };
+}
+
+/** "murillo.calazans@avanca.com.br" -> "Murillo Calazans" (quando o perfil não tem nome). */
+function nomeDoEmail(email) {
+    return String(email ?? "").split("@")[0].split(/[._-]+/).filter(Boolean)
+        .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(" ");
+}
+
+/** Primeiro nome, pra saudação. */
+function primeiroNomeUsuario() {
+    return (APP.usuario?.nome ?? "").split(/\s+/)[0] || "";
 }
 
 function ehAdmin() {
