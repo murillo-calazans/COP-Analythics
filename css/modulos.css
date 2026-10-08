@@ -1090,7 +1090,8 @@ html[data-tema="dark"] .terceiras-status.aberto{ background: rgba(245, 158, 11, 
 .situacao-pag-improdutiva,
 .situacao-pag-nao_paga{ background: #F1F5F9; color: #475569; }
 .situacao-pag-sem_preco,
-.situacao-pag-diag_pendente{ background: #FEF3C7; color: #92400E; }
+.situacao-pag-diag_pendente,
+.situacao-pag-cat_pendente{ background: #FEF3C7; color: #92400E; }
 
 .terceiras-qualidade-linhas{
 
@@ -1120,5 +1121,56 @@ html[data-tema="dark"] .terceiras-status.aberto{ background: rgba(245, 158, 11, 
     font-style: normal;
     text-align: right;
     color: var(--cor-texto-suave);
+
+}
+
+.terceiras-lpu-assunto{
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+
+}
+
+.terceiras-dividir{
+
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+
+    border: 1px solid var(--cor-borda);
+    background: transparent;
+    color: var(--cor-texto-suave);
+
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+
+}
+
+.terceiras-dividir:hover{
+
+    border-color: var(--cor-primaria);
+    color: var(--cor-primaria);
+
+}
+
+.terceiras-lpu-dividido td{
+
+    border-bottom-style: dashed;
+
+}
+
+.terceiras-lpu-categoria td:first-child{
+
+    padding-left: 28px;
+    color: var(--cor-texto-suave);
+
+}
+
+#tabelaDiagnosticosLpu td:last-child select{
+
+    min-width: 120px;
 
 }

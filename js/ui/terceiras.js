@@ -28,7 +28,8 @@ const ROTULOS_SITUACAO = {
     improdutiva: "Improdutiva",
     nao_paga: "Não paga (LPU = 0)",
     sem_preco: "Sem preço na LPU",
-    diag_pendente: "Diagnóstico sem classificação"
+    diag_pendente: "Diagnóstico sem classificação",
+    cat_pendente: "Diagnóstico sem categoria (Externa/Interna)"
 };
 
 function moeda(valor) {
@@ -181,7 +182,7 @@ async function renderizarTerceirasPainel() {
                 </button>`).join("")}
         </div>
 
-        ${pend.assuntos.length || pend.diagnosticos.length ? `
+        ${pend.assuntos.length || pend.diagnosticos.length || pend.semCategoria.length ? `
             <div class="grafico-card terceiras-pendencias">
                 <div class="grafico-cabecalho">
                     <div>
@@ -202,6 +203,12 @@ async function renderizarTerceirasPainel() {
                             <h4>Diagnóstico sem classificação</h4>
                             <ul>${pend.diagnosticos.slice(0, 10).map(p => `<li>${escaparHtml(p.diagnostico)} <span class="admin-dica">· ${p.quantidade} OS</span></li>`).join("")}</ul>
                             ${pend.diagnosticos.length > 10 ? `<p class="admin-dica">e mais ${pend.diagnosticos.length - 10}.</p>` : ""}
+                        </div>` : ""}
+                    ${pend.semCategoria.length ? `
+                        <div>
+                            <h4>Diagnóstico sem categoria (Externa/Interna)</h4>
+                            <ul>${pend.semCategoria.slice(0, 10).map(p => `<li>${escaparHtml(p.diagnostico)} <span class="admin-dica">· ${p.quantidade} OS</span></li>`).join("")}</ul>
+                            ${pend.semCategoria.length > 10 ? `<p class="admin-dica">e mais ${pend.semCategoria.length - 10}.</p>` : ""}
                         </div>` : ""}
                 </div>
             </div>` : ""}
@@ -257,7 +264,7 @@ async function renderizarTerceirasFechamento() {
     const pendentes = resumo.semPreco + resumo.diagPendente;
     const podeFechar = podeEditarOperacao();
 
-    const filtros = { todas: () => true, pagas: i => i.situacao === "paga", nao_pagas: i => i.situacao === "improdutiva" || i.situacao === "nao_paga", pendentes: i => i.situacao === "sem_preco" || i.situacao === "diag_pendente" };
+    const filtros = { todas: () => true, pagas: i => i.situacao === "paga", nao_pagas: i => i.situacao === "improdutiva" || i.situacao === "nao_paga", pendentes: i => ["sem_preco", "diag_pendente", "cat_pendente"].includes(i.situacao) };
     const visiveis = itens.filter(filtros[terceirasFiltroSituacao] ?? filtros.todas);
 
     container.innerHTML = `
@@ -317,7 +324,7 @@ async function renderizarTerceirasFechamento() {
                             <td>${escaparHtml(i.tecnico ?? "")}</td>
                             <td>${escaparHtml(i.cidade ?? "")}</td>
                             <td>${escaparHtml(i.assunto ?? "")}</td>
-                            <td>${escaparHtml(i.diagnostico ?? "")}</td>
+                            <td>${escaparHtml(i.diagnostico ?? "")}${i.categoria ? ` <span class="escala-tag">${TerceirasEngine.nomeCategoria(i.categoria)}</span>` : ""}</td>
                             <td>${chipSituacao(i.situacao)}</td>
                             <td class="num">${i.valor ? moeda(i.valor) : "—"}</td>
                         </tr>`).join("")}
@@ -380,9 +387,10 @@ async function reabrirMesTerceira(mes, terceira) {
 }
 
 function baixarCsvFechamento(mes, terceira, itens) {
-    const linhas = [["OS", "Fechada em", "Técnico", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Diagnóstico", "Situação", "Valor"]];
+    const linhas = [["OS", "Fechada em", "Técnico", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Diagnóstico", "Categoria", "Situação", "Valor"]];
     for (const i of itens) {
         linhas.push([i.os, new Date(i.data).toLocaleDateString("pt-BR"), i.tecnico, i.cliente, i.login, i.cidade, i.bairro, i.assunto, i.diagnostico,
+            i.categoria ? TerceirasEngine.nomeCategoria(i.categoria) : "",
             ROTULOS_SITUACAO[i.situacao] ?? i.situacao, (i.valor || 0).toFixed(2).replace(".", ",")]);
     }
     const csv = "﻿" + linhas.map(l => l.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
@@ -425,7 +433,7 @@ function imprimirFechamento(mes, terceira, itens, resumo, fechado) {
         <tfoot><tr><td>Total</td><td class="num">${resumo.pagas}</td><td></td><td class="num">${moeda(resumo.total)}</td></tr></tfoot></table>
         <h2>OS pagas (${pagas.length})</h2>
         <table><thead><tr><th>OS</th><th>Data</th><th>Técnico</th><th>Cidade</th><th>Assunto</th><th class="num">Valor</th></tr></thead>
-        <tbody>${pagas.map(i => `<tr><td>${escaparHtml(String(i.os))}</td><td>${new Date(i.data).toLocaleDateString("pt-BR")}</td><td>${escaparHtml(i.tecnico ?? "")}</td><td>${escaparHtml(i.cidade ?? "")}</td><td>${escaparHtml(i.assunto ?? "")}</td><td class="num">${moeda(i.valor)}</td></tr>`).join("")}</tbody></table>
+        <tbody>${pagas.map(i => `<tr><td>${escaparHtml(String(i.os))}</td><td>${new Date(i.data).toLocaleDateString("pt-BR")}</td><td>${escaparHtml(i.tecnico ?? "")}</td><td>${escaparHtml(i.cidade ?? "")}</td><td>${escaparHtml(i.assunto ?? "")}${i.categoria ? ` · ${TerceirasEngine.nomeCategoria(i.categoria)}` : ""}</td><td class="num">${moeda(i.valor)}</td></tr>`).join("")}</tbody></table>
         <div class="assinatura"><div>Controle de Operações (COP)</div><div>${escaparHtml(nome)}</div></div>
         <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>
         </body></html>`;
@@ -443,6 +451,37 @@ function lerNumeroLpu(valor) {
     if (texto === "") return undefined;
     const numero = Number(texto.includes(",") ? texto.replace(/\./g, "").replace(",", ".") : texto);
     return Number.isFinite(numero) ? numero : undefined;
+}
+
+/** Chave já usada no rascunho pra esse texto (ignorando acento/maiúscula), ou o próprio texto. */
+function chaveExistente(objeto, texto) {
+    return Object.keys(objeto).find(k => normalizarTexto(k) === normalizarTexto(texto)) ?? texto;
+}
+
+/** Linha da LPU no rascunho, criando se precisar. */
+function entradaRascunho(assunto) {
+    const chave = chaveExistente(terceirasRascunho.lpu, assunto);
+    terceirasRascunho.lpu[chave] ??= {};
+    return terceirasRascunho.lpu[chave];
+}
+
+function definirPrecoRascunho(assunto, terceira, categoria, valor) {
+    const entrada = entradaRascunho(assunto);
+    const alvo = categoria ? ((entrada.porCategoria ??= {})[categoria] ??= {}) : entrada;
+    if (valor === undefined) delete alvo[terceira];
+    else alvo[terceira] = valor;
+}
+
+/** Junta { produtivo, categoria } no diagnóstico do rascunho; tudo vazio apaga a linha. */
+function definirDiagnosticoRascunho(diagnostico, mudanca) {
+    const chave = chaveExistente(terceirasRascunho.diagnosticos, diagnostico);
+    const novo = { ...TerceirasEngine.infoDiagnostico(terceirasRascunho, diagnostico), ...mudanca };
+    if (novo.produtivo === undefined && !novo.categoria) delete terceirasRascunho.diagnosticos[chave];
+    else terceirasRascunho.diagnosticos[chave] = { produtivo: novo.produtivo ?? null, categoria: novo.categoria ?? null };
+}
+
+function textoPreco(valor) {
+    return valor === undefined ? "" : String(valor).replace(".", ",");
 }
 
 async function renderizarTerceirasLpu() {
@@ -470,22 +509,80 @@ async function renderizarTerceirasLpu() {
     }
     const diagnosticos = new Map(catalogo.diagnosticos.map(d => [normalizarTexto(d.diagnostico), d]));
     for (const chave of Object.keys(terceirasRascunho.diagnosticos)) {
-        if (!diagnosticos.has(normalizarTexto(chave))) diagnosticos.set(normalizarTexto(chave), { diagnostico: chave, total: 0 });
+        if (!diagnosticos.has(normalizarTexto(chave))) diagnosticos.set(normalizarTexto(chave), { diagnostico: chave, total: 0, assuntos: new Set() });
     }
 
-    const precoRascunho = (assunto, terceira) => {
-        const v = TerceirasEngine.precoLpu(terceirasRascunho, assunto, terceira);
-        return v === undefined ? "" : String(v).replace(".", ",");
-    };
-    const produtivoRascunho = d => {
-        const v = TerceirasEngine.diagnosticoProdutivo(terceirasRascunho, d);
-        return v === true ? "sim" : v === false ? "nao" : "";
-    };
-    const semPreco = [...assuntos.values()].filter(a => TERCEIRAS.some(t => (a.porTerceira[t.id] ?? 0) > 0 && precoRascunho(a.assunto, t.id) === "")).length;
-    const semClassificacao = [...diagnosticos.values()].filter(d => produtivoRascunho(d.diagnostico) === "").length;
+    const assuntosDivididos = new Set([...assuntos.keys()].filter(chave => TerceirasEngine.assuntoDividido(terceirasRascunho, chave)));
+    const precisaCategoria = d => [...(d.assuntos ?? [])].some(a => assuntosDivididos.has(a));
+
+    const faltaPreco = (a, t, categoria = null) =>
+        (a.porTerceira[t.id] ?? 0) > 0 && TerceirasEngine.precoLpu(terceirasRascunho, a.assunto, t.id, categoria) === undefined;
+    const semPreco = [...assuntos.values()].filter(a => {
+        const dividido = assuntosDivididos.has(normalizarTexto(a.assunto));
+        return TERCEIRAS.some(t => dividido ? CATEGORIAS_PRECO.some(c => faltaPreco(a, t, c.id)) : faltaPreco(a, t));
+    }).length;
+    const semClassificacao = [...diagnosticos.values()].filter(d => TerceirasEngine.diagnosticoProdutivo(terceirasRascunho, d.diagnostico) === undefined).length;
+    const semCategoria = [...diagnosticos.values()].filter(d => {
+        const info = TerceirasEngine.infoDiagnostico(terceirasRascunho, d.diagnostico);
+        return precisaCategoria(d) && info.produtivo !== false && !info.categoria;
+    }).length;
+
     const atualizado = terceirasConfig.atualizado_em
         ? `Última alteração em ${new Date(terceirasConfig.atualizado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${terceirasConfig.atualizado_por ? ` por ${escaparHtml(terceirasConfig.atualizado_por)}` : ""}.`
         : "Ainda não salva.";
+
+    const inputPreco = (a, t, categoria = null) => {
+        const valor = textoPreco(TerceirasEngine.precoLpu(terceirasRascunho, a.assunto, t.id, categoria));
+        const falta = faltaPreco(a, t, categoria);
+        return `<td class="num"><input type="text" inputmode="decimal" class="${falta ? "falta" : ""}" data-lpu-assunto="${escaparHtml(a.assunto)}" data-lpu-terceira="${t.id}"${categoria ? ` data-lpu-categoria="${categoria}"` : ""} value="${escaparHtml(valor)}" placeholder="${falta ? "sem preço" : "—"}" title="${a.porTerceira[t.id] ?? 0} OS da ${t.nome}"${editavel ? "" : " disabled"}></td>`;
+    };
+
+    const linhasAssunto = [...assuntos.values()].map(a => {
+        const busca = escaparHtml(normalizarTexto(a.assunto));
+        const dividido = assuntosDivididos.has(normalizarTexto(a.assunto));
+        const botao = editavel
+            ? `<button type="button" class="terceiras-dividir" data-dividir="${escaparHtml(a.assunto)}" title="${dividido ? "Voltar a um preço só pra esse assunto" : "Preço diferente para verificação Externa e Interna (pela categoria do diagnóstico)"}">${dividido ? "Preço único" : "Externa / Interna"}</button>`
+            : "";
+        const principal = `
+            <tr data-busca="${busca}" class="${dividido ? "terceiras-lpu-dividido" : ""}">
+                <td><div class="terceiras-lpu-assunto"><span>${escaparHtml(a.assunto)}</span>${botao}</div></td>
+                <td class="num">${a.total || "—"}</td>
+                ${dividido
+                    ? `<td colspan="${TERCEIRAS.length}" class="admin-dica">Preço pela categoria do diagnóstico ↓</td>`
+                    : TERCEIRAS.map(t => inputPreco(a, t)).join("")}
+            </tr>`;
+        if (!dividido) return principal;
+        return principal + CATEGORIAS_PRECO.map(c => `
+            <tr data-busca="${busca}" class="terceiras-lpu-categoria">
+                <td>↳ Verificação ${c.nome.toLowerCase()}</td>
+                <td></td>
+                ${TERCEIRAS.map(t => inputPreco(a, t, c.id)).join("")}
+            </tr>`).join("");
+    }).join("");
+
+    const linhasDiagnostico = [...diagnosticos.values()].map(d => {
+        const info = TerceirasEngine.infoDiagnostico(terceirasRascunho, d.diagnostico);
+        const produtivo = info.produtivo === true ? "sim" : info.produtivo === false ? "nao" : "";
+        const faltaCategoria = precisaCategoria(d) && info.produtivo !== false && !info.categoria;
+        return `
+            <tr data-busca="${escaparHtml(normalizarTexto(d.diagnostico))}">
+                <td>${escaparHtml(d.diagnostico)}</td>
+                <td class="num">${d.total || "—"}</td>
+                <td>
+                    <select data-diag-produtivo="${escaparHtml(d.diagnostico)}" class="${produtivo === "" ? "falta" : ""}"${editavel ? "" : " disabled"}>
+                        <option value=""${produtivo === "" ? " selected" : ""}>— sem classificação</option>
+                        <option value="sim"${produtivo === "sim" ? " selected" : ""}>Sim, produtivo (paga)</option>
+                        <option value="nao"${produtivo === "nao" ? " selected" : ""}>Não, improdutivo</option>
+                    </select>
+                </td>
+                <td>
+                    <select data-diag-categoria="${escaparHtml(d.diagnostico)}" class="${faltaCategoria ? "falta" : ""}" title="${precisaCategoria(d) ? "Aparece em assunto com preço Externa/Interna" : "Só usada nos assuntos com preço Externa/Interna"}"${editavel ? "" : " disabled"}>
+                        <option value="">—</option>
+                        ${CATEGORIAS_PRECO.map(c => `<option value="${c.id}"${info.categoria === c.id ? " selected" : ""}>${c.nome}</option>`).join("")}
+                    </select>
+                </td>
+            </tr>`;
+    }).join("");
 
     container.innerHTML = `
         <div class="terceiras-barra">
@@ -499,8 +596,8 @@ async function renderizarTerceirasLpu() {
         </div>
         <p class="admin-dica terceiras-legenda-lpu">
             Valor pago por OS fechada e produtiva. <strong>Em branco</strong> = sem preço (fica como pendência e não paga);
-            <strong>0</strong> = não paga de propósito. ${atualizado}
-            ${editavel ? "" : " Você está vendo em modo leitura."}
+            <strong>0</strong> = não paga de propósito. <strong>Externa / Interna</strong> divide o assunto: o preço passa a sair da categoria do diagnóstico.
+            ${atualizado}${editavel ? "" : " Você está vendo em modo leitura."}
         </p>
 
         <div class="grafico-card">
@@ -513,18 +610,7 @@ async function renderizarTerceirasLpu() {
             <div class="tabela-scroll">
                 <table class="tabela-alertas terceiras-tabela terceiras-lpu" id="tabelaLpu">
                     <thead><tr><th>Assunto</th><th class="num">OS</th>${TERCEIRAS.map(t => `<th class="num">${t.nome} (R$)</th>`).join("")}</tr></thead>
-                    <tbody>
-                        ${[...assuntos.values()].map(a => `
-                            <tr data-busca="${escaparHtml(normalizarTexto(a.assunto))}">
-                                <td>${escaparHtml(a.assunto)}</td>
-                                <td class="num">${a.total || "—"}</td>
-                                ${TERCEIRAS.map(t => {
-                                    const valor = precoRascunho(a.assunto, t.id);
-                                    const falta = valor === "" && (a.porTerceira[t.id] ?? 0) > 0;
-                                    return `<td class="num"><input type="text" inputmode="decimal" class="${falta ? "falta" : ""}" data-lpu-assunto="${escaparHtml(a.assunto)}" data-lpu-terceira="${t.id}" value="${escaparHtml(valor)}" placeholder="${falta ? "sem preço" : "—"}" title="${a.porTerceira[t.id] ?? 0} OS da ${t.nome}"${editavel ? "" : " disabled"}></td>`;
-                                }).join("")}
-                            </tr>`).join("")}
-                    </tbody>
+                    <tbody>${linhasAssunto}</tbody>
                 </table>
             </div>
         </div>
@@ -532,31 +618,18 @@ async function renderizarTerceirasLpu() {
         <div class="grafico-card">
             <div class="grafico-cabecalho">
                 <div>
-                    <div class="grafico-titulo">Diagnósticos — o fechamento é produtivo?</div>
-                    <div class="grafico-subtitulo">Só fechamento produtivo é pago · ${semClassificacao ? `<span class="terceiras-pendente">${semClassificacao} sem classificação</span>` : "todos classificados"}</div>
+                    <div class="grafico-titulo">Diagnósticos — produtivo e categoria</div>
+                    <div class="grafico-subtitulo">
+                        Só fechamento produtivo é pago · ${semClassificacao ? `<span class="terceiras-pendente">${semClassificacao} sem classificação</span>` : "todos classificados"}
+                        ${semCategoria ? ` · <span class="terceiras-pendente">${semCategoria} sem categoria em assunto Externa/Interna</span>` : ""}
+                    </div>
                 </div>
                 ${editavel ? '<button type="button" class="botao-secundario" id="btnPreencherDiagnosticos" title="Usa a lista de Configurações > Diagnósticos Improdutivos para classificar os que estão em branco">Preencher pelos improdutivos</button>' : ""}
             </div>
             <div class="tabela-scroll">
                 <table class="tabela-alertas terceiras-tabela" id="tabelaDiagnosticosLpu">
-                    <thead><tr><th>Diagnóstico</th><th class="num">OS</th><th>Produtivo?</th></tr></thead>
-                    <tbody>
-                        ${[...diagnosticos.values()].map(d => {
-                            const v = produtivoRascunho(d.diagnostico);
-                            return `
-                            <tr data-busca="${escaparHtml(normalizarTexto(d.diagnostico))}">
-                                <td>${escaparHtml(d.diagnostico)}</td>
-                                <td class="num">${d.total || "—"}</td>
-                                <td>
-                                    <select data-diag="${escaparHtml(d.diagnostico)}" class="${v === "" ? "falta" : ""}"${editavel ? "" : " disabled"}>
-                                        <option value=""${v === "" ? " selected" : ""}>— sem classificação</option>
-                                        <option value="sim"${v === "sim" ? " selected" : ""}>Sim, produtivo (paga)</option>
-                                        <option value="nao"${v === "nao" ? " selected" : ""}>Não, improdutivo</option>
-                                    </select>
-                                </td>
-                            </tr>`;
-                        }).join("")}
-                    </tbody>
+                    <thead><tr><th>Diagnóstico</th><th class="num">OS</th><th>Produtivo?</th><th>Categoria (Externa/Interna)</th></tr></thead>
+                    <tbody>${linhasDiagnostico}</tbody>
                 </table>
             </div>
         </div>
@@ -569,23 +642,42 @@ async function renderizarTerceirasLpu() {
     };
 
     container.querySelectorAll("[data-lpu-assunto]").forEach(input => input.addEventListener("change", () => {
-        const assunto = input.dataset.lpuAssunto;
-        const chave = Object.keys(terceirasRascunho.lpu).find(k => normalizarTexto(k) === normalizarTexto(assunto)) ?? assunto;
         const valor = lerNumeroLpu(input.value);
-        terceirasRascunho.lpu[chave] ??= {};
-        if (valor === undefined) delete terceirasRascunho.lpu[chave][input.dataset.lpuTerceira];
-        else terceirasRascunho.lpu[chave][input.dataset.lpuTerceira] = valor;
-        input.value = valor === undefined ? "" : String(valor).replace(".", ",");
+        definirPrecoRascunho(input.dataset.lpuAssunto, input.dataset.lpuTerceira, input.dataset.lpuCategoria ?? null, valor);
+        input.value = textoPreco(valor);
         input.classList.toggle("falta", valor === undefined && input.placeholder === "sem preço");
         marcarAlterado();
     }));
 
-    container.querySelectorAll("[data-diag]").forEach(select => select.addEventListener("change", () => {
-        const diag = select.dataset.diag;
-        const chave = Object.keys(terceirasRascunho.diagnosticos).find(k => normalizarTexto(k) === normalizarTexto(diag)) ?? diag;
-        if (select.value === "") delete terceirasRascunho.diagnosticos[chave];
-        else terceirasRascunho.diagnosticos[chave] = select.value === "sim";
+    container.querySelectorAll("[data-dividir]").forEach(botao => botao.addEventListener("click", () => {
+        const entrada = entradaRascunho(botao.dataset.dividir);
+        if (entrada.dividido) {
+            if (!confirm("Voltar a um preço só para esse assunto? Os preços de Externa e Interna serão apagados.")) return;
+            delete entrada.dividido;
+            delete entrada.porCategoria;
+        } else {
+            // Começa as duas categorias com o preço único que já existia.
+            entrada.porCategoria = {};
+            for (const c of CATEGORIAS_PRECO) {
+                entrada.porCategoria[c.id] = {};
+                for (const t of TERCEIRAS) if (entrada[t.id] !== undefined) entrada.porCategoria[c.id][t.id] = entrada[t.id];
+            }
+            for (const t of TERCEIRAS) delete entrada[t.id];
+            entrada.dividido = true;
+        }
+        terceirasRascunhoAlterado = true;
+        renderizarTerceirasLpu();
+    }));
+
+    container.querySelectorAll("[data-diag-produtivo]").forEach(select => select.addEventListener("change", () => {
+        definirDiagnosticoRascunho(select.dataset.diagProdutivo, { produtivo: select.value === "" ? undefined : select.value === "sim" });
         select.classList.toggle("falta", select.value === "");
+        marcarAlterado();
+    }));
+
+    container.querySelectorAll("[data-diag-categoria]").forEach(select => select.addEventListener("change", () => {
+        definirDiagnosticoRascunho(select.dataset.diagCategoria, { categoria: select.value || null });
+        select.classList.remove("falta");
         marcarAlterado();
     }));
 
@@ -605,8 +697,8 @@ async function renderizarTerceirasLpu() {
         }
         let preenchidos = 0;
         for (const d of diagnosticos.values()) {
-            if (produtivoRascunho(d.diagnostico) !== "") continue;
-            terceirasRascunho.diagnosticos[d.diagnostico] = !improdutivos.has(normalizarTexto(d.diagnostico));
+            if (TerceirasEngine.diagnosticoProdutivo(terceirasRascunho, d.diagnostico) !== undefined) continue;
+            definirDiagnosticoRascunho(d.diagnostico, { produtivo: !improdutivos.has(normalizarTexto(d.diagnostico)) });
             preenchidos++;
         }
         terceirasRascunhoAlterado = preenchidos > 0 || terceirasRascunhoAlterado;
@@ -619,9 +711,9 @@ async function salvarLpu() {
     const botao = document.getElementById("btnSalvarLpu");
     if (botao) { botao.disabled = true; botao.textContent = "Salvando..."; }
 
-    // Tira assuntos que ficaram sem nenhum preço.
-    for (const [chave, precos] of Object.entries(terceirasRascunho.lpu)) {
-        if (!precos || Object.keys(precos).length === 0) delete terceirasRascunho.lpu[chave];
+    // Tira assuntos que ficaram sem nenhum preço (dividido vazio continua: é escolha de formato).
+    for (const [chave, entrada] of Object.entries(terceirasRascunho.lpu)) {
+        if (!entrada || (!entrada.dividido && Object.keys(entrada).length === 0)) delete terceirasRascunho.lpu[chave];
     }
 
     const registro = {
@@ -643,14 +735,20 @@ async function salvarLpu() {
 }
 
 function exportarLpu(assuntos, diagnosticos) {
-    const lpu = [["ASSUNTO", "QTD OS (ref.)", ...TERCEIRAS.map(t => t.id)]];
+    const lpu = [["ASSUNTO", "CATEGORIA", "QTD OS (ref.)", ...TERCEIRAS.map(t => t.id)]];
     for (const a of assuntos) {
-        lpu.push([a.assunto, a.total, ...TERCEIRAS.map(t => TerceirasEngine.precoLpu(terceirasRascunho, a.assunto, t.id) ?? "")]);
+        if (TerceirasEngine.assuntoDividido(terceirasRascunho, a.assunto)) {
+            for (const c of CATEGORIAS_PRECO) {
+                lpu.push([a.assunto, c.id, a.total, ...TERCEIRAS.map(t => TerceirasEngine.precoLpu(terceirasRascunho, a.assunto, t.id, c.id) ?? "")]);
+            }
+        } else {
+            lpu.push([a.assunto, "", a.total, ...TERCEIRAS.map(t => TerceirasEngine.precoLpu(terceirasRascunho, a.assunto, t.id) ?? "")]);
+        }
     }
-    const diags = [["DIAGNOSTICO", "QTD OS (ref.)", "PRODUTIVO (SIM/NÃO)"]];
+    const diags = [["DIAGNOSTICO", "QTD OS (ref.)", "PRODUTIVO (SIM/NÃO)", "CATEGORIA (EXTERNA/INTERNA)"]];
     for (const d of diagnosticos) {
-        const v = TerceirasEngine.diagnosticoProdutivo(terceirasRascunho, d.diagnostico);
-        diags.push([d.diagnostico, d.total, v === true ? "SIM" : v === false ? "NÃO" : ""]);
+        const info = TerceirasEngine.infoDiagnostico(terceirasRascunho, d.diagnostico);
+        diags.push([d.diagnostico, d.total, info.produtivo === true ? "SIM" : info.produtivo === false ? "NÃO" : "", info.categoria ?? ""]);
     }
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lpu), "LPU");
@@ -662,13 +760,15 @@ function exportarLpu(assuntos, diagnosticos) {
  * Lê o Excel no formato do modelo (abas LPU e DIAGNOSTICOS) e joga no
  * rascunho — só grava no banco quando clicar em "Salvar alterações".
  * Coluna de terceirizada é achada pelo nome (AZUL, VELOZ, TECHNOMAIS);
- * célula vazia não apaga o preço que já existe.
+ * linha com CATEGORIA (EXTERNA/INTERNA) divide o assunto. Célula vazia
+ * não apaga o preço que já existe.
  */
 async function importarLpu(arquivo) {
     if (!arquivo) return;
     try {
         const wb = XLSX.read(await arquivo.arrayBuffer(), { type: "array" });
         const aba = nome => wb.SheetNames.find(n => normalizarTexto(n) === nome);
+        const categoriaDe = texto => CATEGORIAS_PRECO.find(c => normalizarTexto(texto ?? "").startsWith(c.id))?.id ?? null;
         let precos = 0, diags = 0;
 
         const abaLpu = aba("LPU");
@@ -676,16 +776,24 @@ async function importarLpu(arquivo) {
             const linhas = XLSX.utils.sheet_to_json(wb.Sheets[abaLpu], { header: 1, defval: "" });
             const cabecalho = (linhas[0] ?? []).map(c => normalizarTexto(c));
             const colAssunto = cabecalho.findIndex(c => c === "ASSUNTO");
+            const colCategoria = cabecalho.findIndex(c => c.startsWith("CATEGORIA"));
             const colunas = TERCEIRAS.map(t => ({ id: t.id, col: cabecalho.findIndex(c => t.sufixos.includes(c) || c === t.id) })).filter(c => c.col >= 0);
             for (const linha of linhas.slice(1)) {
                 const assunto = String(linha[colAssunto] ?? "").trim();
                 if (!assunto) continue;
+                const categoria = colCategoria >= 0 ? categoriaDe(linha[colCategoria]) : null;
+                if (categoria) {
+                    const entrada = entradaRascunho(assunto);
+                    if (!entrada.dividido) {
+                        for (const t of TERCEIRAS) delete entrada[t.id];
+                        entrada.dividido = true;
+                        entrada.porCategoria ??= {};
+                    }
+                }
                 for (const { id, col } of colunas) {
                     const valor = lerNumeroLpu(linha[col]);
                     if (valor === undefined) continue;
-                    const chave = Object.keys(terceirasRascunho.lpu).find(k => normalizarTexto(k) === normalizarTexto(assunto)) ?? assunto;
-                    terceirasRascunho.lpu[chave] ??= {};
-                    terceirasRascunho.lpu[chave][id] = valor;
+                    definirPrecoRascunho(assunto, id, categoria, valor);
                     precos++;
                 }
             }
@@ -697,12 +805,18 @@ async function importarLpu(arquivo) {
             const cabecalho = (linhas[0] ?? []).map(c => normalizarTexto(c));
             const colDiag = cabecalho.findIndex(c => c.startsWith("DIAGNOSTICO"));
             const colProd = cabecalho.findIndex(c => c.startsWith("PRODUTIVO"));
+            const colCategoria = cabecalho.findIndex(c => c.startsWith("CATEGORIA"));
             for (const linha of linhas.slice(1)) {
                 const diag = String(linha[colDiag] ?? "").trim();
-                const resposta = normalizarTexto(linha[colProd] ?? "");
-                if (!diag || !["SIM", "NAO", "S", "N"].includes(resposta)) continue;
-                const chave = Object.keys(terceirasRascunho.diagnosticos).find(k => normalizarTexto(k) === normalizarTexto(diag)) ?? diag;
-                terceirasRascunho.diagnosticos[chave] = resposta.startsWith("S");
+                if (!diag) continue;
+                const mudanca = {};
+                const resposta = colProd >= 0 ? normalizarTexto(linha[colProd] ?? "") : "";
+                if (["SIM", "S"].includes(resposta)) mudanca.produtivo = true;
+                if (["NAO", "N"].includes(resposta)) mudanca.produtivo = false;
+                const categoria = colCategoria >= 0 ? categoriaDe(linha[colCategoria]) : null;
+                if (categoria) mudanca.categoria = categoria;
+                if (Object.keys(mudanca).length === 0) continue;
+                definirDiagnosticoRascunho(diag, mudanca);
                 diags++;
             }
         }

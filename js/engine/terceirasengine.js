@@ -16,6 +16,15 @@
  *   LPU (terceiras_config.diagnosticos), compartilhada no banco.
  * - Valor = LPU[assunto][terceira]. Sem valor = "sem preço"
  *   (pendência, não paga); 0 = não paga de propósito.
+ * - Assunto "dividido" (ex.: LOS): o preço depende da CATEGORIA do
+ *   diagnóstico (verificação Externa ou Interna) —
+ *   LPU[assunto].porCategoria[categoria][terceira]. Diagnóstico sem
+ *   categoria num assunto dividido = pendência.
+ *
+ * Formato salvo (terceiras_config):
+ *   lpu          { "ASSUNTO": { AZUL: 60, ... } }                         preço único
+ *                { "ASSUNTO": { dividido: true, porCategoria: { EXTERNA: { AZUL: 90 }, INTERNA: {...} } } }
+ *   diagnosticos { "DIAG": { produtivo: true, categoria: "EXTERNA" } }   (true/false sozinho = formato antigo)
  * - Só fechamento produtivo é pago. Reagendamento não é fechamento,
  *   então nem entra.
  * - Retrabalho só é MOSTRADO (aba Qualidade), não desconta nada.
@@ -30,12 +39,18 @@ const TERCEIRAS = [
     { id: "TECHNOMAIS", nome: "Technomais", sufixos: ["TECHNOMAIS", "TECNHOMAIS"] }
 ];
 
+const CATEGORIAS_PRECO = [
+    { id: "EXTERNA", nome: "Externa" },
+    { id: "INTERNA", nome: "Interna" }
+];
+
 const SITUACAO_PAGAMENTO = {
     PAGA: "paga",
     IMPRODUTIVA: "improdutiva",
     SEM_PRECO: "sem_preco",
-    NAO_PAGA: "nao_paga",          // LPU = 0
-    DIAG_PENDENTE: "diag_pendente" // diagnóstico ainda não classificado na aba LPU
+    NAO_PAGA: "nao_paga",            // LPU = 0
+    DIAG_PENDENTE: "diag_pendente",  // diagnóstico ainda não classificado na aba LPU
+    CAT_PENDENTE: "cat_pendente"     // assunto dividido e o diagnóstico sem categoria (Externa/Interna)
 };
 
 const TerceirasEngine = {
@@ -63,24 +78,56 @@ const TerceirasEngine = {
         return AuditEngine.resolverReferencia(APP.referencias.diagnosticos, mov.diagnostico, CONFIG_BASE.diagnosticos.nome);
     },
 
-    /** Busca na LPU ignorando acento/maiúscula. undefined = sem preço. */
-    precoLpu(config, assunto, terceira) {
+    nomeCategoria(id) {
+        return CATEGORIAS_PRECO.find(c => c.id === id)?.nome ?? id;
+    },
+
+    /** Linha da LPU do assunto (ignorando acento/maiúscula), ou undefined. */
+    entradaLpu(config, assunto) {
         const alvo = normalizarTexto(assunto ?? "");
-        for (const [chave, precos] of Object.entries(config.lpu ?? {})) {
-            if (normalizarTexto(chave) !== alvo) continue;
-            const valor = precos?.[terceira];
-            return valor === null || valor === undefined || valor === "" ? undefined : Number(valor);
+        for (const [chave, entrada] of Object.entries(config.lpu ?? {})) {
+            if (normalizarTexto(chave) === alvo) return entrada;
         }
         return undefined;
     },
 
+    assuntoDividido(config, assunto) {
+        return this.entradaLpu(config, assunto)?.dividido === true;
+    },
+
+    /**
+     * Preço da terceirizada pro assunto. Em assunto dividido, depende da
+     * categoria (sem categoria = undefined). undefined = sem preço.
+     */
+    precoLpu(config, assunto, terceira, categoria = null) {
+        const entrada = this.entradaLpu(config, assunto);
+        if (!entrada) return undefined;
+        const valor = entrada.dividido === true
+            ? (categoria ? entrada.porCategoria?.[categoria]?.[terceira] : undefined)
+            : entrada[terceira];
+        return valor === null || valor === undefined || valor === "" ? undefined : Number(valor);
+    },
+
+    /**
+     * { produtivo: true|false|undefined, categoria: 'EXTERNA'|'INTERNA'|null }.
+     * Aceita o formato antigo (só true/false).
+     */
+    infoDiagnostico(config, diagnostico) {
+        const alvo = normalizarTexto(diagnostico ?? "");
+        for (const [chave, valor] of Object.entries(config.diagnosticos ?? {})) {
+            if (normalizarTexto(chave) !== alvo) continue;
+            if (typeof valor === "boolean") return { produtivo: valor, categoria: null };
+            return {
+                produtivo: valor?.produtivo === true ? true : valor?.produtivo === false ? false : undefined,
+                categoria: valor?.categoria ?? null
+            };
+        }
+        return { produtivo: undefined, categoria: null };
+    },
+
     /** true = produtivo, false = improdutivo, undefined = não classificado. */
     diagnosticoProdutivo(config, diagnostico) {
-        const alvo = normalizarTexto(diagnostico ?? "");
-        for (const [chave, produtivo] of Object.entries(config.diagnosticos ?? {})) {
-            if (normalizarTexto(chave) === alvo) return produtivo === true ? true : produtivo === false ? false : undefined;
-        }
-        return undefined;
+        return this.infoDiagnostico(config, diagnostico).produtivo;
     },
 
     /**
@@ -101,12 +148,14 @@ const TerceirasEngine = {
             if (!terceira) continue;
 
             const diagnostico = this.nomeDiagnostico(info.ultimoFechamento ?? efetivo);
-            const produtivo = this.diagnosticoProdutivo(config, diagnostico);
-            const preco = this.precoLpu(config, ordem.assunto, terceira);
+            const { produtivo, categoria } = this.infoDiagnostico(config, diagnostico);
+            const dividido = this.assuntoDividido(config, ordem.assunto);
+            const preco = this.precoLpu(config, ordem.assunto, terceira, categoria);
 
             let situacao;
             if (produtivo === undefined) situacao = SITUACAO_PAGAMENTO.DIAG_PENDENTE;
             else if (produtivo === false) situacao = SITUACAO_PAGAMENTO.IMPRODUTIVA;
+            else if (dividido && !categoria) situacao = SITUACAO_PAGAMENTO.CAT_PENDENTE;
             else if (preco === undefined) situacao = SITUACAO_PAGAMENTO.SEM_PRECO;
             else if (preco === 0) situacao = SITUACAO_PAGAMENTO.NAO_PAGA;
             else situacao = SITUACAO_PAGAMENTO.PAGA;
@@ -122,6 +171,7 @@ const TerceirasEngine = {
                 bairro: ordem.bairro,
                 assunto: ordem.assunto,
                 diagnostico,
+                categoria: dividido ? categoria : null, // só importa (e só aparece) em assunto dividido
                 situacao,
                 valor: situacao === SITUACAO_PAGAMENTO.PAGA ? preco : 0,
                 precoLpu: preco ?? null
@@ -137,7 +187,8 @@ const TerceirasEngine = {
         const porAssunto = new Map();
 
         for (const item of itens.filter(i => i.situacao === SITUACAO_PAGAMENTO.PAGA)) {
-            const chave = item.assunto ?? "Sem assunto";
+            // Assunto dividido vira uma linha por categoria ("LOS · Externa"), cada uma com o seu preço.
+            const chave = `${item.assunto ?? "Sem assunto"}${item.categoria ? ` · ${this.nomeCategoria(item.categoria)}` : ""}`;
             const atual = porAssunto.get(chave) ?? { assunto: chave, quantidade: 0, valorUnitario: item.valor, subtotal: 0 };
             atual.quantidade++;
             atual.subtotal += item.valor;
@@ -150,24 +201,31 @@ const TerceirasEngine = {
             improdutivas: contar(SITUACAO_PAGAMENTO.IMPRODUTIVA),
             naoPagas: contar(SITUACAO_PAGAMENTO.NAO_PAGA),
             semPreco: contar(SITUACAO_PAGAMENTO.SEM_PRECO),
-            diagPendente: contar(SITUACAO_PAGAMENTO.DIAG_PENDENTE),
+            // Pendência = tudo que fica fora do pagamento por falta de configuração.
+            diagPendente: contar(SITUACAO_PAGAMENTO.DIAG_PENDENTE) + contar(SITUACAO_PAGAMENTO.CAT_PENDENTE),
             total: itens.reduce((s, i) => s + (i.valor || 0), 0),
             porAssunto: [...porAssunto.values()].sort((a, b) => b.subtotal - a.subtotal)
         };
     },
 
-    /** Assuntos sem preço e diagnósticos sem classificação, com contagem. */
+    /** Assuntos sem preço, diagnósticos sem classificação e sem categoria, com contagem. */
     pendencias(itens) {
         const assuntos = new Map();
         const diagnosticos = new Map();
+        const semCategoria = new Map();
         for (const item of itens) {
             if (item.situacao === SITUACAO_PAGAMENTO.SEM_PRECO) {
-                const chave = `${item.assunto ?? "Sem assunto"}|${item.terceira}`;
+                const assunto = `${item.assunto ?? "Sem assunto"}${item.categoria ? ` · ${this.nomeCategoria(item.categoria)}` : ""}`;
+                const chave = `${assunto}|${item.terceira}`;
                 assuntos.set(chave, (assuntos.get(chave) ?? 0) + 1);
             }
             if (item.situacao === SITUACAO_PAGAMENTO.DIAG_PENDENTE) {
                 const chave = item.diagnostico ?? "Sem diagnóstico";
                 diagnosticos.set(chave, (diagnosticos.get(chave) ?? 0) + 1);
+            }
+            if (item.situacao === SITUACAO_PAGAMENTO.CAT_PENDENTE) {
+                const chave = item.diagnostico ?? "Sem diagnóstico";
+                semCategoria.set(chave, (semCategoria.get(chave) ?? 0) + 1);
             }
         }
         return {
@@ -176,6 +234,8 @@ const TerceirasEngine = {
                 return { assunto, terceira, quantidade };
             }).sort((a, b) => b.quantidade - a.quantidade),
             diagnosticos: [...diagnosticos].map(([diagnostico, quantidade]) => ({ diagnostico, quantidade }))
+                .sort((a, b) => b.quantidade - a.quantidade),
+            semCategoria: [...semCategoria].map(([diagnostico, quantidade]) => ({ diagnostico, quantidade }))
                 .sort((a, b) => b.quantidade - a.quantidade)
         };
     },
@@ -202,12 +262,15 @@ const TerceirasEngine = {
             assuntos.set(assunto, a);
 
             const diagnostico = this.nomeDiagnostico(info.ultimoFechamento ?? efetivo) ?? "Sem diagnóstico";
-            diagnosticos.set(diagnostico, (diagnosticos.get(diagnostico) ?? 0) + 1);
+            const d = diagnosticos.get(diagnostico) ?? { diagnostico, total: 0, assuntos: new Set() };
+            d.total++;
+            d.assuntos.add(normalizarTexto(assunto)); // pra saber se aparece em assunto dividido (precisa de categoria)
+            diagnosticos.set(diagnostico, d);
         }
 
         return {
             assuntos: [...assuntos.values()].sort((a, b) => b.total - a.total),
-            diagnosticos: [...diagnosticos].map(([diagnostico, total]) => ({ diagnostico, total })).sort((a, b) => b.total - a.total)
+            diagnosticos: [...diagnosticos.values()].sort((a, b) => b.total - a.total)
         };
     },
 
