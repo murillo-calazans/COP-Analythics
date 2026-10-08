@@ -140,6 +140,7 @@ async function inicializarDadosAutenticado() {
     }
 
     renderizarDashboard();
+    abrirSecaoDoEndereco();
 }
 
 function registrarEventos() {

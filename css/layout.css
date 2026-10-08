@@ -89,6 +89,12 @@ header{
 
 }
 
+.menu [hidden]{
+
+    display: none;
+
+}
+
 .menu button:hover,
 .menu a.menu-link:hover{
 

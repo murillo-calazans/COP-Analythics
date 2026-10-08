@@ -18,7 +18,7 @@
 
 </head>
 
-<body>
+<body data-modulo="ordens">
 
     <div id="telaLogin" class="tela-login">
         <div class="tela-login-card">
@@ -42,7 +42,8 @@
         </div>
     </div>
 
-    <header>
+    <!-- O botão do menu lateral (js/ui/menulateral.js) entra antes da logo. -->
+    <header data-menu-lateral-host>
 
         <div class="logo">
 
@@ -93,17 +94,7 @@
                 <span id="badgeAlertas" class="badge-alertas" hidden>0</span>
             </button>
 
-            <!-- Link comum (não é uma seção desta página): abre o agendador numa aba nova sem depender de script. -->
-            <a id="btnAgendador" class="menu-link" href="agendador.html" target="_blank" rel="noopener" title="Abre o pré-agendamento de técnicos numa nova aba">
-                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
-                Agendamento ↗
-            </a>
-
-            <!-- Link comum: abre a escala técnica numa aba nova. Login/papel próprios (mesma conta do COP). -->
-            <a id="btnEscala" class="menu-link" href="escala.html" target="_blank" rel="noopener" title="Abre a escala de técnicos numa nova aba">
-                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h3M13 14h3M8 18h3"/></svg>
-                Escala ↗
-            </a>
+            <!-- Agendador IA e Escala são páginas próprias, abertas pelo menu lateral. -->
 
         </nav>
 
@@ -276,6 +267,7 @@
 
             <div id="resultadosTecnicos"></div>
         </div>
+
         <div class="placeholder-card auditoria-card regiao-atuacao-card">
             <div class="dashboard-cabecalho">
                 <div>
@@ -303,6 +295,22 @@
 
         <div id="indicadoresConteudo" class="dashboard-grid"></div>
 
+    </section>
+
+    <section id="secao-terceiras" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>Gestão de Terceiras</h2>
+                <p>Produção e pagamento das terceirizadas (Azul, Veloz, Technomais).</p>
+            </div>
+        </div>
+        <div class="placeholder-card">
+            <h2>🚧 Em construção</h2>
+            <p>
+                Aqui vão ficar a produção de cada terceirizada (OS produtivas por assunto e setor),
+                o cálculo pela LPU e o relatório mensal de pagamento.
+            </p>
+        </div>
     </section>
 
     <section id="secao-auditoria-ia" class="secao">
@@ -929,6 +937,7 @@
 <script src="js/services/importador.js"></script>
 <script src="js/services/relatorios.js"></script>
 
+<script src="js/ui/menulateral.js"></script>
 <script src="js/ui/navegacao.js"></script>
 <script src="js/ui/login.js"></script>
 <script src="js/ui/tema.js"></script>

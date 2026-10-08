@@ -208,7 +208,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
 }
 </style>
 </head>
-<body>
+<body data-modulo="agendador">
 
 <div class="wrap">
 
@@ -227,7 +227,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
       <path d="M0 30H520M0 70H520M0 110H520M60 0V140M160 0V140M260 0V140M360 0V140M460 0V140"/>
     </g>
   </svg>
-  <div class="marca">
+  <div class="marca" data-menu-lateral-host="claro">
     <img class="marca-logo" id="logoCop" src="img/logo.png" alt="COP Analytics" onerror="this.remove()">
     <div>
       <span class="marca-tag">COP Analytics</span>
@@ -328,6 +328,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
     integrity="sha384-OUpie84zd1LdwNlK9uJJQRwab0BLqo3eKYKFh7hSVL58FSk7wPp2l0kfUMIIoaQd"
     crossorigin="anonymous"></script>
 <script src="js/config/supabase.js"></script>
+<script src="js/ui/menulateral.js"></script>
 <!-- Suba o ?v= a cada alteração do motor para o navegador não usar a versão antiga em cache. -->
 <script src="js/agendador/mapa-regioes-dados.js?v=1"></script>
 <script src="js/agendador/motor.js?v=33"></script>
