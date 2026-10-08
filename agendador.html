@@ -925,7 +925,20 @@ $('#btnPublicar').addEventListener('click', async () => {
   const dataIso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const dataBr = dataIso.split('-').reverse().join('/');
   const itens = [];
+  // Dados da rota (repetidos em cada parada): jornada, ocupação (mesma conta da barra "carga" da aba
+  // Rotas) e se a última OS termina depois do fim da jornada — a Agenda do dia usa pra barra e o filtro.
+  const daRota = r => {
+    const usado = r.paradas.reduce((s, p) => s + p.os.dur, 0);
+    const ultima = r.paradas[r.paradas.length - 1];
+    return {
+      jornada: r.tech.horario || null,
+      termino: r.termino || null,
+      cargaPct: r.cap ? Math.min(100, Math.round(usado / r.cap * 100)) : null,
+      passaJornada: !!(ultima && ultima.fimMin > r.fim)
+    };
+  };
   ultimo.plano.rotas.forEach(r => r.paradas.forEach((p, i) => itens.push({
+    ...daRota(r),
     tecnico: r.tech.nome, dupla: r.tech.dupla || null, setor: r.tech.setor, grupo: r.grupo, ordem: i + 1,
     chegada: p.chegada, saida: p.saida, os: p.os.id, cliente: p.os.cliente, login: p.os.login,
     cidade: p.os.cidade, bairro: p.os.bairro, assunto: p.os.assunto, prioridade: p.os.prioridade,

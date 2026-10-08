@@ -225,17 +225,26 @@
     </section>
 
     <section id="secao-agenda-hoje" class="secao">
-        <div class="dashboard-cabecalho">
+        <div class="escala-topo">
             <div>
                 <h2 id="agendaHojeTitulo">Agenda do dia</h2>
-                <p>Rotas e horários publicados pelo pré-agendamento.</p>
+                <p id="agendaHojeData"></p>
             </div>
-            <div class="dashboard-cabecalho-acoes">
-                <button type="button" id="btnAgendaDiaAnterior" class="botao-secundario" title="Dia anterior" aria-label="Dia anterior">◀</button>
-                <button type="button" id="btnAgendaHoje" class="botao-secundario">Hoje</button>
-                <button type="button" id="btnAgendaProximoDia" class="botao-secundario" title="Próximo dia" aria-label="Próximo dia">▶</button>
+            <div class="escala-topo-acoes">
+                <div class="escala-segmentado" role="group" aria-label="Escolher o dia">
+                    <button type="button" id="btnAgendaDiaAnterior" title="Dia anterior" aria-label="Dia anterior">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button type="button" id="btnAgendaHoje">Hoje</button>
+                    <button type="button" id="btnAgendaProximoDia" title="Próximo dia" aria-label="Próximo dia">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                </div>
                 <!-- Pré-agendamento numa guia nova; só admin/editor vê (js/ui/agendahoje.js). -->
-                <a id="btnAbrirPreAgendamento" class="botao-primario" href="agendador.html" target="_blank" rel="noopener" hidden>Pré-agendamento ↗</a>
+                <a id="btnAbrirPreAgendamento" class="escala-botao-editar" href="agendador.html" target="_blank" rel="noopener" hidden>
+                    Pré-agendamento
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
             </div>
         </div>
         <div id="agendaHojeConteudo"></div>

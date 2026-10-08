@@ -68,7 +68,8 @@
 
 /* ---------- Escala de hoje ---------- */
 
-#secao-escala-hoje{
+#secao-escala-hoje,
+#secao-agenda-hoje{
 
     --escala-azul: #3B82F6;
     --escala-verde: #16A34A;
@@ -80,7 +81,8 @@
 
 }
 
-html[data-tema="dark"] #secao-escala-hoje{
+html[data-tema="dark"] #secao-escala-hoje,
+html[data-tema="dark"] #secao-agenda-hoje{
 
     --escala-azul: #3B82F6;
     --escala-verde: #22C55E;
@@ -1172,5 +1174,218 @@ html[data-tema="dark"] .terceiras-status.aberto{ background: rgba(245, 158, 11, 
 #tabelaDiagnosticosLpu td:last-child select{
 
     min-width: 120px;
+
+}
+
+/* ---------- Agenda do dia (visual novo, junto com a Escala) ---------- */
+
+.agenda-kpis{
+
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+}
+
+.escala-kpi.kpi-alerta{
+
+    background: var(--escala-laranja-fundo);
+    color: var(--escala-laranja);
+
+}
+
+.escala-kpi.kpi-alerta .escala-kpi-icone{
+
+    color: var(--escala-laranja);
+
+}
+
+.escala-kpi.kpi-alerta.ativo{
+
+    outline: 2px solid var(--escala-laranja);
+    outline-offset: -2px;
+
+}
+
+.agenda-chips{
+
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+
+}
+
+.agenda-chip{
+
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    min-height: 42px;
+    padding: 0 20px;
+    border-radius: 999px;
+    border: 1px solid var(--cor-borda);
+    background: transparent;
+    color: var(--cor-texto);
+
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+
+}
+
+.agenda-chip:hover{
+
+    background: var(--cor-fundo-elevado);
+
+}
+
+.agenda-chip.ativo{
+
+    border-color: var(--escala-azul);
+    background: var(--escala-ativo-fundo);
+
+}
+
+.agenda-quadrado{
+
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #EF4444;
+    border-radius: 3px;
+
+}
+
+.agenda-tag{
+
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+
+}
+
+.tag-inst{ background: var(--escala-ativo-fundo); color: var(--escala-ativo-texto); }
+.tag-troca{ background: var(--escala-laranja-fundo); color: var(--escala-laranja); }
+.tag-neutro{ background: var(--escala-tag-fundo); color: var(--cor-texto-suave); }
+
+.agenda-rota{
+
+    display: flex;
+    flex-direction: column;
+
+}
+
+.agenda-rota-nome{
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+
+}
+
+.agenda-rota-nome h3{
+
+    font-size: 18px;
+    font-weight: 600;
+
+}
+
+.agenda-rota-sub{
+
+    margin-top: 4px;
+    color: var(--cor-texto-suave);
+    font-size: 14px;
+
+}
+
+.agenda-passa{
+
+    color: #EF4444;
+    font-weight: 600;
+
+}
+
+.agenda-barra{
+
+    height: 5px;
+    margin: 14px 0 6px;
+    border-radius: 999px;
+    background: var(--escala-tag-fundo);
+    overflow: hidden;
+
+}
+
+.agenda-barra i{
+
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--escala-azul);
+
+}
+
+.agenda-barra.passa i{
+
+    background: #EF4444;
+
+}
+
+.agenda-rota .agenda-paradas li{
+
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--cor-borda);
+
+}
+
+.agenda-rota .agenda-paradas.agenda-sem li{
+
+    grid-template-columns: 1fr;
+
+}
+
+.agenda-rota .agenda-hora{
+
+    color: var(--escala-azul);
+    font-weight: 600;
+    font-size: 15px;
+
+}
+
+.agenda-os{
+
+    font-size: 15px;
+
+}
+
+.agenda-os strong{
+
+    font-weight: 700;
+
+}
+
+.agenda-rota .agenda-detalhe{
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    font-size: 14px;
+
+}
+
+@media (max-width: 700px){
+
+    .agenda-kpis{
+
+        grid-template-columns: 1fr;
+
+    }
 
 }
