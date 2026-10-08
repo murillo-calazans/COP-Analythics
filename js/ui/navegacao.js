@@ -23,6 +23,9 @@ const MODULO_DA_SECAO = {
     "ordens": "ordens",
     "tecnicos": "ordens",
     "terceiras": "terceiras",
+    "terceiras-fechamento": "terceiras",
+    "terceiras-lpu": "terceiras",
+    "terceiras-qualidade": "terceiras",
     "auditoria": "auditoria",
     "auditoria-ia": "auditoria",
     "agenda-hoje": "agendador",
@@ -105,6 +108,10 @@ function mostrarSecao(nome) {
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "agenda-hoje") renderizarAgendaHoje();
     if (nome === "usuarios") renderizarAdminUsuarios();
+    if (nome === "terceiras") renderizarTerceirasPainel();
+    if (nome === "terceiras-fechamento") renderizarTerceirasFechamento();
+    if (nome === "terceiras-lpu") renderizarTerceirasLpu();
+    if (nome === "terceiras-qualidade") renderizarTerceirasQualidade();
     if (nome === "configuracoes") {
         preencherFormularioConfig();
         renderizarResumoFiltroAssuntos();

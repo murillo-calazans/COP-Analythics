@@ -31,6 +31,7 @@ async function iniciarSistema() {
     registrarEscalaHoje();
     registrarAgendaHoje();
     registrarAdminUsuarios();
+    registrarTerceiras();
     registrarTema();
     registrarFormularioConfig();
     registrarFiltroAssuntos();
@@ -143,8 +144,11 @@ async function inicializarDadosAutenticado() {
     }
 
     renderizarDashboard();
+    // Abre a tela pedida no endereço; se já estava nela (ou não pediu nada),
+    // redesenha a tela aberta agora que os dados chegaram.
+    const secaoAntes = secaoAtiva();
     abrirSecaoDoEndereco();
-    if (secaoAtiva() === "inicio") renderizarInicio();
+    if (secaoAtiva() === secaoAntes && secaoAntes !== "dashboard") renderizarSecaoAtiva();
 }
 
 function registrarEventos() {

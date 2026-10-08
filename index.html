@@ -107,6 +107,26 @@
                 Auditor IA
             </button>
 
+            <button data-secao="terceiras">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Painel
+            </button>
+
+            <button data-secao="terceiras-fechamento">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Fechamento
+            </button>
+
+            <button data-secao="terceiras-lpu">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                LPU
+            </button>
+
+            <button data-secao="terceiras-qualidade">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                Qualidade
+            </button>
+
             <button data-secao="usuarios">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 Usuários
@@ -388,20 +408,57 @@
         <div id="gestaoCopConteudo" class="dashboard-grid"></div>
     </section>
 
+    <!-- Gestão de Terceiras: js/ui/terceiras.js + js/engine/terceirasengine.js (banco: patch-19). -->
     <section id="secao-terceiras" class="secao">
         <div class="dashboard-cabecalho">
             <div>
                 <h2>Gestão de Terceiras</h2>
-                <p>Produção e pagamento das terceirizadas (Azul, Veloz, Technomais).</p>
+                <p>Quanto pagar a cada terceirizada no mês, pela LPU. Só fechamento produtivo é pago.</p>
+            </div>
+            <div class="dashboard-cabecalho-acoes">
+                <button type="button" class="botao-secundario" data-atualizar-terceiras>Atualizar</button>
             </div>
         </div>
-        <div class="placeholder-card">
-            <h2>🚧 Em construção</h2>
-            <p>
-                Aqui vão ficar a produção de cada terceirizada (OS produtivas por assunto e setor),
-                o cálculo pela LPU e o relatório mensal de pagamento.
-            </p>
+        <div id="terceirasPainelConteudo"></div>
+    </section>
+
+    <section id="secao-terceiras-fechamento" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>Fechamento mensal</h2>
+                <p>Detalhe do pagamento de uma terceirizada, para conferir, imprimir e fechar o mês.</p>
+            </div>
+            <div class="dashboard-cabecalho-acoes">
+                <button type="button" class="botao-secundario" data-atualizar-terceiras>Atualizar</button>
+            </div>
         </div>
+        <div id="terceirasFechamentoConteudo"></div>
+    </section>
+
+    <section id="secao-terceiras-lpu" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>LPU</h2>
+                <p>Preço por assunto de cada terceirizada e quais diagnósticos contam como produtivos.</p>
+            </div>
+            <div class="dashboard-cabecalho-acoes">
+                <button type="button" class="botao-secundario" data-atualizar-terceiras>Atualizar</button>
+            </div>
+        </div>
+        <div id="terceirasLpuConteudo"></div>
+    </section>
+
+    <section id="secao-terceiras-qualidade" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>Qualidade das terceirizadas</h2>
+                <p>Reaberturas, retornos de cliente e garantias no mês.</p>
+            </div>
+            <div class="dashboard-cabecalho-acoes">
+                <button type="button" class="botao-secundario" data-atualizar-terceiras>Atualizar</button>
+            </div>
+        </div>
+        <div id="terceirasQualidadeConteudo"></div>
     </section>
 
     <section id="secao-auditoria-ia" class="secao">
@@ -1029,6 +1086,7 @@
 <script src="js/engine/assuntoengine.js"></script>
 <script src="js/engine/regiaoatuacaoengine.js"></script>
 <script src="js/engine/producaoengine.js"></script>
+<script src="js/engine/terceirasengine.js"></script>
 
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
@@ -1054,6 +1112,7 @@
 <script src="js/ui/agendahoje.js"></script>
 <script src="js/ui/inicio.js"></script>
 <script src="js/ui/adminusuarios.js"></script>
+<script src="js/ui/terceiras.js"></script>
 <script src="js/ui/ordens.js"></script>
 <script src="js/ui/configuracoes.js"></script>
 <script src="js/ui/filtroglobal.js"></script><script src="js/ui/assuntosincluidoscancelamento.js"></script>
