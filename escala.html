@@ -1,0 +1,2731 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Escala de Técnicos</title>
+<!-- Mesmo projeto/sessão de login do COP Analytics (index.html) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.js"
+    integrity="sha384-OUpie84zd1LdwNlK9uJJQRwab0BLqo3eKYKFh7hSVL58FSk7wPp2l0kfUMIIoaQd"
+    crossorigin="anonymous"></script>
+<script src="js/config/supabase.js"></script>
+<style>
+  :root{
+    --bg: #f4f6f9;
+    --card-bg: #ffffff;
+    --border: #e2e6ec;
+    --text: #1f2530;
+    --text-muted: #7a8494;
+    --instalador-bg: #dbeafe;
+    --instalador-text: #1e40af;
+    --manutencao-bg: #d1fae5;
+    --manutencao-text: #065f46;
+    --folga-bg: #eef1f5;
+    --folga-text: #97a1b0;
+    --atestado-bg: #fef3c7;
+    --atestado-text: #92400e;
+    --ferias-bg: #fee2e2;
+    --ferias-text: #b91c1c;
+    --temp-away-bg: #ede9fe;
+    --temp-away-text: #5b21b6;
+    --outras-bg: #cffafe;
+    --outras-text: #0e7490;
+    --empty-text: #c3cad4;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 32px 48px;
+  }
+  header{
+    display:flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  header .periodo{
+    font-size: 15px;
+    color: var(--text-muted);
+  }
+
+  .city-tabs{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .city-tab{
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .city-tab:hover{ background: #f0f2f6; }
+  .city-tab.active{
+    background: #1d3f72;
+    border-color: #1d3f72;
+    color: #fff;
+  }
+
+  .city-section{
+    margin-bottom: 32px;
+  }
+  .city-section h2{
+    font-size: 15px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin: 0 0 10px 2px;
+  }
+  .setor-heading{
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    margin: 14px 0 8px 2px;
+  }
+  .setor-heading:first-of-type{ margin-top: 2px; }
+
+  .tech-row{
+    display:flex;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .tech-name-card{
+    flex: 0 0 190px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    display:flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: box-shadow .12s ease;
+  }
+  .tech-name-card:hover{ box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .tech-name-card .nome{ font-weight: 600; font-size: 14px; }
+  .tech-name-card .setor{ font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .tech-name-card.guest{ opacity: .7; border-style: dashed; }
+  .tech-name-card .tag-guest{
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--temp-away-text);
+    margin-top: 4px;
+    font-weight: 600;
+  }
+  .tech-name-card .tag-dupla{
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .day-cards{
+    display:flex;
+    gap: 8px;
+    flex: 1;
+  }
+  .day-card{
+    flex: 1;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 6px;
+    text-align: center;
+    cursor: pointer;
+    display:flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+  .day-card .label{
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .day-card .sub{
+    font-size: 11px;
+    margin-top: 2px;
+    line-height: 1.3;
+    overflow-wrap: break-word;
+  }
+  .day-card .sub.dupla-sub{
+    font-style: italic;
+    opacity: .85;
+  }
+  .day-card.instalador{ background: var(--instalador-bg); color: var(--instalador-text); }
+  .day-card.manutencao{ background: var(--manutencao-bg); color: var(--manutencao-text); }
+  .day-card.folga{ background: var(--folga-bg); color: var(--folga-text); }
+  .day-card.atestado{ background: var(--atestado-bg); color: var(--atestado-text); }
+  .day-card.outras{ background: var(--outras-bg); color: var(--outras-text); }
+  .day-card.ferias{ background: var(--ferias-bg); color: var(--ferias-text); }
+  .day-card.temp-away{ background: var(--temp-away-bg); color: var(--temp-away-text); }
+  .day-card.temp-here{ border-style: dashed; opacity: .65; }
+  .day-card.temp-here.instalador{ background: var(--instalador-bg); color: var(--instalador-text); }
+  .day-card.temp-here.manutencao{ background: var(--manutencao-bg); color: var(--manutencao-text); }
+  .day-card.empty{ background: #fafbfc; color: var(--empty-text); }
+
+  .week-header{
+    display:flex;
+    gap: 8px;
+    margin: 0 0 8px 200px;
+  }
+  .week-header .wd{
+    flex:1;
+    text-align:center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+  .week-header .wd .num{
+    display:block;
+    font-size: 13px;
+    color: var(--text);
+    margin-top: 1px;
+  }
+
+  .legend{
+    display:flex;
+    gap: 20px;
+    align-items:center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .legend .item{ display:flex; align-items:center; gap:6px; }
+  .legend .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .legend .dot.instalador{ background: var(--instalador-text); }
+  .legend .dot.manutencao{ background: var(--manutencao-text); }
+
+  .modal-overlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(20,24,32,.35);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index: 100;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .hidden{ display:none !important; }
+  .modal{
+    background: #fff;
+    border-radius: 14px;
+    padding: 22px 24px;
+    width: 380px;
+    max-height: 86vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,.2);
+  }
+  .modal h3{ margin: 0 0 16px; font-size: 17px; }
+  .field{ margin-bottom: 14px; }
+  .field label{ display:block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+  .field select, .field input[type=text], .field input[type=date], .field input[type=time]{
+    width:100%;
+    padding: 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .field select:disabled, .field input:disabled{ background: #f4f6f9; color: var(--text-muted); }
+  .field-row{ display:flex; gap: 10px; }
+  .field-row .field{ flex:1; }
+  .toggle-row{ display:flex; align-items:center; justify-content: space-between; margin-bottom: 12px; }
+  .toggle-row label{ font-size: 13px; }
+  .switch{ position: relative; display:inline-block; width: 38px; height: 22px; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; cursor:pointer; inset:0; background:#d3d9e0; border-radius: 999px; transition:.15s; }
+  .slider:before{ content:""; position:absolute; height:16px; width:16px; left:3px; bottom:3px; background:white; border-radius:50%; transition:.15s; }
+  .switch input:checked + .slider{ background:#1d3f72; }
+  .switch input:checked + .slider:before{ transform: translateX(16px); }
+
+  .divider{ border:none; border-top:1px solid var(--border); margin: 16px 0; }
+
+  .temp-list{ margin-bottom: 10px; }
+  .temp-item{
+    background: var(--temp-away-bg);
+    color: var(--temp-away-text);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .temp-item-head{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .temp-item-head button{
+    border:none;
+    background:none;
+    color: var(--temp-away-text);
+    font-weight: 600;
+    cursor:pointer;
+    font-size: 11px;
+    text-decoration: underline;
+  }
+  .temp-dias-wrap{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .temp-dia-chip{
+    display:inline-flex;
+    align-items:center;
+    gap: 4px;
+    background: rgba(255,255,255,.55);
+    border-radius: 6px;
+    padding: 2px 4px 2px 8px;
+    font-size: 11px;
+  }
+  .temp-dia-chip button{
+    border:none;
+    background:none;
+    color: inherit;
+    font-weight: 700;
+    cursor:pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+  .day-checks{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .day-checks label{
+    display:flex;
+    align-items:center;
+    gap: 4px;
+    font-size: 12px;
+    background: #f4f6f9;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor:pointer;
+  }
+  .btn{
+    border:none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor:pointer;
+    font-weight: 600;
+  }
+  .btn-primary{ background: #1d3f72; color:#fff; }
+  .btn-secondary{ background:#eef1f5; color: var(--text); }
+  .btn-add{ background: var(--temp-away-bg); color: var(--temp-away-text); width:100%; margin-bottom: 16px; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top: 18px; }
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    background: linear-gradient(90deg, #0c2647, #17427a);
+    padding: 12px 32px;
+    margin: -24px -32px 24px;
+  }
+  .topbar-logo{ height: 32px; display:block; }
+  .topbar-title{
+    color:#fff;
+    font-size:15px;
+    font-weight:600;
+    padding-left:16px;
+    border-left:1px solid rgba(255,255,255,.25);
+    letter-spacing:.02em;
+  }
+  .topbar-right{
+    margin-left:auto;
+    display:flex;
+    align-items:center;
+    gap:16px;
+  }
+  .status-pill{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    background:rgba(255,255,255,.12);
+    color:#fff;
+    padding:6px 13px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:600;
+    white-space:nowrap;
+  }
+  .status-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:#34d399;
+    box-shadow: 0 0 0 0 rgba(52,211,153,.5);
+    animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot{
+    0%{ box-shadow: 0 0 0 0 rgba(52,211,153,.5); }
+    70%{ box-shadow: 0 0 0 6px rgba(52,211,153,0); }
+    100%{ box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+  }
+  .clock{
+    color:#fff;
+    font-size:13px;
+    font-variant-numeric: tabular-nums;
+    font-weight:600;
+    opacity:.92;
+    min-width: 64px;
+  }
+
+  .week-header .wd.feriado{ color: var(--ferias-text); }
+  .week-header .feriado-tag{
+    display:block;
+    font-size:9px;
+    font-weight:700;
+    text-transform:none;
+    letter-spacing:0;
+    color:#fff;
+    background: var(--ferias-text);
+    border-radius:6px;
+    padding:2px 5px;
+    margin-bottom:3px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .day-card.feriado-day{ box-shadow: inset 0 0 0 2px var(--ferias-text); }
+
+  .calendario-nav{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:18px;
+  }
+  .calendario-titulo{
+    font-size:17px;
+    font-weight:700;
+    color: var(--text);
+    min-width:170px;
+    text-align:center;
+  }
+  .calendario-grid{
+    display:grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap:8px;
+  }
+  .calendario-wd{
+    text-align:center;
+    font-size:11px;
+    font-weight:700;
+    color: var(--text-muted);
+    text-transform:uppercase;
+    padding-bottom:2px;
+  }
+  .calendario-dia{
+    background: var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:10px 8px;
+    min-height:88px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:1px;
+  }
+  .calendario-dia.vazio{ background:transparent; border-color:transparent; }
+  .calendario-dia.feriado{ box-shadow: inset 0 0 0 2px var(--ferias-text); }
+  .calendario-dia.zero{ opacity: .5; }
+  .calendario-num{
+    align-self:flex-start;
+    font-size:12px;
+    font-weight:700;
+    color: var(--text-muted);
+  }
+  .calendario-feriado-tag{
+    align-self:flex-start;
+    font-size:9px;
+    font-weight:700;
+    color: var(--ferias-text);
+    margin-bottom:2px;
+  }
+  .calendario-count{
+    font-size:26px;
+    font-weight:800;
+    color: #1d3f72;
+    line-height:1.15;
+  }
+  .calendario-count-label{
+    font-size:10px;
+    color: var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <img class="topbar-logo" src="data:image/png;base64,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" alt="avança">
+  <span class="topbar-title">Escala de Técnicos</span>
+  <div class="topbar-right">
+    <span id="authStatus" style="font-size:12px; color:var(--text-muted);"></span>
+    <button class="btn btn-secondary" id="authSairBtn">Sair</button>
+    <div class="status-pill"><span class="status-dot"></span> Sistema Online</div>
+    <div class="clock" id="relogio">--:--:--</div>
+  </div>
+</div>
+
+<header>
+  <button class="btn btn-secondary" id="semanaAnteriorBtn" title="Semana anterior">◀</button>
+  <span class="periodo" id="periodoLabel"></span>
+  <button class="btn btn-secondary" id="semanaProximaBtn" title="Próxima semana">▶</button>
+  <button class="btn btn-secondary" id="semanaHojeBtn">Semana atual</button>
+  <button class="btn btn-secondary" id="toggleCalendarioBtn">📅 Calendário mensal</button>
+  <select id="exportDiaSelect" class="btn btn-secondary" style="margin-left:auto;"></select>
+  <button class="btn btn-secondary" id="exportarBtn">⬇ Exportar escala</button>
+  <input type="month" id="relatorioMesInput" class="btn btn-secondary">
+  <button class="btn btn-secondary" id="relatorioMensalBtn">📊 Relatório mensal</button>
+  <button class="btn btn-secondary" id="backupExportarBtn" title="Baixa um arquivo com todos os dados da escala (técnicos, horários, exceções)">💾 Backup</button>
+  <input type="file" id="backupImportarInput" accept="application/json" style="display:none;">
+  <button class="btn btn-secondary" id="backupImportarBtn" title="Restaura os dados de um arquivo de backup, substituindo os dados atuais deste navegador">📂 Restaurar backup</button>
+  <button class="btn btn-primary" id="novoTecnicoBtn">+ Novo técnico</button>
+</header>
+
+<div class="city-tabs" id="cityTabs"></div>
+
+<div id="scheduleContainer"></div>
+
+<div class="legend" id="legendaTurnos">
+  <div class="item"><span class="dot instalador"></span> Instalador</div>
+  <div class="item"><span class="dot manutencao"></span> Manutenção</div>
+</div>
+
+<div id="calendarioContainer" class="hidden"></div>
+
+<!-- Modal técnico -->
+<div class="modal-overlay hidden" id="techModal">
+  <div class="modal">
+    <h3 id="techModalTitle">Técnico</h3>
+
+    <div class="field">
+      <label>Nome</label>
+      <input type="text" id="techNome">
+    </div>
+
+    <div class="field">
+      <label>Cidade de atuação</label>
+      <select id="techCidade"></select>
+    </div>
+
+    <div class="field">
+      <label>Região padrão</label>
+      <select id="techRegiao"></select>
+    </div>
+
+    <div class="field">
+      <label>Setor</label>
+      <select id="techSetor">
+        <option value="Instalador">Instalador</option>
+        <option value="Manutenção">Manutenção</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Trabalha em dupla com</label>
+      <select id="techDupla"></select>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:-8px 0 14px;">Os cards de horário deste técnico passam a indicar a dupla. No card do parceiro selecionado, aparece só o nome deste técnico, em destaque discreto.</p>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Horário padrão · Início</label>
+        <input type="time" id="techPadraoInicio">
+      </div>
+      <div class="field">
+        <label>Horário padrão · Fim</label>
+        <input type="time" id="techPadraoFim">
+      </div>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:-8px 0 8px;">Aplicado a todos os dias, exceto os que forem personalizados individualmente no card do dia.</p>
+    <div class="toggle-row">
+      <label for="techResetDias">Aplicar a todos os dias agora (remove personalizações de horário)</label>
+      <label class="switch">
+        <input type="checkbox" id="techResetDias">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <label for="techOutrasPadrao">Outras atividades por padrão (todos os dias)</label>
+      <label class="switch">
+        <input type="checkbox" id="techOutrasPadrao">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:-8px 0 14px;">Para técnicos que não fazem ordem sempre. O card do dia mostra "Outras atividades" toda semana; nos dias em que ele fizer uma ordem, edite só aquele dia no card correspondente.</p>
+
+    <div class="field">
+      <label>Status</label>
+      <select id="techStatus">
+        <option value="trabalhando">Trabalhando</option>
+        <option value="ferias">Férias</option>
+      </select>
+    </div>
+
+    <div id="feriasFields" style="display:none;">
+      <div class="field-row">
+        <div class="field">
+          <label>Início das férias</label>
+          <input type="date" id="feriasInicio">
+        </div>
+        <div class="field">
+          <label>Fim das férias</label>
+          <input type="date" id="feriasFim">
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <label style="font-size:13px; font-weight:600; display:block; margin-bottom:2px;">Alocação temporária em outra cidade (padrão, toda semana)</label>
+    <p style="font-size:11px; color:var(--text-muted); margin:0 0 8px;">Isso se repete toda semana nos dias marcados. Pra um deslocamento de uma semana só, prefira editar direto o card do dia (campo "Atuação temporária neste dia").</p>
+
+    <div class="temp-list" id="tempList"></div>
+
+    <div class="field">
+      <label>Cidade temporária</label>
+      <select id="novaTempCidade"></select>
+    </div>
+    <div class="field">
+      <label>Dias da semana</label>
+      <div class="day-checks" id="novaTempDias"></div>
+    </div>
+    <button class="btn btn-add" id="addTempBtn">+ Adicionar alocação temporária</button>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="techDeleteBtn" style="margin-right:auto; background:#fee2e2; color:#b91c1c;">Remover técnico</button>
+      <button class="btn btn-secondary" id="techCancelBtn">Cancelar</button>
+      <button class="btn btn-primary" id="techSaveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tela de login (bloqueio de página inteira — mesma conta/papel do COP Analytics) -->
+<div class="modal-overlay" id="loginModal" style="background:rgba(20,24,32,.92);">
+  <div class="modal">
+    <h3>Escala de Técnicos</h3>
+    <p style="font-size:12px; color:var(--text-muted); margin:-4px 0 14px;">Entre com sua conta do COP Analytics. Edição fica liberada só pra quem tem papel "admin".</p>
+    <div class="field">
+      <label>E-mail</label>
+      <input type="email" id="loginEmail">
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="loginSenha">
+    </div>
+    <p id="loginErro" class="hidden" style="font-size:12px; color:#b91c1c; margin:-8px 0 14px;"></p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="loginEntrarBtn">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal dia -->
+<div class="modal-overlay hidden" id="dayModal">
+  <div class="modal">
+    <h3 id="dayModalTitle">Horário</h3>
+
+    <div class="toggle-row">
+      <label for="dayCustom">Horário diferente do padrão</label>
+      <label class="switch">
+        <input type="checkbox" id="dayCustom">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Início</label>
+        <input type="time" id="dayInicio">
+      </div>
+      <div class="field">
+        <label>Fim</label>
+        <input type="time" id="dayFim">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Dupla neste dia</label>
+      <select id="dayDupla"></select>
+    </div>
+
+    <div class="field">
+      <label>Atuação temporária neste dia</label>
+      <select id="dayTempCidade"></select>
+    </div>
+
+    <div class="field">
+      <label>Função neste dia</label>
+      <select id="daySetor"></select>
+    </div>
+
+    <div class="toggle-row">
+      <label for="dayFolga">Folga</label>
+      <label class="switch">
+        <input type="checkbox" id="dayFolga">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <label for="dayAtestado">Atestado</label>
+      <label class="switch">
+        <input type="checkbox" id="dayAtestado">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <label for="dayOutras">Outras atividades</label>
+      <label class="switch">
+        <input type="checkbox" id="dayOutras">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="dayCancelBtn">Cancelar</button>
+      <button class="btn btn-primary" id="daySaveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "escalaTecnicos_v1";
+
+  // ---------- Supabase ----------
+  // "supabaseClient" vem de js/config/supabase.js (mesmo projeto/sessão de
+  // login do COP Analytics — carregado antes deste script no <head>).
+  var ESCALA_ROW_ID = "default";
+  var sessaoAtual = null; // sessão de login (Supabase Auth)
+  var papelAtual = null;  // papel do usuário logado na tabela "perfis" (admin/editor/leitor)
+
+  var DIAS = ["seg","ter","qua","qui","sex","sab","dom"];
+  var DIA_LABEL = { seg:"Seg", ter:"Ter", qua:"Qua", qui:"Qui", sex:"Sex", sab:"Sáb", dom:"Dom" };
+
+  var CIDADES = [
+    "Nova Friburgo", "Bom Jardim", "Cachoeiras de Macacu", "Japuíba", "Papucaia",
+    "Rio Bonito", "Silva Jardim", "Rio das Ostras", "Cabo Frio", "Petrópolis",
+    "Teresópolis", "Guapimirim", "São Paulo"
+  ];
+
+  var REGIOES = [
+    "Região Norte", "Região Sul", "Região Central", "Região Oeste", "Região Leste", "Região Rural"
+  ];
+
+  // Feriados: chave "AAAA-MM-DD" -> nome. Edite/complete livremente.
+  var FERIADOS = {
+    "2026-01-01": "Confraternização Universal",
+    "2026-02-16": "Carnaval",
+    "2026-02-17": "Carnaval",
+    "2026-04-03": "Sexta-feira Santa",
+    "2026-04-21": "Tiradentes",
+    "2026-05-01": "Dia do Trabalho",
+    "2026-06-04": "Corpus Christi",
+    "2026-09-07": "Independência do Brasil",
+    "2026-10-12": "Nossa Senhora Aparecida",
+    "2026-11-02": "Finados",
+    "2026-11-15": "Proclamação da República",
+    "2026-12-25": "Natal"
+  };
+
+  function pad2(n){ return n < 10 ? "0"+n : ""+n; }
+  function isoDate(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()); }
+  function getFeriado(d){ return FERIADOS[isoDate(d)] || null; }
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(c){
+      return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+    });
+  }
+
+  // Dia usando o horário padrão do técnico (custom:false — inicio/fim vêm de tech.horarioPadrao)
+  function hp(folga, atestado, outras){
+    return { custom: false, inicio: "", fim: "", folga: !!folga, atestado: !!atestado, outras: !!outras };
+  }
+  // Dia com horário próprio, diferente do padrão do técnico
+  function hc(inicio, fim, folga, atestado, outras){
+    return { custom: true, inicio: inicio||"", fim: fim||"", folga: !!folga, atestado: !!atestado, outras: !!outras };
+  }
+
+  function novoDiasVazios(){
+    return { seg:hp(), ter:hp(), qua:hp(), qui:hp(), sex:hp(), sab:hp(), dom:hp() };
+  }
+
+  function seedData(){
+    return [
+      {
+        id: "t1", nome: "Rafael Souza", setor: "Instalador", cidade: "Nova Friburgo",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "07:00", fim: "15:00" },
+        horarios: { seg:hp(), ter:hp(), qua:hp(),
+                    qui:hc("15:00","23:00"), sex:hc("15:00","23:00"), sab:hp(true), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: null
+      },
+      {
+        id: "t2", nome: "Bruno Tavares", setor: "Instalador", cidade: "Nova Friburgo",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "07:00", fim: "15:00" },
+        horarios: { seg:hp(), ter:hp(), qua:hp(),
+                    qui:hp(), sex:hc("15:00","23:00"), sab:hc("15:00","23:00"), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: "t1"
+      },
+      {
+        id: "t3", nome: "Diego Almeida", setor: "Manutenção", cidade: "Nova Friburgo",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "07:00", fim: "15:00" },
+        horarios: { seg:hp(true), ter:hp(), qua:hp(),
+                    qui:hp(), sex:hc("15:00","23:00"), sab:hc("15:00","23:00"), dom:hp(true) },
+        alocacoesTemporarias: [ { cidade: "Cachoeiras de Macacu", dias: ["qua","qui"] } ], dupla: null
+      },
+      {
+        id: "t4", nome: "Felipe Rocha", setor: "Instalador", cidade: "Nova Friburgo",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "15:00", fim: "23:00" },
+        horarios: { seg:hp(), ter:hp(), qua:hp(),
+                    qui:hp(), sex:hp(), sab:hc("07:00","15:00"), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: null
+      },
+      {
+        id: "t5", nome: "Marcos Vinícius", setor: "Manutenção", cidade: "Nova Friburgo",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "07:00", fim: "15:00" },
+        horarios: { seg:hp(), ter:hp(), qua:hp(true),
+                    qui:hp(), sex:hp(), sab:hp(), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: null
+      },
+      {
+        id: "t6", nome: "Thiago Lima", setor: "Instalador", cidade: "Nova Friburgo",
+        status: "ferias", feriasInicio: "2026-08-27", feriasFim: "2026-09-02",
+        horarioPadrao: { inicio: "07:00", fim: "15:00" },
+        horarios: { seg:hp(true), ter:hp(), qua:hp(),
+                    qui:hp(), sex:hc("15:00","23:00"), sab:hc("15:00","23:00"), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: null
+      },
+      {
+        id: "t7", nome: "Eduardo Nunes", setor: "Manutenção", cidade: "Nova Friburgo",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "07:00", fim: "15:00" },
+        horarios: { seg:hc("15:00","23:00"), ter:hc("15:00","23:00"), qua:hp(),
+                    qui:hp(false,true), sex:hp(), sab:hp(), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: null
+      },
+      {
+        id: "t8", nome: "Ana Paula", setor: "Instalador", cidade: "Rio das Ostras",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "07:00", fim: "15:00" },
+        horarios: { seg:hp(), ter:hp(), qua:hp(),
+                    qui:hp(), sex:hp(), sab:hp(true), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: null
+      },
+      {
+        id: "t9", nome: "Carlos Eduardo", setor: "Manutenção", cidade: "Petrópolis",
+        status: "trabalhando", feriasInicio: null, feriasFim: null,
+        horarioPadrao: { inicio: "15:00", fim: "23:00" },
+        horarios: { seg:hp(), ter:hp(), qua:hp(),
+                    qui:hp(), sex:hp(), sab:hp(true), dom:hp(true) },
+        alocacoesTemporarias: [], dupla: null
+      }
+    ];
+  }
+
+  var techs = [];
+
+  // Converte dados salvos no formato antigo (sem horarioPadrao/custom) para o novo formato,
+  // preservando exatamente o horário que já estava exibido em cada dia.
+  function migrarTech(tech){
+    if(!tech.horarioPadrao){
+      tech.horarioPadrao = { inicio: "07:00", fim: "15:00" };
+      DIAS.forEach(function(dia){
+        var d = tech.horarios[dia] || {};
+        tech.horarios[dia] = {
+          custom: true,
+          inicio: d.inicio || "",
+          fim: d.fim || "",
+          folga: !!d.folga,
+          atestado: !!d.atestado,
+          outras: !!d.outras
+        };
+      });
+    }
+    if(tech.dupla === undefined) tech.dupla = null;
+    if(!tech.excecoes) tech.excecoes = {};
+    return tech;
+  }
+
+  // Carrega do cache local (localStorage) — usado tanto como ponto de partida
+  // instantâneo (enquanto o Supabase ainda não respondeu) quanto como fallback
+  // se a rede falhar ou a tabela ainda estiver vazia (primeira execução).
+  function carregarDoCacheLocal(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        techs = JSON.parse(raw).map(migrarTech);
+        return;
+      }
+    }catch(e){}
+    techs = seedData();
+  }
+
+  // Carrega os dados do Supabase (fonte da verdade, compartilhada entre
+  // todo mundo que acessa o link). Qualquer um pode ler (RLS libera select
+  // pro anon) — só quem está logado consegue gravar (ver saveData).
+  function loadData(){
+    carregarDoCacheLocal(); // mostra algo na tela imediatamente, mesmo offline
+    return supabaseClient
+      .from("escala_tecnicos_dados")
+      .select("dados")
+      .eq("id", ESCALA_ROW_ID)
+      .maybeSingle()
+      .then(function(res){
+        if(res.error) throw res.error;
+        if(res.data && res.data.dados){
+          techs = res.data.dados.map(migrarTech);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(techs));
+        }
+        // Se a linha ainda não existe no banco (primeira vez), mantém o que
+        // já foi carregado do cache local — quem estiver logado e salvar
+        // alguma alteração cria a linha (ver saveData, upsert).
+      })
+      .catch(function(erro){
+        console.error("Falha ao carregar do Supabase, usando cache local:", erro);
+      });
+  }
+
+  // Grava local sempre (cache instantâneo pra essa aba/navegador) e, só se
+  // estiver logado, também no Supabase (RLS bloqueia escrita de quem não
+  // autenticou, então nem tenta gastar uma requisição à toa).
+  function saveData(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(techs));
+    if(!sessaoAtual) return;
+    supabaseClient
+      .from("escala_tecnicos_dados")
+      .upsert({ id: ESCALA_ROW_ID, dados: techs, atualizado_em: new Date().toISOString() })
+      .then(function(res){
+        if(res.error) console.error("Falha ao salvar no Supabase:", res.error);
+      });
+  }
+
+  // ---------- Login (Supabase Auth + papel do COP Analytics) ----------
+  // A página inteira exige login (mesma conta/sessão do COP Analytics) —
+  // sem sessão válida com um papel cadastrado em "perfis", só a tela de
+  // login aparece (cobre tudo, não é um modal fechável). Só quem tem papel
+  // "admin" edita (a RLS da tabela escala_tecnicos_dados garante isso
+  // também do lado do servidor, essa checagem na tela é só UX).
+  function podeEditar(){
+    return papelAtual === "admin";
+  }
+
+  function carregarPapelAtual(sessao){
+    if(!sessao) return Promise.resolve(null);
+    return supabaseClient.from("perfis").select("papel").eq("id", sessao.user.id).maybeSingle()
+      .then(function(res){
+        if(res.error){ console.error("Falha ao carregar perfil do usuário:", res.error); return null; }
+        return res.data ? res.data.papel : null;
+      });
+  }
+
+  function mostrarTelaLogin(mensagemErro){
+    var erroEl = document.getElementById("loginErro");
+    if(mensagemErro){
+      erroEl.textContent = mensagemErro;
+      erroEl.classList.remove("hidden");
+    } else {
+      erroEl.classList.add("hidden");
+    }
+    document.getElementById("loginModal").classList.remove("hidden");
+  }
+
+  function esconderTelaLogin(){
+    document.getElementById("loginModal").classList.add("hidden");
+  }
+
+  // Confere sessão + papel atuais (login inicial, após entrar, após sair) e
+  // mostra a tela certa.
+  function atualizarAuthUI(){
+    return carregarPapelAtual(sessaoAtual).then(function(papel){
+      papelAtual = papel;
+      var autorizado = !!(sessaoAtual && papelAtual);
+      if(!autorizado){
+        mostrarTelaLogin(sessaoAtual && !papelAtual ? "Sua conta ainda não tem um papel configurado no COP Analytics. Fale com o administrador." : null);
+        atualizarVisibilidadeEdicao(false);
+        return;
+      }
+      document.getElementById("authStatus").textContent = sessaoAtual.user.email + " · " + papelAtual;
+      esconderTelaLogin();
+      atualizarVisibilidadeEdicao(podeEditar());
+    });
+  }
+
+  // Só o botão de criar técnico precisa sumir pra quem não é admin — os
+  // cliques nos cards/técnicos continuam abrindo o aviso de exigirLogin().
+  function atualizarVisibilidadeEdicao(admin){
+    document.getElementById("novoTecnicoBtn").classList.toggle("hidden", !admin);
+  }
+
+  // Chame no início de qualquer ação de edição: se não for admin, avisa e
+  // devolve true (quem chamou deve parar ali, sem abrir o modal de edição).
+  function exigirLogin(){
+    if(podeEditar()) return false;
+    alert('Só quem tem papel "admin" no COP Analytics pode editar a escala.');
+    return true;
+  }
+
+  document.getElementById("authSairBtn").addEventListener("click", function(){
+    supabaseClient.auth.signOut().then(function(){
+      sessaoAtual = null;
+      papelAtual = null;
+      atualizarAuthUI();
+    });
+  });
+
+  function tentarLogin(){
+    var email = document.getElementById("loginEmail").value.trim();
+    var senha = document.getElementById("loginSenha").value;
+    if(!email || !senha) return;
+    document.getElementById("loginErro").classList.add("hidden");
+    supabaseClient.auth.signInWithPassword({ email: email, password: senha }).then(function(res){
+      if(res.error){
+        mostrarTelaLogin(res.error.message.indexOf("Invalid login credentials") !== -1
+          ? "E-mail ou senha incorretos."
+          : "Erro ao entrar: " + res.error.message);
+        return;
+      }
+      sessaoAtual = res.data.session;
+      atualizarAuthUI();
+    });
+  }
+
+  document.getElementById("loginEntrarBtn").addEventListener("click", tentarLogin);
+  ["loginEmail", "loginSenha"].forEach(function(id){
+    document.getElementById(id).addEventListener("keydown", function(e){
+      if(e.key === "Enter") tentarLogin();
+    });
+  });
+
+  supabaseClient.auth.onAuthStateChange(function(_evento, sessao){
+    sessaoAtual = sessao;
+    atualizarAuthUI();
+  });
+
+  // Backup manual: baixa/restaura o array "techs" inteiro como arquivo JSON.
+  // Serve tanto pra guardar uma cópia de segurança quanto pra migrar os
+  // dados de um navegador pra outro (ex: pra importar depois num banco).
+  document.getElementById("backupExportarBtn").addEventListener("click", function(){
+    var blob = new Blob([JSON.stringify(techs, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "escala-tecnica-backup-" + isoDate(new Date()) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("backupImportarBtn").addEventListener("click", function(){
+    if(exigirLogin()) return;
+    document.getElementById("backupImportarInput").click();
+  });
+
+  document.getElementById("backupImportarInput").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    e.target.value = "";
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      var dados;
+      try{
+        dados = JSON.parse(reader.result);
+      }catch(err){
+        alert("Arquivo inválido: não é um JSON de backup da escala.");
+        return;
+      }
+      if(!Array.isArray(dados)){
+        alert("Arquivo inválido: não é um backup da escala técnica.");
+        return;
+      }
+      if(!confirm("Isso vai SUBSTITUIR todos os dados atuais deste navegador pelos do arquivo \"" + file.name + "\". Continuar?")) return;
+      techs = dados.map(migrarTech);
+      saveData();
+      render();
+      alert("Backup restaurado.");
+    };
+    reader.readAsText(file);
+  });
+
+  // --- semana exibida (seg a dom), navegável ---
+  var weekOffset = 0; // 0 = semana atual, -1 = semana anterior, +1 = próxima, etc.
+  var weekDates = []; // Date objects, index 0 = seg ... 6 = dom
+
+  function computeWeek(){
+    weekDates = [];
+    var today = new Date();
+    var dow = today.getDay(); // 0=dom ... 6=sab
+    var diffToMonday = (dow === 0) ? -6 : (1 - dow);
+    var monday = new Date(today);
+    monday.setDate(today.getDate() + diffToMonday + (weekOffset * 7));
+    monday.setHours(0,0,0,0);
+    for(var i=0;i<7;i++){
+      var d = new Date(monday);
+      d.setDate(monday.getDate()+i);
+      weekDates.push(d);
+    }
+  }
+  computeWeek();
+
+  var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+
+  function formatPeriodo(){
+    var ini = weekDates[0], fim = weekDates[6];
+    if(ini.getMonth() === fim.getMonth()){
+      return ini.getDate() + "–" + fim.getDate() + " de " + MESES[fim.getMonth()] + " de " + fim.getFullYear();
+    }
+    return ini.getDate() + " de " + MESES[ini.getMonth()] + " – " + fim.getDate() + " de " + MESES[fim.getMonth()] + " de " + fim.getFullYear();
+  }
+
+  var DIA_SEMANA_EXTENSO = { seg:"Segunda-feira", ter:"Terça-feira", qua:"Quarta-feira", qui:"Quinta-feira", sex:"Sexta-feira", sab:"Sábado", dom:"Domingo" };
+
+  function formatDataLonga(diaKey, data){
+    return DIA_SEMANA_EXTENSO[diaKey] + ", " + data.getDate() + " de " + MESES[data.getMonth()] + " de " + data.getFullYear();
+  }
+
+  function dateInRange(date, startStr, endStr){
+    if(!startStr || !endStr) return false;
+    var d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    var s = new Date(startStr + "T00:00:00");
+    var e = new Date(endStr + "T00:00:00");
+    return d >= s && d <= e;
+  }
+
+  // --- estado de seleção ---
+  var cidadeAtiva = "Todas";
+  var currentTechId = null;
+  var currentDia = null;
+  var currentDataIso = null;
+  var pendingTempAllocs = null; // usado durante edição do modal de técnico
+
+  function getTech(id){
+    for(var i=0;i<techs.length;i++) if(techs[i].id === id) return techs[i];
+    return null;
+  }
+
+  // Técnico que escolheu este como sua dupla (lado "passivo" da parceria) — vínculo permanente
+  function getParceiroDeQuem(tech){
+    for(var i=0;i<techs.length;i++){
+      if(techs[i].dupla === tech.id) return techs[i];
+    }
+    return null;
+  }
+
+  // Retorna a configuração efetiva do dia: uma exceção específica daquela data, se
+  // existir, senão o padrão recorrente daquele dia da semana.
+  function getDiaData(tech, diaKey, dataIso){
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    return exc || tech.horarios[diaKey];
+  }
+
+  // Cidade de atuação temporária padrão (recorrente) do técnico naquele dia da semana, cadastrada no técnico
+  function getTempCidadePadrao(tech, diaKey){
+    var alloc = (tech.alocacoesTemporarias||[]).find(function(a){ return a.dias.indexOf(diaKey) !== -1; });
+    return alloc ? alloc.cidade : null;
+  }
+
+  // Cidade de atuação temporária efetiva numa data: usa a exceção daquele dia, se houver
+  // (pode ser "nenhuma"), senão o padrão recorrente cadastrado no técnico.
+  function getTempCidadeEfetiva(tech, diaKey, dataIso){
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    if(exc && Object.prototype.hasOwnProperty.call(exc, "tempCidadeOverride")){
+      return exc.tempCidadeOverride || null;
+    }
+    return getTempCidadePadrao(tech, diaKey);
+  }
+
+  // Papel e parceiro efetivo do técnico numa data, considerando exceção avulsa daquele dia.
+  // Em ambos os casos — dupla AVULSA (exceção do dia) ou FIXA (campo "dupla" no cadastro) — quem
+  // TEM o parceiro configurado (no próprio dia ou no próprio cadastro) é o AUXILIAR, e quem foi
+  // ESCOLHIDO é o PRINCIPAL, responsável por lançamentos de estoque, ordens de serviço etc. — é o
+  // nome dele que aparece na exportação.
+  // Verdadeiro se o técnico tem uma exceção de dupla lançada nesse dia (avulsa com alguém, ou
+  // "sozinho só neste dia") — nos dois casos, a dupla fixa dele fica suspensa naquele dia.
+  function techTemDuplaOverrideNoDia(tech, dataIso){
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    return !!(exc && Object.prototype.hasOwnProperty.call(exc, "duplaOverride"));
+  }
+
+  function getDuplaInfo(tech, dataIso){
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    if(exc && Object.prototype.hasOwnProperty.call(exc, "duplaOverride")){
+      if(!exc.duplaOverride) return null;
+      var parceiroAvulsa = getTech(exc.duplaOverride);
+      return parceiroAvulsa ? { papel: "auxiliar", parceiro: parceiroAvulsa } : null;
+    }
+    // Alguém escolheu este técnico como parceiro avulso hoje (substituição temporária) — isso vale
+    // mais que qualquer dupla fixa, mesmo que ele (ou o parceiro fixo dele) tenha uma cadastrada.
+    // Sem essa checagem primeiro, um auxiliar fixo "roubado" pra outra dupla no dia continuaria
+    // preso ao parceiro fixo original (e apareceria sozinho, se esse parceiro estiver de folga).
+    for(var i=0;i<techs.length;i++){
+      var outro = techs[i];
+      if(outro.id === tech.id) continue;
+      var outroExc = outro.excecoes && outro.excecoes[dataIso];
+      if(outroExc && Object.prototype.hasOwnProperty.call(outroExc, "duplaOverride") && outroExc.duplaOverride === tech.id){
+        return { papel: "principal", parceiro: outro };
+      }
+    }
+    // Dupla fixa (cadastrada neste técnico) — só vale se o parceiro fixo não foi reatribuído hoje
+    if(tech.dupla){
+      var parceiroFixo = getTech(tech.dupla);
+      if(parceiroFixo && !techTemDuplaOverrideNoDia(parceiroFixo, dataIso)) return { papel: "auxiliar", parceiro: parceiroFixo };
+      return null;
+    }
+    // Dupla fixa (cadastrada no outro técnico, apontando pra este) — mesma checagem de reatribuição
+    for(var j=0;j<techs.length;j++){
+      var outro2 = techs[j];
+      if(outro2.id === tech.id) continue;
+      if(outro2.dupla === tech.id && !techTemDuplaOverrideNoDia(outro2, dataIso)) return { papel: "principal", parceiro: outro2 };
+    }
+    return null;
+  }
+
+  // Texto de dupla/solo para exibir no card de dia, só quando o dia tem um horário de fato (não folga/atestado/férias/vazio).
+  // O principal mostra "Em dupla com X" por extenso; o auxiliar mostra só "Duplado", sem nome. "Solo" quando o
+  // parceiro falta naquele dia.
+  function getDuplaSub(tech, dia, weekDate, cellCls){
+    if(!/(^|\s)(instalador|manutencao)(\s|$)/.test(cellCls)) return null;
+
+    var dataIso = isoDate(weekDate);
+    var info = getDuplaInfo(tech, dataIso);
+    if(!info) return null;
+
+    var parceiroDia = getDiaData(info.parceiro, dia, dataIso);
+    var parceiroAusente = (info.parceiro.status === "ferias" && dateInRange(weekDate, info.parceiro.feriasInicio, info.parceiro.feriasFim)) ||
+      parceiroDia.folga || parceiroDia.atestado;
+
+    if(parceiroAusente) return "Solo";
+    return info.papel === "principal" ? ("Em dupla com " + info.parceiro.nome) : "Duplado";
+  }
+
+  // Horário efetivo do dia: usa o valor próprio se "custom", senão o padrão do técnico
+  function horarioEfetivo(tech, diaData){
+    if(diaData.custom) return { inicio: diaData.inicio, fim: diaData.fim };
+    return { inicio: tech.horarioPadrao.inicio, fim: tech.horarioPadrao.fim };
+  }
+
+  // Função (setor) efetiva do técnico numa data: usa a exceção daquele dia, se houver, senão o
+  // setor cadastrado no técnico. Permite remanejar um Instalador pra Manutenção (ou vice-versa)
+  // só naquele dia, sem alterar o cadastro.
+  function getSetorEfetivo(tech, dataIso){
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    if(exc && Object.prototype.hasOwnProperty.call(exc, "setorOverride") && exc.setorOverride){
+      return exc.setorOverride;
+    }
+    return tech.setor;
+  }
+
+  function setorClass(tech, dataIso){
+    return getSetorEfetivo(tech, dataIso) === "Manutenção" ? "manutencao" : "instalador";
+  }
+
+  // Fim de semana ou feriado sem nenhuma edição naquele dia (nem exceção, nem padrão
+  // customizado): folga por padrão. Se o dia foi editado (exceção ou padrão do técnico),
+  // essa edição sempre prevalece. Usado tanto para exibir o card quanto para abrir o modal do dia.
+  function ehFolgaPadraoNaoEditado(tech, diaKey, dataIso, weekDate, diaData){
+    var temExcecao = !!(tech.excecoes && tech.excecoes[dataIso]);
+    var diaIntocado = !diaData.custom && !diaData.folga && !diaData.atestado && !diaData.outras;
+    return !temExcecao && diaIntocado && (diaKey === "sab" || diaKey === "dom" || !!getFeriado(weekDate));
+  }
+
+  // Retorna { cls, label, sub } para o dia de um técnico, numa data específica, no contexto da cidade e do
+  // grupo de setor sendo exibidos. viewingSetor é opcional (usado só pelas seções agrupadas por setor).
+  function getCell(tech, diaKey, viewingCidade, isHome, weekDate, viewingSetor){
+    var dataIso = isoDate(weekDate);
+    var diaData = getDiaData(tech, diaKey, dataIso);
+    var tempCidade = getTempCidadeEfetiva(tech, diaKey, dataIso);
+
+    if(isHome){
+      if(tech.status === "ferias" && dateInRange(weekDate, tech.feriasInicio, tech.feriasFim)){
+        return { cls: "ferias", label: "Férias" };
+      }
+      if(tempCidade && tempCidade !== viewingCidade){
+        return { cls: "empty", label: "—" };
+      }
+      if(ehFolgaPadraoNaoEditado(tech, diaKey, dataIso, weekDate, diaData)){
+        return { cls: "folga", label: "Folga" };
+      }
+      if(diaData.folga) return { cls: "folga", label: "Folga" };
+      if(diaData.atestado) return { cls: "atestado", label: "Atestado" };
+      if(diaData.outras) return { cls: "outras", label: "Outras atividades" };
+      var horario = horarioEfetivo(tech, diaData);
+      if(!horario.inicio || !horario.fim) return { cls: "empty", label: "—" };
+      var setorEfetivo = getSetorEfetivo(tech, dataIso);
+      if(viewingSetor && setorEfetivo !== viewingSetor){
+        return { cls: "temp-away", label: "Atuação em " + setorEfetivo, sub: horario.inicio + "–" + horario.fim };
+      }
+      return { cls: setorClass(tech, dataIso), label: horario.inicio + "–" + horario.fim };
+    } else {
+      // linha de convidado: outra cidade (alocação temporária) ou, se for a mesma cidade,
+      // outro setor (remanejamento de função só naquele dia)
+      if(tech.status === "ferias" && dateInRange(weekDate, tech.feriasInicio, tech.feriasFim)){
+        return { cls: "ferias", label: "Férias" };
+      }
+      if(tech.cidade === viewingCidade){
+        if(tempCidade || getSetorEfetivo(tech, dataIso) !== viewingSetor) return { cls: "empty", label: "—" };
+      } else {
+        if(tempCidade !== viewingCidade || getSetorEfetivo(tech, dataIso) !== viewingSetor) return { cls: "empty", label: "—" };
+      }
+      if(diaData.folga || diaData.atestado || diaData.outras || ehFolgaPadraoNaoEditado(tech, diaKey, dataIso, weekDate, diaData)){
+        return { cls: "empty", label: "—" };
+      }
+      var h2 = horarioEfetivo(tech, diaData);
+      if(!h2.inicio || !h2.fim) return { cls: "empty", label: "—" };
+      return { cls: "temp-here " + setorClass(tech, dataIso), label: h2.inicio + "–" + h2.fim };
+    }
+  }
+
+  // Técnico foi auxiliar (duplado) de alguém em pelo menos um dia da semana exibida, na cidade dele
+  function techEhAuxiliarNaSemana(tech, cidade){
+    for(var idx=0; idx<DIAS.length; idx++){
+      var cell = getCell(tech, DIAS[idx], cidade, true, weekDates[idx], tech.setor);
+      if(getDuplaSub(tech, DIAS[idx], weekDates[idx], cell.cls) === "Duplado") return true;
+    }
+    return false;
+  }
+
+  // Técnico atua temporariamente nesta cidade em pelo menos um dia da semana exibida (padrão ou exceção do dia)
+  function techEhConvidadoNaSemana(tech, cidade){
+    for(var idx=0; idx<DIAS.length; idx++){
+      if(getTempCidadeEfetiva(tech, DIAS[idx], isoDate(weekDates[idx])) === cidade) return true;
+    }
+    return false;
+  }
+
+  // Técnico atua como convidado nesta cidade, nesse setor especificamente (considerando o setor
+  // efetivo de cada dia — que pode ter sido remanejado ali, mesmo sendo de outro setor cadastrado),
+  // em pelo menos um dia da semana exibida
+  function techEhConvidadoDoSetorNaSemana(tech, cidade, setor){
+    for(var idx=0; idx<DIAS.length; idx++){
+      var dataIso = isoDate(weekDates[idx]);
+      if(getTempCidadeEfetiva(tech, DIAS[idx], dataIso) === cidade && getSetorEfetivo(tech, dataIso) === setor) return true;
+    }
+    return false;
+  }
+
+  // Técnico foi remanejado (por exceção do dia) pra este setor em pelo menos um dia da semana exibida,
+  // sendo esse setor diferente do dele cadastrado e permanecendo na cidade de origem naquele dia
+  // (se ele também foi alocado pra outra cidade nesse dia, quem mostra isso é o convidado da outra cidade)
+  function techEhConvidadoDeSetorNaSemana(tech, setor){
+    if(ehDoSetor(tech, setor)) return false;
+    for(var idx=0; idx<DIAS.length; idx++){
+      var dataIso = isoDate(weekDates[idx]);
+      if(getTempCidadeEfetiva(tech, DIAS[idx], dataIso)) continue;
+      if(getSetorEfetivo(tech, dataIso) === setor) return true;
+    }
+    return false;
+  }
+
+  function techsForCidade(cidade){
+    var home = techs.filter(function(t){ return t.cidade === cidade; });
+    var titulares = home.filter(function(t){ return !techEhAuxiliarNaSemana(t, cidade); });
+    var duplados = home.filter(function(t){ return techEhAuxiliarNaSemana(t, cidade); });
+    var guests = techs.filter(function(t){
+      return t.cidade !== cidade && techEhConvidadoNaSemana(t, cidade);
+    });
+    return { home: titulares.concat(duplados), guests: guests };
+  }
+
+  function renderCityTabs(){
+    var wrap = document.getElementById("cityTabs");
+    wrap.innerHTML = "";
+    var all = ["Todas"].concat(CIDADES);
+    all.forEach(function(c){
+      var btn = document.createElement("button");
+      btn.className = "city-tab" + (c === cidadeAtiva ? " active" : "");
+      btn.textContent = c === "Todas" ? "Todas as cidades" : c;
+      btn.addEventListener("click", function(){
+        cidadeAtiva = c;
+        render();
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function renderWeekHeader(container){
+    var wh = document.createElement("div");
+    wh.className = "week-header";
+    DIAS.forEach(function(dia, idx){
+      var el = document.createElement("div");
+      var feriado = getFeriado(weekDates[idx]);
+      el.className = "wd" + (feriado ? " feriado" : "");
+      el.innerHTML = (feriado ? '<span class="feriado-tag">Feriado · ' + escapeHtml(feriado) + '</span>' : "") +
+        DIA_LABEL[dia] + '<span class="num">' + weekDates[idx].getDate() + "</span>";
+      wh.appendChild(el);
+    });
+    container.appendChild(wh);
+  }
+
+  function renderTechRow(tech, cidade, isHome, container, viewingSetor){
+    var row = document.createElement("div");
+    row.className = "tech-row";
+
+    var duploDe = getParceiroDeQuem(tech);
+    var nameCard = document.createElement("div");
+    nameCard.className = "tech-name-card" + (isHome ? "" : " guest");
+    nameCard.innerHTML = '<div class="nome">' + tech.nome + '</div><div class="setor">' + tech.setor + '</div>' +
+      (isHome ? "" : '<div class="tag-guest">Temporário</div>') +
+      (duploDe ? '<div class="tag-dupla">+ ' + duploDe.nome + '</div>' : "");
+    nameCard.addEventListener("click", function(){ if(exigirLogin()) return; openTechModal(tech.id); });
+    row.appendChild(nameCard);
+
+    var dayCards = document.createElement("div");
+    dayCards.className = "day-cards";
+    DIAS.forEach(function(dia, idx){
+      var cell = getCell(tech, dia, cidade, isHome, weekDates[idx], viewingSetor);
+      var feriado = getFeriado(weekDates[idx]);
+      var duplaSub = getDuplaSub(tech, dia, weekDates[idx], cell.cls);
+      var card = document.createElement("div");
+      card.className = "day-card " + cell.cls + (feriado ? " feriado-day" : "");
+      card.innerHTML = '<div class="label">' + cell.label + '</div>' +
+        (cell.sub ? '<div class="sub">' + cell.sub + '</div>' : "") +
+        (duplaSub ? '<div class="sub dupla-sub">' + duplaSub + '</div>' : "");
+      card.addEventListener("click", function(){ if(exigirLogin()) return; openDayModal(tech.id, dia, isoDate(weekDates[idx])); });
+      dayCards.appendChild(card);
+    });
+    row.appendChild(dayCards);
+
+    container.appendChild(row);
+  }
+
+  var GRUPOS_SETOR = [
+    { setor: "Instalador", titulo: "Instaladores" },
+    { setor: "Manutenção", titulo: "Manutenção" }
+  ];
+
+  function ehDoSetor(tech, setor){
+    return (tech.setor === "Manutenção" ? "Manutenção" : "Instalador") === setor;
+  }
+
+  function renderCitySection(cidade, container){
+    var grupo = techsForCidade(cidade);
+    if(grupo.home.length === 0 && grupo.guests.length === 0) return;
+
+    var section = document.createElement("div");
+    section.className = "city-section";
+    var title = document.createElement("h2");
+    title.textContent = "Técnicos · " + cidade;
+    section.appendChild(title);
+
+    renderWeekHeader(section);
+
+    GRUPOS_SETOR.forEach(function(g){
+      var homeDoSetor = grupo.home.filter(function(t){ return ehDoSetor(t, g.setor); });
+      var guestsDoSetor = grupo.guests.filter(function(t){ return techEhConvidadoDoSetorNaSemana(t, cidade, g.setor); });
+      var convidadosDeSetor = grupo.home.filter(function(t){ return techEhConvidadoDeSetorNaSemana(t, g.setor); });
+      if(homeDoSetor.length === 0 && guestsDoSetor.length === 0 && convidadosDeSetor.length === 0) return;
+
+      var subTitle = document.createElement("h3");
+      subTitle.className = "setor-heading";
+      subTitle.textContent = g.titulo;
+      section.appendChild(subTitle);
+
+      homeDoSetor.forEach(function(t){ renderTechRow(t, cidade, true, section, g.setor); });
+      guestsDoSetor.forEach(function(t){ renderTechRow(t, cidade, false, section, g.setor); });
+      convidadosDeSetor.forEach(function(t){ renderTechRow(t, cidade, false, section, g.setor); });
+    });
+
+    container.appendChild(section);
+  }
+
+  function populateExportDiaSelect(){
+    var sel = document.getElementById("exportDiaSelect");
+    var valorAtual = sel.options.length ? sel.value : "semana";
+    sel.innerHTML = "";
+    var optSemana = document.createElement("option");
+    optSemana.value = "semana";
+    optSemana.textContent = "Semana toda";
+    sel.appendChild(optSemana);
+    DIAS.forEach(function(dia, idx){
+      var opt = document.createElement("option");
+      opt.value = String(idx);
+      opt.textContent = "Só " + DIA_LABEL[dia] + " " + pad2(weekDates[idx].getDate()) + "/" + pad2(weekDates[idx].getMonth()+1);
+      sel.appendChild(opt);
+    });
+    sel.value = valorAtual;
+  }
+
+  function render(){
+    computeWeek();
+    document.getElementById("periodoLabel").textContent = formatPeriodo();
+    document.getElementById("semanaHojeBtn").style.display = (weekOffset === 0) ? "none" : "inline-block";
+    populateExportDiaSelect();
+    renderCityTabs();
+
+    var container = document.getElementById("scheduleContainer");
+    container.innerHTML = "";
+
+    if(cidadeAtiva === "Todas"){
+      CIDADES.forEach(function(c){ renderCitySection(c, container); });
+    } else {
+      renderCitySection(cidadeAtiva, container);
+    }
+  }
+
+  document.getElementById("semanaAnteriorBtn").addEventListener("click", function(){
+    weekOffset -= 1;
+    render();
+  });
+  document.getElementById("semanaProximaBtn").addEventListener("click", function(){
+    weekOffset += 1;
+    render();
+  });
+  document.getElementById("semanaHojeBtn").addEventListener("click", function(){
+    weekOffset = 0;
+    render();
+  });
+
+  // ---------- Calendário mensal (quantidade de equipes ativas por dia) ----------
+  var viewMode = "semana"; // "semana" | "mes"
+  var mesOffset = 0;
+
+  // Conta quantas equipes estão ativas numa data: cada dupla (principal + auxiliar) conta como
+  // uma equipe só; quem está sozinho ou deslocado temporariamente conta como uma equipe própria.
+  function contarEquipesAtivasNoDia(data){
+    var diaKey = DIAS[(data.getDay() + 6) % 7];
+    var dataIso = isoDate(data);
+    var total = 0;
+    techs.forEach(function(tech){
+      var cell = getCell(tech, diaKey, tech.cidade, true, data);
+      if(cell.cls === "instalador" || cell.cls === "manutencao"){
+        if(getDuplaSub(tech, diaKey, data, cell.cls) === "Duplado") return;
+        total += 1;
+      } else if(cell.cls === "empty" && getTempCidadeEfetiva(tech, diaKey, dataIso)){
+        total += 1;
+      }
+    });
+    return total;
+  }
+
+  function renderCalendarioMensal(){
+    var container = document.getElementById("calendarioContainer");
+    container.innerHTML = "";
+
+    var hoje = new Date();
+    var base = new Date(hoje.getFullYear(), hoje.getMonth() + mesOffset, 1);
+    var ano = base.getFullYear();
+    var mes = base.getMonth();
+
+    var nav = document.createElement("div");
+    nav.className = "calendario-nav";
+    var btnAnterior = document.createElement("button");
+    btnAnterior.className = "btn btn-secondary";
+    btnAnterior.textContent = "◀";
+    btnAnterior.addEventListener("click", function(){ mesOffset -= 1; renderCalendarioMensal(); });
+    var titulo = document.createElement("span");
+    titulo.className = "calendario-titulo";
+    titulo.textContent = MESES[mes].charAt(0).toUpperCase() + MESES[mes].slice(1) + " de " + ano;
+    var btnProximo = document.createElement("button");
+    btnProximo.className = "btn btn-secondary";
+    btnProximo.textContent = "▶";
+    btnProximo.addEventListener("click", function(){ mesOffset += 1; renderCalendarioMensal(); });
+    nav.appendChild(btnAnterior);
+    nav.appendChild(titulo);
+    nav.appendChild(btnProximo);
+    if(mesOffset !== 0){
+      var btnHoje = document.createElement("button");
+      btnHoje.className = "btn btn-secondary";
+      btnHoje.textContent = "Mês atual";
+      btnHoje.addEventListener("click", function(){ mesOffset = 0; renderCalendarioMensal(); });
+      nav.appendChild(btnHoje);
+    }
+    container.appendChild(nav);
+
+    var grid = document.createElement("div");
+    grid.className = "calendario-grid";
+    ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].forEach(function(l){
+      var wd = document.createElement("div");
+      wd.className = "calendario-wd";
+      wd.textContent = l;
+      grid.appendChild(wd);
+    });
+
+    var primeiroDiaSemana = (new Date(ano, mes, 1).getDay() + 6) % 7;
+    for(var i=0;i<primeiroDiaSemana;i++){
+      var vazio = document.createElement("div");
+      vazio.className = "calendario-dia vazio";
+      grid.appendChild(vazio);
+    }
+
+    var totalDias = new Date(ano, mes+1, 0).getDate();
+    for(var d=1; d<=totalDias; d++){
+      var data = new Date(ano, mes, d);
+      var count = contarEquipesAtivasNoDia(data);
+      var feriado = getFeriado(data);
+      var cel = document.createElement("div");
+      cel.className = "calendario-dia" + (feriado ? " feriado" : "") + (count === 0 ? " zero" : "");
+      cel.innerHTML =
+        '<div class="calendario-num">' + d + '</div>' +
+        (feriado ? '<div class="calendario-feriado-tag" title="' + escapeHtml(feriado) + '">Feriado</div>' : "") +
+        '<div class="calendario-count">' + count + '</div>' +
+        '<div class="calendario-count-label">equipe' + (count === 1 ? "" : "s") + '</div>';
+      grid.appendChild(cel);
+    }
+    container.appendChild(grid);
+  }
+
+  function atualizarViewMode(){
+    var emMes = viewMode === "mes";
+    document.getElementById("toggleCalendarioBtn").textContent = emMes ? "📋 Ver escala semanal" : "📅 Calendário mensal";
+    document.getElementById("semanaAnteriorBtn").classList.toggle("hidden", emMes);
+    document.getElementById("semanaProximaBtn").classList.toggle("hidden", emMes);
+    document.getElementById("periodoLabel").classList.toggle("hidden", emMes);
+    document.getElementById("semanaHojeBtn").classList.toggle("hidden", emMes || weekOffset === 0);
+    document.getElementById("exportDiaSelect").classList.toggle("hidden", emMes);
+    document.getElementById("exportarBtn").classList.toggle("hidden", emMes);
+    document.getElementById("cityTabs").classList.toggle("hidden", emMes);
+    document.getElementById("scheduleContainer").classList.toggle("hidden", emMes);
+    document.getElementById("legendaTurnos").classList.toggle("hidden", emMes);
+    document.getElementById("calendarioContainer").classList.toggle("hidden", !emMes);
+    if(emMes){
+      renderCalendarioMensal();
+    } else {
+      render();
+    }
+  }
+
+  document.getElementById("toggleCalendarioBtn").addEventListener("click", function(){
+    viewMode = viewMode === "semana" ? "mes" : "semana";
+    atualizarViewMode();
+  });
+
+  // ---------- Modal técnico ----------
+  function fillCidadeSelect(select, selected){
+    select.innerHTML = "";
+    CIDADES.forEach(function(c){
+      var opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      if(c === selected) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  function fillRegiaoSelect(select, selected){
+    select.innerHTML = "";
+    var optNenhuma = document.createElement("option");
+    optNenhuma.value = "";
+    optNenhuma.textContent = "Sem região padrão";
+    select.appendChild(optNenhuma);
+    REGIOES.forEach(function(r){
+      var opt = document.createElement("option");
+      opt.value = r; opt.textContent = r;
+      select.appendChild(opt);
+    });
+    select.value = selected || "";
+  }
+
+  function fillDuplaSelect(select, techId, selected){
+    select.innerHTML = "";
+    var optNone = document.createElement("option");
+    optNone.value = "";
+    optNone.textContent = "Nenhum (trabalha sozinho)";
+    select.appendChild(optNone);
+    techs.filter(function(t){ return t.id !== techId; })
+      .slice()
+      .sort(function(a, b){ return a.nome.localeCompare(b.nome); })
+      .forEach(function(t){
+        var opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.nome + " — " + t.cidade;
+        if(t.id === selected) opt.selected = true;
+        select.appendChild(opt);
+      });
+  }
+
+  function renderTempList(){
+    var wrap = document.getElementById("tempList");
+    wrap.innerHTML = "";
+    pendingTempAllocs.forEach(function(a, idx){
+      var item = document.createElement("div");
+      item.className = "temp-item";
+
+      var head = document.createElement("div");
+      head.className = "temp-item-head";
+      var nomeCidade = document.createElement("span");
+      nomeCidade.textContent = a.cidade;
+      head.appendChild(nomeCidade);
+      var removerCidadeBtn = document.createElement("button");
+      removerCidadeBtn.type = "button";
+      removerCidadeBtn.textContent = "Remover cidade";
+      removerCidadeBtn.addEventListener("click", function(){
+        pendingTempAllocs.splice(idx, 1);
+        renderTempList();
+      });
+      head.appendChild(removerCidadeBtn);
+      item.appendChild(head);
+
+      var diasWrap = document.createElement("div");
+      diasWrap.className = "temp-dias-wrap";
+      a.dias.forEach(function(dia){
+        var chip = document.createElement("span");
+        chip.className = "temp-dia-chip";
+        chip.appendChild(document.createTextNode(DIA_LABEL[dia]));
+        var x = document.createElement("button");
+        x.type = "button";
+        x.textContent = "×";
+        x.title = "Remover " + DIA_LABEL[dia];
+        x.addEventListener("click", function(){
+          a.dias = a.dias.filter(function(d){ return d !== dia; });
+          if(a.dias.length === 0) pendingTempAllocs.splice(idx, 1);
+          renderTempList();
+        });
+        chip.appendChild(x);
+        diasWrap.appendChild(chip);
+      });
+      item.appendChild(diasWrap);
+
+      wrap.appendChild(item);
+    });
+  }
+
+  function renderNovaTempDias(){
+    var wrap = document.getElementById("novaTempDias");
+    wrap.innerHTML = "";
+    DIAS.forEach(function(dia){
+      var label = document.createElement("label");
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = dia;
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(DIA_LABEL[dia]));
+      wrap.appendChild(label);
+    });
+  }
+
+  function openTechModal(techId){
+    var tech = getTech(techId);
+    if(!tech) return;
+    currentTechId = techId;
+    pendingTempAllocs = JSON.parse(JSON.stringify(tech.alocacoesTemporarias || []));
+
+    document.getElementById("techModalTitle").textContent = tech.nome;
+    document.getElementById("techNome").value = tech.nome;
+    document.getElementById("techPadraoInicio").value = tech.horarioPadrao.inicio || "";
+    document.getElementById("techPadraoFim").value = tech.horarioPadrao.fim || "";
+    document.getElementById("techResetDias").checked = false;
+    document.getElementById("techOutrasPadrao").checked = DIAS.every(function(dia){ return !!tech.horarios[dia].outras; });
+    fillCidadeSelect(document.getElementById("techCidade"), tech.cidade);
+    fillRegiaoSelect(document.getElementById("techRegiao"), tech.regiao);
+    document.getElementById("techSetor").value = tech.setor;
+    fillDuplaSelect(document.getElementById("techDupla"), tech.id, tech.dupla);
+    document.getElementById("techStatus").value = tech.status;
+    document.getElementById("feriasFields").style.display = tech.status === "ferias" ? "block" : "none";
+    document.getElementById("feriasInicio").value = tech.feriasInicio || "";
+    document.getElementById("feriasFim").value = tech.feriasFim || "";
+
+    fillCidadeSelect(document.getElementById("novaTempCidade"), null);
+    renderNovaTempDias();
+    renderTempList();
+
+    document.getElementById("techModal").classList.remove("hidden");
+  }
+
+  function closeTechModal(){
+    document.getElementById("techModal").classList.add("hidden");
+    currentTechId = null;
+    pendingTempAllocs = null;
+  }
+
+  document.getElementById("techStatus").addEventListener("change", function(){
+    document.getElementById("feriasFields").style.display = this.value === "ferias" ? "block" : "none";
+  });
+
+  document.getElementById("addTempBtn").addEventListener("click", function(){
+    var cidade = document.getElementById("novaTempCidade").value;
+    var dias = Array.prototype.slice.call(document.querySelectorAll("#novaTempDias input:checked")).map(function(cb){ return cb.value; });
+    if(!cidade || dias.length === 0) return;
+    var existing = pendingTempAllocs.find(function(a){ return a.cidade === cidade; });
+    if(existing){
+      dias.forEach(function(d){ if(existing.dias.indexOf(d) === -1) existing.dias.push(d); });
+    } else {
+      pendingTempAllocs.push({ cidade: cidade, dias: dias });
+    }
+    renderTempList();
+    document.querySelectorAll("#novaTempDias input:checked").forEach(function(cb){ cb.checked = false; });
+  });
+
+  document.getElementById("techCancelBtn").addEventListener("click", closeTechModal);
+
+  document.getElementById("techDeleteBtn").addEventListener("click", function(){
+    var tech = getTech(currentTechId);
+    if(!tech) return;
+    if(!confirm('Remover "' + tech.nome + '" da escala? Essa ação não pode ser desfeita.')) return;
+    techs = techs.filter(function(t){ return t.id !== currentTechId; });
+    techs.forEach(function(t){ if(t.dupla === currentTechId) t.dupla = null; });
+    saveData();
+    closeTechModal();
+    render();
+  });
+
+  document.getElementById("novoTecnicoBtn").addEventListener("click", function(){
+    if(exigirLogin()) return;
+    var cidadeInicial = (cidadeAtiva !== "Todas") ? cidadeAtiva : CIDADES[0];
+    var novoId = "t" + Date.now();
+    var novoTech = {
+      id: novoId,
+      nome: "Novo Técnico",
+      setor: "Instalador",
+      cidade: cidadeInicial,
+      regiao: null,
+      status: "trabalhando",
+      feriasInicio: null,
+      feriasFim: null,
+      horarioPadrao: { inicio: "07:00", fim: "15:00" },
+      horarios: novoDiasVazios(),
+      excecoes: {},
+      alocacoesTemporarias: [],
+      dupla: null
+    };
+    techs.push(novoTech);
+    saveData();
+    cidadeAtiva = cidadeInicial;
+    render();
+    openTechModal(novoId);
+  });
+
+  document.getElementById("techSaveBtn").addEventListener("click", function(){
+    var tech = getTech(currentTechId);
+    if(!tech) return;
+    var novoNome = document.getElementById("techNome").value.trim();
+    if(novoNome) tech.nome = novoNome;
+    tech.horarioPadrao = {
+      inicio: document.getElementById("techPadraoInicio").value,
+      fim: document.getElementById("techPadraoFim").value
+    };
+    if(document.getElementById("techResetDias").checked){
+      DIAS.forEach(function(dia){
+        var d = tech.horarios[dia];
+        d.custom = false;
+        d.inicio = "";
+        d.fim = "";
+      });
+    }
+    var outrasPadrao = document.getElementById("techOutrasPadrao").checked;
+    DIAS.forEach(function(dia){
+      var d = tech.horarios[dia];
+      d.outras = outrasPadrao;
+      if(outrasPadrao){
+        d.folga = false;
+        d.atestado = false;
+      }
+    });
+    tech.cidade = document.getElementById("techCidade").value;
+    tech.regiao = document.getElementById("techRegiao").value || null;
+    tech.setor = document.getElementById("techSetor").value;
+    tech.dupla = document.getElementById("techDupla").value || null;
+    tech.status = document.getElementById("techStatus").value;
+    if(tech.status === "ferias"){
+      tech.feriasInicio = document.getElementById("feriasInicio").value || null;
+      tech.feriasFim = document.getElementById("feriasFim").value || null;
+    } else {
+      tech.feriasInicio = null;
+      tech.feriasFim = null;
+    }
+    tech.alocacoesTemporarias = pendingTempAllocs.filter(function(a){ return a.cidade !== tech.cidade; });
+    saveData();
+    closeTechModal();
+    render();
+  });
+
+  // ---------- Modal dia ----------
+  function updateDayInputsState(){
+    var custom = document.getElementById("dayCustom").checked;
+    var tech = getTech(currentTechId);
+    var inicioEl = document.getElementById("dayInicio");
+    var fimEl = document.getElementById("dayFim");
+    inicioEl.disabled = !custom;
+    fimEl.disabled = !custom;
+    if(!custom && tech){
+      inicioEl.value = tech.horarioPadrao.inicio || "";
+      fimEl.value = tech.horarioPadrao.fim || "";
+    }
+  }
+
+  function formatDataCurta(dataIso){
+    var partes = dataIso.split("-");
+    return partes[2] + "/" + partes[1];
+  }
+
+  function fillDayDuplaSelect(select, tech, dataIso){
+    select.innerHTML = "";
+    var optPadrao = document.createElement("option");
+    optPadrao.value = "__padrao__";
+    var permanente = tech.dupla ? getTech(tech.dupla) : null;
+    optPadrao.textContent = "Padrão (" + (permanente ? permanente.nome : "sozinho") + ")";
+    select.appendChild(optPadrao);
+
+    var optNone = document.createElement("option");
+    optNone.value = "";
+    optNone.textContent = "Sozinho só neste dia";
+    select.appendChild(optNone);
+
+    techs.filter(function(t){ return t.id !== tech.id; })
+      .slice()
+      .sort(function(a, b){ return a.nome.localeCompare(b.nome); })
+      .forEach(function(t){
+        var opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.nome + " — " + t.cidade;
+        select.appendChild(opt);
+      });
+
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    var valorAtual = (exc && Object.prototype.hasOwnProperty.call(exc, "duplaOverride")) ? (exc.duplaOverride || "") : "__padrao__";
+    select.value = valorAtual;
+  }
+
+  function fillDayTempCidadeSelect(select, tech, diaKey, dataIso){
+    select.innerHTML = "";
+    var optPadrao = document.createElement("option");
+    optPadrao.value = "__padrao__";
+    var padraoCidade = getTempCidadePadrao(tech, diaKey);
+    optPadrao.textContent = "Padrão (" + (padraoCidade ? "Atuação em " + padraoCidade : "nesta cidade") + ")";
+    select.appendChild(optPadrao);
+
+    var optNenhuma = document.createElement("option");
+    optNenhuma.value = "";
+    optNenhuma.textContent = "Nesta cidade só neste dia";
+    select.appendChild(optNenhuma);
+
+    CIDADES.filter(function(c){ return c !== tech.cidade; })
+      .forEach(function(c){
+        var opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        select.appendChild(opt);
+      });
+
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    var valorAtual = (exc && Object.prototype.hasOwnProperty.call(exc, "tempCidadeOverride")) ? (exc.tempCidadeOverride || "") : "__padrao__";
+    select.value = valorAtual;
+  }
+
+  function fillDaySetorSelect(select, tech, dataIso){
+    select.innerHTML = "";
+    var optPadrao = document.createElement("option");
+    optPadrao.value = "__padrao__";
+    optPadrao.textContent = "Padrão (" + tech.setor + ")";
+    select.appendChild(optPadrao);
+
+    var alternado = tech.setor === "Manutenção" ? "Instalador" : "Manutenção";
+    var optAlternado = document.createElement("option");
+    optAlternado.value = alternado;
+    optAlternado.textContent = alternado + " só neste dia";
+    select.appendChild(optAlternado);
+
+    var exc = tech.excecoes && tech.excecoes[dataIso];
+    var valorAtual = (exc && exc.setorOverride) ? exc.setorOverride : "__padrao__";
+    select.value = valorAtual;
+  }
+
+  function openDayModal(techId, dia, dataIso){
+    var tech = getTech(techId);
+    if(!tech) return;
+    currentTechId = techId;
+    currentDia = dia;
+    currentDataIso = dataIso;
+    var horario = getDiaData(tech, dia, dataIso);
+    var weekDate = weekDates[DIAS.indexOf(dia)];
+    var folgaPadrao = ehFolgaPadraoNaoEditado(tech, dia, dataIso, weekDate, horario);
+    document.getElementById("dayModalTitle").textContent = tech.nome + " — " + DIA_LABEL[dia] + ", " + formatDataCurta(dataIso);
+    document.getElementById("dayCustom").checked = !!horario.custom;
+    document.getElementById("dayInicio").value = horario.custom ? (horario.inicio || "") : (tech.horarioPadrao.inicio || "");
+    document.getElementById("dayFim").value = horario.custom ? (horario.fim || "") : (tech.horarioPadrao.fim || "");
+    document.getElementById("dayFolga").checked = !!horario.folga || folgaPadrao;
+    document.getElementById("dayAtestado").checked = !!horario.atestado;
+    document.getElementById("dayOutras").checked = !!horario.outras;
+    fillDayDuplaSelect(document.getElementById("dayDupla"), tech, dataIso);
+    fillDayTempCidadeSelect(document.getElementById("dayTempCidade"), tech, dia, dataIso);
+    fillDaySetorSelect(document.getElementById("daySetor"), tech, dataIso);
+    updateDayInputsState();
+    document.getElementById("dayModal").classList.remove("hidden");
+  }
+
+  function closeDayModal(){
+    document.getElementById("dayModal").classList.add("hidden");
+    currentTechId = null;
+    currentDia = null;
+    currentDataIso = null;
+  }
+
+  document.getElementById("dayCustom").addEventListener("change", updateDayInputsState);
+
+  document.getElementById("dayCancelBtn").addEventListener("click", closeDayModal);
+
+  document.getElementById("daySaveBtn").addEventListener("click", function(){
+    var tech = getTech(currentTechId);
+    if(!tech || !currentDia || !currentDataIso) return;
+    var custom = document.getElementById("dayCustom").checked;
+    var duplaSelVal = document.getElementById("dayDupla").value;
+    var tempCidadeSelVal = document.getElementById("dayTempCidade").value;
+    var setorSelVal = document.getElementById("daySetor").value;
+    var novaExcecao = {
+      custom: custom,
+      inicio: custom ? document.getElementById("dayInicio").value : "",
+      fim: custom ? document.getElementById("dayFim").value : "",
+      folga: document.getElementById("dayFolga").checked,
+      atestado: document.getElementById("dayAtestado").checked,
+      outras: document.getElementById("dayOutras").checked
+    };
+    if(duplaSelVal !== "__padrao__"){
+      novaExcecao.duplaOverride = duplaSelVal;
+    }
+    if(tempCidadeSelVal !== "__padrao__"){
+      novaExcecao.tempCidadeOverride = tempCidadeSelVal;
+    }
+    if(setorSelVal !== "__padrao__"){
+      novaExcecao.setorOverride = setorSelVal;
+    }
+    if(!tech.excecoes) tech.excecoes = {};
+    tech.excecoes[currentDataIso] = novaExcecao;
+    saveData();
+    closeDayModal();
+    render();
+  });
+
+  [document.getElementById("techModal"), document.getElementById("dayModal")].forEach(function(overlay){
+    overlay.addEventListener("click", function(e){
+      if(e.target === overlay){
+        overlay.classList.add("hidden");
+      }
+    });
+  });
+
+  var EXPORT_CSS = `
+:root{
+  --bg:#eef1f6;
+  --surface:#ffffff;
+  --surface-sunken:#f7f8fb;
+  --border:#dfe4ec;
+  --text:#161d2b;
+  --text-muted:#6b768c;
+  --text-faint:#a8b0c0;
+  --accent:#173a68;
+  --accent-strong:#0b2140;
+  --accent-contrast:#ffffff;
+
+  --instalador-bg:#fdf1de;   --instalador-text:#a9590a;
+  --manutencao-bg:#eceafc;   --manutencao-text:#4433b0;
+  --folga-bg:#eef1f5;   --folga-text:#7d879b;
+  --atestado-bg:#e2f4f1;--atestado-text:#0d7a6c;
+  --ferias-bg:#fce7ec;  --ferias-text:#bd1550;
+  --temp-bg:#f2ecfd;    --temp-text:#7139c9;
+  --outras-bg:#e0f2f7;  --outras-text:#0e7490;
+
+  --shadow:0 1px 2px rgba(20,30,50,.04), 0 6px 16px -8px rgba(20,30,50,.12);
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1420;
+    --surface:#161d2c;
+    --surface-sunken:#111725;
+    --border:#28324a;
+    --text:#e8ecf5;
+    --text-muted:#93a0ba;
+    --text-faint:#4b5670;
+    --accent:#6f9bef;
+    --accent-strong:#a9c4fb;
+    --accent-contrast:#0b1420;
+
+    --instalador-bg:rgba(217,142,45,.16); --instalador-text:#f0b876;
+    --manutencao-bg:rgba(102,89,240,.2);  --manutencao-text:#bcb4ff;
+    --folga-bg:rgba(255,255,255,.05);--folga-text:#98a2ba;
+    --atestado-bg:rgba(20,166,148,.18);--atestado-text:#6be0cc;
+    --ferias-bg:rgba(217,49,101,.18);--ferias-text:#f793ae;
+    --temp-bg:rgba(139,92,246,.2);   --temp-text:#c9b3fb;
+    --outras-bg:rgba(6,182,212,.18); --outras-text:#67e8f9;
+
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 20px -10px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1420;
+  --surface:#161d2c;
+  --surface-sunken:#111725;
+  --border:#28324a;
+  --text:#e8ecf5;
+  --text-muted:#93a0ba;
+  --text-faint:#4b5670;
+  --accent:#6f9bef;
+  --accent-strong:#a9c4fb;
+  --accent-contrast:#0b1420;
+
+  --instalador-bg:rgba(217,142,45,.16); --instalador-text:#f0b876;
+  --manutencao-bg:rgba(102,89,240,.2);  --manutencao-text:#bcb4ff;
+  --folga-bg:rgba(255,255,255,.05);--folga-text:#98a2ba;
+  --atestado-bg:rgba(20,166,148,.18);--atestado-text:#6be0cc;
+  --ferias-bg:rgba(217,49,101,.18);--ferias-text:#f793ae;
+  --temp-bg:rgba(139,92,246,.2);   --temp-text:#c9b3fb;
+
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 20px -10px rgba(0,0,0,.5);
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  padding:22px 28px 48px;
+}
+h1,h2,h3{font-family:"Barlow Condensed","Segoe UI",Arial,sans-serif;}
+
+.page-topbar{
+  display:flex;align-items:center;gap:16px;
+  background:linear-gradient(120deg,var(--accent-strong),var(--accent));
+  padding:14px 22px;border-radius:14px;margin-bottom:16px;
+  box-shadow:var(--shadow);
+}
+.topbar-logo{height:26px;display:block;filter:brightness(0) invert(1);opacity:.95;}
+.topbar-titles{display:flex;flex-direction:column;padding-left:16px;border-left:1px solid rgba(255,255,255,.25);}
+.topbar-title{color:#fff;font-family:"Barlow Condensed",sans-serif;font-size:19px;font-weight:700;letter-spacing:.01em;line-height:1.1;}
+.topbar-date{color:rgba(255,255,255,.75);font-size:12px;font-weight:500;margin-top:2px;}
+
+.export-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:10px 14px;margin-bottom:22px;box-shadow:var(--shadow);
+}
+.export-bar .hint{font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;}
+.search-wrap{position:relative;}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-faint);}
+.busca-cidade{
+  width:220px;padding:8px 12px 8px 30px;border:1px solid var(--border);border-radius:8px;
+  font-size:13px;font-family:inherit;background:var(--surface-sunken);color:var(--text);
+}
+.busca-cidade:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.export-bar button{
+  display:inline-flex;align-items:center;gap:7px;
+  border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;
+  cursor:pointer;background:var(--accent);color:var(--accent-contrast);font-family:inherit;
+}
+.export-bar button:hover{background:var(--accent-strong);}
+.export-bar button svg{width:14px;height:14px;}
+
+.city-page{margin-bottom:34px;}
+.city-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 14px 2px;}
+.city-heading h2{font-size:22px;font-weight:700;margin:0;letter-spacing:.01em;}
+.city-heading .count{font-size:12px;color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border);padding:2px 9px;border-radius:999px;font-weight:600;}
+
+.setor-heading{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin:16px 0 8px 2px;}
+.setor-heading:first-of-type{margin-top:4px;}
+
+.week-header{display:flex;gap:8px;margin:0 0 8px 200px;}
+.week-header .wd{flex:1;text-align:center;font-size:13px;font-weight:700;color:var(--text-muted);letter-spacing:.01em;line-height:1.25;}
+.week-header .wd .num{display:block;font-family:"IBM Plex Mono",monospace;font-size:26px;color:var(--text);margin-top:4px;font-weight:800;}
+.week-header .wd.feriado{color:var(--ferias-text);}
+.week-header .feriado-tag{
+  display:inline-block;font-size:9px;font-weight:700;color:#fff;background:var(--ferias-text);
+  border-radius:6px;padding:2px 6px;margin-bottom:3px;white-space:nowrap;letter-spacing:.02em;
+}
+
+.rows{display:flex;flex-direction:column;gap:10px;}
+.folga-footer{font-size:14px;font-style:italic;color:var(--text-muted);margin:4px 0 16px 2px;}
+.tech-row{display:flex;align-items:stretch;gap:10px;}
+
+.tech-name-card{
+  flex:0 0 190px;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:11px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);
+}
+.avatar{
+  flex:0 0 34px;width:34px;height:34px;border-radius:50%;
+  background:var(--surface-sunken);color:var(--accent);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;letter-spacing:.02em;
+}
+.tech-name-card .info{min-width:0;}
+.tech-name-card .nome{font-weight:600;font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tech-name-card .setor{font-size:11px;color:var(--text-muted);margin-top:1px;}
+.tech-name-card.guest{opacity:.75;border-style:dashed;}
+.tech-name-card .tag-guest{
+  font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--temp-text);
+  margin-top:3px;font-weight:700;
+}
+.tech-name-card .tag-dupla{font-size:10.5px;color:var(--text-muted);margin-top:3px;font-style:italic;}
+
+.day-cards{display:flex;gap:8px;flex:1;}
+.day-card{
+  flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:9px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;min-width:0;gap:2px;box-shadow:var(--shadow);
+}
+.day-card .label{
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;
+}
+.day-card .label svg{width:12px;height:12px;flex:0 0 auto;}
+.day-card .sub{font-size:10.5px;margin-top:1px;line-height:1.3;opacity:.9;}
+.day-card .sub.dupla-sub{font-style:italic;}
+
+.day-card.instalador{background:var(--instalador-bg);color:var(--instalador-text);border-color:transparent;}
+.day-card.manutencao{background:var(--manutencao-bg);color:var(--manutencao-text);border-color:transparent;}
+.day-card.folga{background:var(--folga-bg);color:var(--folga-text);border-color:transparent;}
+.day-card.atestado{background:var(--atestado-bg);color:var(--atestado-text);border-color:transparent;}
+.day-card.outras{background:var(--outras-bg);color:var(--outras-text);border-color:transparent;}
+.day-card.ferias{background:var(--ferias-bg);color:var(--ferias-text);border-color:transparent;}
+.day-card.temp-away{background:var(--temp-bg);color:var(--temp-text);border-color:transparent;}
+.day-card.temp-here{border-style:dashed;opacity:.7;background:var(--surface);}
+.day-card.temp-here.instalador{background:var(--instalador-bg);color:var(--instalador-text);}
+.day-card.temp-here.manutencao{background:var(--manutencao-bg);color:var(--manutencao-text);}
+.day-card.empty{background:var(--surface-sunken);color:var(--text-faint);border-style:dashed;}
+.day-card.feriado-day{box-shadow:inset 0 0 0 2px var(--ferias-text);}
+
+.legend{
+  display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:22px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;
+  box-shadow:var(--shadow);
+}
+.legend .title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-right:4px;}
+.legend .item{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);}
+.legend .swatch{
+  width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+.legend .swatch svg{width:11px;height:11px;}
+.legend .swatch.instalador{background:var(--instalador-bg);color:var(--instalador-text);}
+.legend .swatch.manutencao{background:var(--manutencao-bg);color:var(--manutencao-text);}
+.legend .swatch.folga{background:var(--folga-bg);color:var(--folga-text);}
+.legend .swatch.atestado{background:var(--atestado-bg);color:var(--atestado-text);}
+.legend .swatch.outras{background:var(--outras-bg);color:var(--outras-text);}
+.legend .swatch.ferias{background:var(--ferias-bg);color:var(--ferias-text);}
+.legend .swatch.temp{background:var(--temp-bg);color:var(--temp-text);}
+
+@media print{
+  .no-print{display:none !important;}
+  body{padding:0;background:#fff;}
+  .city-page{page-break-after:always;padding:10mm 12mm 0;}
+  .city-page:last-of-type{page-break-after:auto;}
+  .day-card,.tech-name-card,.legend,.page-topbar{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  @page{size:A4 landscape;margin:0;}
+}
+`;
+
+  // ---------- Relógio ----------
+  function tickClock(){
+    var now = new Date();
+    var el = document.getElementById("relogio");
+    if(el) el.textContent = pad2(now.getHours()) + ":" + pad2(now.getMinutes()) + ":" + pad2(now.getSeconds());
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // ---------- Exportar escala (HTML autônomo, com PDF por cidade) ----------
+  function getLogoDataUri(){
+    var img = document.querySelector(".topbar-logo");
+    return img ? img.src : "";
+  }
+
+  var ICONE_BUSCA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+  var ICONE_IMPRIMIR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>';
+  var ICONES_STATUS = {
+    instalador: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
+    manutencao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
+    folga: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>',
+    atestado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6z"></path><path d="M12 8v6M9 11h6"></path></svg>',
+    ferias: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21c4-8 12-8 16-16"></path><path d="M20 5c0 4-3 6-8 6"></path></svg>',
+    "temp-away": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5M21 12H9"></path></svg>',
+    outras: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>'
+  };
+
+  function iconeParaCls(cls){
+    var tokens = cls.split(/\s+/);
+    for(var i=0;i<tokens.length;i++){
+      if(ICONES_STATUS[tokens[i]]) return ICONES_STATUS[tokens[i]];
+    }
+    return "";
+  }
+
+  function getIniciais(nome){
+    var partes = nome.trim().split(/\s+/);
+    if(partes.length >= 2) return (partes[0][0] + partes[1][0]).toUpperCase();
+    return nome.slice(0,2).toUpperCase();
+  }
+
+  function gerarWeekHeaderHTML(diasIdx){
+    return '<div class="week-header">' + diasIdx.map(function(idx){
+      var dia = DIAS[idx];
+      var feriado = getFeriado(weekDates[idx]);
+      return '<div class="wd' + (feriado ? ' feriado' : '') + '">' +
+        (feriado ? '<span class="feriado-tag">Feriado · ' + escapeHtml(feriado) + '</span>' : '') +
+        DIA_SEMANA_EXTENSO[dia] + '<span class="num">' + weekDates[idx].getDate() + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function gerarLinhaTecnicoHTML(tech, cidade, isHome, diasIdx, viewingSetor){
+    var cells = diasIdx.map(function(idx){
+      var dia = DIAS[idx];
+      var cell = getCell(tech, dia, cidade, isHome, weekDates[idx], viewingSetor);
+      var feriado = getFeriado(weekDates[idx]);
+      var duplaSub = getDuplaSub(tech, dia, weekDates[idx], cell.cls);
+      var cls = "day-card " + cell.cls + (feriado ? " feriado-day" : "");
+      var icone = iconeParaCls(cell.cls);
+      return '<div class="' + cls + '"><div class="label">' + icone + escapeHtml(cell.label) + '</div>' +
+        (cell.sub ? '<div class="sub">' + escapeHtml(cell.sub) + '</div>' : '') +
+        (duplaSub ? '<div class="sub dupla-sub">' + escapeHtml(duplaSub) + '</div>' : '') + '</div>';
+    }).join('');
+    var duploDe = getParceiroDeQuem(tech);
+    return '<div class="tech-row">' +
+      '<div class="tech-name-card' + (isHome ? '' : ' guest') + '">' +
+        '<div class="avatar">' + escapeHtml(getIniciais(tech.nome)) + '</div>' +
+        '<div class="info">' +
+          '<div class="nome">' + escapeHtml(tech.nome) + '</div>' +
+          '<div class="setor">' + escapeHtml(tech.setor) + '</div>' +
+          (isHome ? '' : '<div class="tag-guest">Temporário</div>') +
+          (duploDe ? '<div class="tag-dupla">+ ' + escapeHtml(duploDe.nome) + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="day-cards">' + cells + '</div>' +
+    '</div>';
+  }
+
+  function gerarPageTopbarHTML(logoUri, dataTxt){
+    return '<div class="page-topbar"><img class="topbar-logo" src="' + logoUri + '" alt="avança">' +
+      '<div class="topbar-titles"><span class="topbar-title">Escala de Técnicos</span>' +
+      '<span class="topbar-date">' + escapeHtml(dataTxt) + '</span></div></div>';
+  }
+
+  function gerarLegendaHTML(){
+    return '<div class="legend no-print">' +
+      '<span class="title">Legenda</span>' +
+      '<div class="item"><span class="swatch instalador">' + ICONES_STATUS.instalador + '</span>Instalador</div>' +
+      '<div class="item"><span class="swatch manutencao">' + ICONES_STATUS.manutencao + '</span>Manutenção</div>' +
+      '<div class="item"><span class="swatch folga">' + ICONES_STATUS.folga + '</span>Folga</div>' +
+      '<div class="item"><span class="swatch atestado">' + ICONES_STATUS.atestado + '</span>Atestado</div>' +
+      '<div class="item"><span class="swatch ferias">' + ICONES_STATUS.ferias + '</span>Férias</div>' +
+      '<div class="item"><span class="swatch temp">' + ICONES_STATUS["temp-away"] + '</span>Deslocado temporariamente</div>' +
+      '<div class="item"><span class="swatch outras">' + ICONES_STATUS.outras + '</span>Outras atividades</div>' +
+    '</div>';
+  }
+
+  function normalizarBusca(str){
+    return String(str).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+
+  // Técnico é o auxiliar (duplado) de alguém em pelo menos um dos dias sendo exportados, nessa cidade
+  // (seja como titular de lá, seja como convidado — a dupla viaja junto). Só usado na exportação —
+  // na tela normal, o duplado continua aparecendo (só desce na lista).
+  function techEhAuxiliarNosDiasExportados(tech, cidade, diasIdx, isHome, viewingSetor){
+    var home = isHome !== false;
+    var setor = viewingSetor || tech.setor;
+    for(var i=0; i<diasIdx.length; i++){
+      var idx = diasIdx[i];
+      var cell = getCell(tech, DIAS[idx], cidade, home, weekDates[idx], setor);
+      if(getDuplaSub(tech, DIAS[idx], weekDates[idx], cell.cls) === "Duplado") return true;
+    }
+    return false;
+  }
+
+  // Técnico atua temporariamente nesta cidade em pelo menos um dos dias sendo exportados
+  // (evita mostrar, num export de um dia só, um convidado que só está alocado ali em outro dia da semana)
+  function techEhConvidadoNosDiasExportados(tech, cidade, diasIdx){
+    for(var i=0; i<diasIdx.length; i++){
+      var idx = diasIdx[i];
+      if(getTempCidadeEfetiva(tech, DIAS[idx], isoDate(weekDates[idx])) === cidade) return true;
+    }
+    return false;
+  }
+
+  // Técnico atua como convidado nesta cidade, nesse setor especificamente (considerando o setor
+  // efetivo de cada dia), em pelo menos um dos dias sendo exportados
+  function techEhConvidadoDoSetorNosDiasExportados(tech, cidade, setor, diasIdx){
+    for(var i=0; i<diasIdx.length; i++){
+      var idx = diasIdx[i];
+      var dataIso = isoDate(weekDates[idx]);
+      if(getTempCidadeEfetiva(tech, DIAS[idx], dataIso) === cidade && getSetorEfetivo(tech, dataIso) === setor) return true;
+    }
+    return false;
+  }
+
+  // Técnico foi remanejado (exceção do dia) pra este setor em pelo menos um dos dias sendo exportados,
+  // permanecendo na cidade de origem naquele dia (senão quem mostra é o convidado da outra cidade)
+  function techEhConvidadoDeSetorNosDiasExportados(tech, setor, diasIdx){
+    if(ehDoSetor(tech, setor)) return false;
+    for(var i=0; i<diasIdx.length; i++){
+      var idx = diasIdx[i];
+      var dataIso = isoDate(weekDates[idx]);
+      if(getTempCidadeEfetiva(tech, DIAS[idx], dataIso)) continue;
+      if(getSetorEfetivo(tech, dataIso) === setor) return true;
+    }
+    return false;
+  }
+
+  // Técnico ficou fora da cidade (alocado em outra) ou remanejado pra fora do setor dele em TODOS
+  // os dias exportados — já aparece em outro grupo/cidade, então some da lista do grupo original.
+  function techEhOcultavelHomeExportado(tech, diasIdx){
+    for(var i=0; i<diasIdx.length; i++){
+      var idx = diasIdx[i];
+      var dataIso = isoDate(weekDates[idx]);
+      if(getTempCidadeEfetiva(tech, DIAS[idx], dataIso)) continue;
+      if(getSetorEfetivo(tech, dataIso) !== tech.setor) continue;
+      return false;
+    }
+    return true;
+  }
+
+  // Técnico está com o mesmo status (folga, férias etc.) em TODOS os dias exportados — vira só uma
+  // menção no rodapé, sem linha própria
+  function techEstaComStatusTodosDiasExportados(tech, diasIdx, cls){
+    for(var i=0; i<diasIdx.length; i++){
+      var idx = diasIdx[i];
+      var cell = getCell(tech, DIAS[idx], tech.cidade, true, weekDates[idx], tech.setor);
+      if(cell.cls !== cls) return false;
+    }
+    return true;
+  }
+
+  function gerarGrupoSetorHTML(titulo, homeTechs, guestTechs, cidade, diasIdx, viewingSetor, folgaTechs, feriasTechs, outrasTechs, atestadoTechs){
+    if(homeTechs.length === 0 && guestTechs.length === 0 && folgaTechs.length === 0 && feriasTechs.length === 0 && outrasTechs.length === 0 && atestadoTechs.length === 0) return "";
+    var rows = homeTechs.map(function(t){ return gerarLinhaTecnicoHTML(t, cidade, true, diasIdx, viewingSetor); }).join("") +
+               guestTechs.map(function(t){ return gerarLinhaTecnicoHTML(t, cidade, false, diasIdx, viewingSetor); }).join("");
+    var footer =
+      (folgaTechs.length ? '<div class="folga-footer">De folga: ' + folgaTechs.map(function(t){ return escapeHtml(t.nome); }).join(", ") + '</div>' : '') +
+      (feriasTechs.length ? '<div class="folga-footer">De férias: ' + feriasTechs.map(function(t){ return escapeHtml(t.nome); }).join(", ") + '</div>' : '') +
+      (atestadoTechs.length ? '<div class="folga-footer">De atestado: ' + atestadoTechs.map(function(t){ return escapeHtml(t.nome); }).join(", ") + '</div>' : '') +
+      (outrasTechs.length ? '<div class="folga-footer">Em outras atividades: ' + outrasTechs.map(function(t){ return escapeHtml(t.nome); }).join(", ") + '</div>' : '');
+    return '<h3 class="setor-heading">' + escapeHtml(titulo) + '</h3>' +
+      (rows ? '<div class="rows">' + rows + '</div>' : '') +
+      footer;
+  }
+
+  function gerarSecaoCidadeHTML(cidade, logoUri, diasIdx, dataTxt){
+    var grupo = techsForCidade(cidade);
+    var guestsExportaveis = grupo.guests.filter(function(t){ return techEhConvidadoNosDiasExportados(t, cidade, diasIdx); });
+    var homeElegivel = grupo.home.filter(function(t){
+      return !techEhAuxiliarNosDiasExportados(t, cidade, diasIdx) && !techEhOcultavelHomeExportado(t, diasIdx);
+    });
+    var homeDeFolga = homeElegivel.filter(function(t){ return techEstaComStatusTodosDiasExportados(t, diasIdx, "folga"); });
+    var homeDeFerias = homeElegivel.filter(function(t){ return techEstaComStatusTodosDiasExportados(t, diasIdx, "ferias"); });
+    var homeDeOutras = homeElegivel.filter(function(t){ return techEstaComStatusTodosDiasExportados(t, diasIdx, "outras"); });
+    var homeDeAtestado = homeElegivel.filter(function(t){ return techEstaComStatusTodosDiasExportados(t, diasIdx, "atestado"); });
+    var homeVisivel = homeElegivel.filter(function(t){
+      return homeDeFolga.indexOf(t) === -1 && homeDeFerias.indexOf(t) === -1 && homeDeOutras.indexOf(t) === -1 && homeDeAtestado.indexOf(t) === -1;
+    });
+    var convidadosDeSetorPorGrupo = GRUPOS_SETOR.map(function(g){
+      return grupo.home.filter(function(t){ return techEhConvidadoDeSetorNosDiasExportados(t, g.setor, diasIdx); });
+    });
+    // Convidado (de outra cidade ou remanejado de setor) que é auxiliar de alguém não precisa de
+    // linha própria — a dupla já aparece via o "+ Nome" na linha do principal.
+    var guestsDoSetorPorGrupo = GRUPOS_SETOR.map(function(g, i){
+      return guestsExportaveis.filter(function(t){ return techEhConvidadoDoSetorNosDiasExportados(t, cidade, g.setor, diasIdx); })
+        .concat(convidadosDeSetorPorGrupo[i])
+        .filter(function(t){ return !techEhAuxiliarNosDiasExportados(t, cidade, diasIdx, false, g.setor); });
+    });
+    var totalAtivo = homeVisivel.length +
+      guestsDoSetorPorGrupo.reduce(function(soma, lista){ return soma + lista.length; }, 0);
+    var totalGeral = totalAtivo + homeDeFolga.length + homeDeFerias.length + homeDeOutras.length + homeDeAtestado.length;
+    if(totalGeral === 0) return "";
+    var gruposHtml = GRUPOS_SETOR.map(function(g, i){
+      var homeDoSetor = homeVisivel.filter(function(t){ return ehDoSetor(t, g.setor); });
+      var guestsDoSetor = guestsDoSetorPorGrupo[i];
+      var folgaDoSetor = homeDeFolga.filter(function(t){ return ehDoSetor(t, g.setor); });
+      var feriasDoSetor = homeDeFerias.filter(function(t){ return ehDoSetor(t, g.setor); });
+      var outrasDoSetor = homeDeOutras.filter(function(t){ return ehDoSetor(t, g.setor); });
+      var atestadoDoSetor = homeDeAtestado.filter(function(t){ return ehDoSetor(t, g.setor); });
+      return gerarGrupoSetorHTML(g.titulo, homeDoSetor, guestsDoSetor, cidade, diasIdx, g.setor, folgaDoSetor, feriasDoSetor, outrasDoSetor, atestadoDoSetor);
+    }).join("");
+    var contagem = totalAtivo === 1 ? "1 técnico" : totalAtivo + " técnicos";
+    return '<section class="city-page" data-cidade="' + escapeHtml(normalizarBusca(cidade)) + '">' +
+      gerarPageTopbarHTML(logoUri, dataTxt) +
+      '<div class="city-heading"><h2>' + escapeHtml(cidade) + '</h2><span class="count">' + contagem + '</span></div>' +
+      gerarWeekHeaderHTML(diasIdx) +
+      gruposHtml +
+      gerarLegendaHTML() +
+    '</section>';
+  }
+
+  function gerarHtmlExportacao(diasIdx){
+    diasIdx = diasIdx || [0,1,2,3,4,5,6];
+    var logoUri = getLogoDataUri();
+    var periodoTxt = diasIdx.length === 1 ? formatDataLonga(DIAS[diasIdx[0]], weekDates[diasIdx[0]]) : formatPeriodo();
+    var citiesHtml = CIDADES.map(function(c){ return gerarSecaoCidadeHTML(c, logoUri, diasIdx, periodoTxt); }).join("");
+    return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>Escala de Técnicos — ' + escapeHtml(periodoTxt) + '</title>' +
+      '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">' +
+      '<style>' + EXPORT_CSS + '</style></head><body>' +
+      '<div class="export-bar no-print">' +
+        '<span class="hint">Uma cidade por folha ao imprimir · use a busca para localizar rapidamente uma cidade</span>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<div class="search-wrap">' + ICONE_BUSCA +
+            '<input type="text" id="buscaCidade" class="busca-cidade" placeholder="Buscar cidade…">' +
+          '</div>' +
+          '<button onclick="window.print()">' + ICONE_IMPRIMIR + 'Baixar PDF</button>' +
+        '</div>' +
+      '</div>' +
+      citiesHtml +
+      '<script>' +
+        'document.getElementById("buscaCidade").addEventListener("input", function(){' +
+          'var termo = this.value.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");' +
+          'document.querySelectorAll(".city-page").forEach(function(sec){' +
+            'var nome = sec.getAttribute("data-cidade") || "";' +
+            'sec.style.display = nome.indexOf(termo) !== -1 ? "" : "none";' +
+          '});' +
+        '});' +
+      '<\/script>' +
+      '</body></html>';
+  }
+
+  document.getElementById("exportarBtn").addEventListener("click", function(){
+    var selVal = document.getElementById("exportDiaSelect").value;
+    var diasIdx = selVal === "semana" ? [0,1,2,3,4,5,6] : [parseInt(selVal, 10)];
+    var htmlExport = gerarHtmlExportacao(diasIdx);
+    var blob = new Blob([htmlExport], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = diasIdx.length === 7
+      ? "escala-tecnicos_" + isoDate(weekDates[0]) + "_a_" + isoDate(weekDates[6]) + ".html"
+      : "escala-tecnicos_" + isoDate(weekDates[diasIdx[0]]) + ".html";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  });
+
+  // ---------- Relatório mensal (por colaborador) ----------
+
+  var DIAS_JS = ["dom","seg","ter","qua","qui","sex","sab"]; // Date.getDay(): 0=dom
+  var PALAVRAS_IGNORAR_ABREV = { de:1, da:1, do:1, das:1, dos:1 };
+
+  // Abreviação curta (2-4 letras) de uma cidade pro grid mensal: iniciais das palavras
+  // relevantes, ou as 3 primeiras letras quando é um nome de uma palavra só.
+  function cidadeAbrev(nome){
+    var palavras = String(nome).split(/\s+/).filter(function(p){ return !PALAVRAS_IGNORAR_ABREV[p.toLowerCase()]; });
+    if(palavras.length === 1) return palavras[0].slice(0,3).toUpperCase();
+    return palavras.slice(0,4).map(function(p){ return p[0]; }).join("").toUpperCase();
+  }
+
+  function diaKeyFromDate(d){ return DIAS_JS[d.getDay()]; }
+
+  function getDiasDoMes(anoMesStr){
+    var partes = anoMesStr.split("-");
+    var ano = parseInt(partes[0], 10), mes = parseInt(partes[1], 10);
+    var dias = [];
+    var d = new Date(ano, mes - 1, 1);
+    while(d.getMonth() === mes - 1){
+      dias.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return dias;
+  }
+
+  // Situação efetiva do técnico num dia, pro relatório mensal: folga (inclui fim de semana
+  // não editado), férias, atestado, outras atividades, ou trabalhando (com a cidade efetiva
+  // daquele dia — a alocação temporária, se houver, senão a cidade cadastrada — e se foi
+  // remanejamento avulso pra outra cidade).
+  function getResumoDiaMensal(tech, diaKey, dataIso, dateObj){
+    if(tech.status === "ferias" && dateInRange(dateObj, tech.feriasInicio, tech.feriasFim)){
+      return { kind: "ferias" };
+    }
+    var diaData = getDiaData(tech, diaKey, dataIso);
+    if(ehFolgaPadraoNaoEditado(tech, diaKey, dataIso, dateObj, diaData) || diaData.folga){
+      return { kind: "folga" };
+    }
+    if(diaData.atestado) return { kind: "atestado" };
+    if(diaData.outras) return { kind: "outras" };
+    var horario = horarioEfetivo(tech, diaData);
+    if(!horario.inicio || !horario.fim) return { kind: "folga" };
+    var tempCidade = getTempCidadeEfetiva(tech, diaKey, dataIso);
+    var setorEfetivo = getSetorEfetivo(tech, dataIso);
+    return {
+      kind: setorEfetivo === "Manutenção" ? "manutencao" : "instalador",
+      cidade: tempCidade || tech.cidade,
+      temp: !!tempCidade
+    };
+  }
+
+  // Layout em tabela (table-layout:fixed): garante que as colunas dos dias fiquem sempre
+  // alinhadas entre as linhas, com o mês inteiro (até 31 dias) coubendo na largura da
+  // página, ao contrário de uma linha flexível (que desalinha e embaralha o texto quando
+  // o conteúdo não cabe).
+  var MONTHLY_EXTRA_CSS = `
+.mreport{overflow-x:auto;}
+.report-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 16px 2px;}
+.report-heading h2{font-size:22px;font-weight:700;letter-spacing:.01em;margin:0;}
+.report-heading .count{font-size:12px;color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border);padding:2px 9px;border-radius:999px;font-weight:600;}
+.mtable{width:100%;border-collapse:separate;border-spacing:3px 4px;table-layout:fixed;margin-bottom:6px;}
+.mtable col.mcol-name{width:180px;}
+.mtable col.mcol-summary{width:180px;}
+.mtable thead th{
+  font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;color:var(--text-faint);
+  text-align:center;padding:2px 0 4px;font-variant-numeric:tabular-nums;
+}
+.mtable thead th.mth-side{font-family:"IBM Plex Sans",sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;color:var(--text-muted);}
+.mtd-name{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 12px;box-shadow:var(--shadow);}
+.mtd-name .row{display:flex;align-items:center;gap:9px;}
+.mtd-name .avatar{
+  flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:var(--surface-sunken);color:var(--accent);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:12px;
+}
+.mtd-name .nome{font-weight:700;font-size:13.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mtd-name .setor{font-size:11px;color:var(--text-muted);margin-top:1px;}
+.mday{
+  background:var(--surface-sunken);border-radius:6px;text-align:center;vertical-align:middle;
+  font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:10px;letter-spacing:.02em;
+  color:var(--text-faint);padding:9px 1px;
+}
+.mday.folga{color:var(--folga-text);}
+.mday.instalador{background:var(--instalador-bg);color:var(--instalador-text);}
+.mday.manutencao{background:var(--manutencao-bg);color:var(--manutencao-text);}
+.mday.atestado{background:var(--atestado-bg);color:var(--atestado-text);}
+.mday.ferias{background:var(--ferias-bg);color:var(--ferias-text);}
+.mday.outras{background:var(--outras-bg);color:var(--outras-text);}
+.mday.temp{box-shadow:inset 0 0 0 2px currentColor;}
+.mtd-summary{font-size:11.5px;color:var(--text-muted);padding-left:8px;line-height:1.45;}
+.mtd-summary b{color:var(--text);font-weight:700;}
+@media print{
+  @page{ size:A4 landscape; margin:8mm; }
+  .mtable{ font-size:9px; }
+}
+`;
+
+  function gerarColgroupMensalHTML(dias){
+    var cols = dias.map(function(){ return "<col>"; }).join("");
+    return '<colgroup><col class="mcol-name">' + cols + '<col class="mcol-summary"></colgroup>';
+  }
+
+  function gerarCabecalhoMensalHTML(dias){
+    var ths = dias.map(function(d){ return "<th>" + d.getDate() + "</th>"; }).join("");
+    return '<thead><tr><th class="mth-side">Colaborador</th>' + ths + '<th class="mth-side">Resumo</th></tr></thead>';
+  }
+
+  function gerarLinhaMensalHTML(tech, dias){
+    var cidadeCount = {};
+    var statusCount = { atestado: 0, ferias: 0, outras: 0 };
+    var cellsHtml = dias.map(function(d){
+      var diaKey = diaKeyFromDate(d);
+      var dataIso = isoDate(d);
+      var info = getResumoDiaMensal(tech, diaKey, dataIso, d);
+      if(info.kind === "folga"){
+        return '<td class="mday folga">&middot;</td>';
+      }
+      if(info.kind === "atestado" || info.kind === "ferias" || info.kind === "outras"){
+        statusCount[info.kind]++;
+        var code = info.kind === "atestado" ? "AT" : (info.kind === "ferias" ? "FÉ" : "OU");
+        return '<td class="mday ' + info.kind + '">' + code + '</td>';
+      }
+      cidadeCount[info.cidade] = (cidadeCount[info.cidade] || 0) + 1;
+      var cls = "mday " + info.kind + (info.temp ? " temp" : "");
+      return '<td class="' + cls + '">' + escapeHtml(cidadeAbrev(info.cidade)) + '</td>';
+    }).join("");
+
+    var partesResumo = Object.keys(cidadeCount)
+      .sort(function(a, b){ return cidadeCount[b] - cidadeCount[a]; })
+      .map(function(c){ return escapeHtml(c) + " <b>" + cidadeCount[c] + "d</b>"; });
+    if(statusCount.ferias) partesResumo.push("Férias <b>" + statusCount.ferias + "d</b>");
+    if(statusCount.atestado) partesResumo.push("Atestado <b>" + statusCount.atestado + "d</b>");
+    if(statusCount.outras) partesResumo.push("Outras ativ. <b>" + statusCount.outras + "d</b>");
+    var resumo = partesResumo.length ? partesResumo.join(" &middot; ") : "Sem dias trabalhados";
+
+    return '<tr>' +
+      '<td class="mtd-name"><div class="row">' +
+        '<div class="avatar">' + escapeHtml(getIniciais(tech.nome)) + '</div>' +
+        '<div class="info">' +
+          '<div class="nome">' + escapeHtml(tech.nome) + '</div>' +
+          '<div class="setor">' + escapeHtml(tech.setor) + '</div>' +
+        '</div>' +
+      '</div></td>' +
+      cellsHtml +
+      '<td class="mtd-summary">' + resumo + '</td>' +
+    '</tr>';
+  }
+
+  function gerarHtmlRelatorioMensal(anoMesStr){
+    var dias = getDiasDoMes(anoMesStr);
+    var partes = anoMesStr.split("-");
+    var tituloMes = MESES[parseInt(partes[1], 10) - 1] + " de " + partes[0];
+    var logoUri = getLogoDataUri();
+    var colgroupHtml = gerarColgroupMensalHTML(dias);
+    var cabecalhoHtml = gerarCabecalhoMensalHTML(dias);
+
+    var gruposHtml = GRUPOS_SETOR.map(function(g){
+      var techsDoSetor = techs.filter(function(t){ return ehDoSetor(t, g.setor); })
+        .sort(function(a, b){ return a.nome.localeCompare(b.nome, "pt-BR"); });
+      if(techsDoSetor.length === 0) return "";
+      var rows = techsDoSetor.map(function(t){ return gerarLinhaMensalHTML(t, dias); }).join("");
+      return '<h3 class="setor-heading">' + escapeHtml(g.titulo) + '</h3>' +
+        '<table class="mtable">' + colgroupHtml + cabecalhoHtml + '<tbody>' + rows + '</tbody></table>';
+    }).join("");
+
+    return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>Relatório Mensal — ' + escapeHtml(tituloMes) + '</title>' +
+      '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">' +
+      '<style>' + EXPORT_CSS + MONTHLY_EXTRA_CSS + '</style></head><body>' +
+      '<div class="export-bar no-print">' +
+        '<span class="hint">Um colaborador por linha · cidade e status por dia do mês</span>' +
+        '<button onclick="window.print()">' + ICONE_IMPRIMIR + 'Baixar PDF</button>' +
+      '</div>' +
+      '<div class="page-topbar"><img class="topbar-logo" src="' + logoUri + '" alt="avança">' +
+        '<div class="topbar-titles"><span class="topbar-title">Relatório Mensal de Escala</span>' +
+        '<span class="topbar-date">' + escapeHtml(tituloMes) + '</span></div></div>' +
+      '<div class="report-heading"><h2>Relatório Mensal</h2><span class="count">' + techs.length + ' colaboradores</span></div>' +
+      '<div class="mreport">' + gruposHtml + '</div>' +
+      gerarLegendaHTML() +
+      '</body></html>';
+  }
+
+  var relatorioMesInput = document.getElementById("relatorioMesInput");
+  var hoje = new Date();
+  relatorioMesInput.value = hoje.getFullYear() + "-" + pad2(hoje.getMonth() + 1);
+
+  document.getElementById("relatorioMensalBtn").addEventListener("click", function(){
+    var anoMesStr = relatorioMesInput.value;
+    if(!anoMesStr) return;
+    var htmlRelatorio = gerarHtmlRelatorioMensal(anoMesStr);
+    var blob = new Blob([htmlRelatorio], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "relatorio-mensal_" + anoMesStr + ".html";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  });
+
+  // Mostra algo na tela imediatamente com o cache local (carregarDoCacheLocal, dentro de
+  // loadData, é síncrono), depois confere a sessão de login e busca a versão mais recente
+  // no Supabase — quando os dois voltarem, re-renderiza com o estado final.
+  var cargaInicial = loadData();
+  atualizarAuthUI();
+  render();
+
+  Promise.all([
+    supabaseClient.auth.getSession().then(function(res){ return res.data ? res.data.session : null; }),
+    cargaInicial
+  ]).then(function(resultados){
+    sessaoAtual = resultados[0];
+    atualizarAuthUI();
+    render();
+  });
+})();
+</script>
+</body>
+</html>
