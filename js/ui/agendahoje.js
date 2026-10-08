@@ -7,7 +7,7 @@
  * guardado em agenda_publicada (database/patch-15). Uma linha por
  * dia, com uma lista de paradas: técnico, horário, OS, cliente...
  *
- * O pré-agendamento em si abre numa guia nova e só admin vê o botão.
+ * O pré-agendamento em si abre numa guia nova e só admin/editor vê o botão.
  */
 
 let agendaHojeData = null; // dia exibido (Date à meia-noite)
@@ -37,7 +37,7 @@ async function renderizarAgendaHoje() {
     if (!container) return;
 
     const botaoPre = document.getElementById("btnAbrirPreAgendamento");
-    if (botaoPre) botaoPre.hidden = !ehAdmin();
+    if (botaoPre) botaoPre.hidden = !podeEditarOperacao();
 
     agendaHojeData ??= hojeMeiaNoite();
     const data = agendaHojeData;
@@ -63,7 +63,7 @@ async function renderizarAgendaHoje() {
         container.innerHTML = `
             <div class="placeholder-card">
                 <h2>📭 Nenhuma agenda publicada para este dia</h2>
-                <p>${ehAdmin()
+                <p>${podeEditarOperacao()
                     ? 'Gere o plano no Pré-agendamento e clique em "Publicar agenda" para ela aparecer aqui.'
                     : "Assim que o pré-agendamento do dia for publicado, ele aparece aqui."}</p>
             </div>`;

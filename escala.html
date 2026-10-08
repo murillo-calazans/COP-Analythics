@@ -929,10 +929,10 @@
   // A página inteira exige login (mesma conta/sessão do COP Analytics) —
   // sem sessão válida com um papel cadastrado em "perfis", só a tela de
   // login aparece (cobre tudo, não é um modal fechável). Só quem tem papel
-  // "admin" edita (a RLS da tabela escala_tecnicos_dados garante isso
+  // "admin" ou "editor" edita (a RLS da tabela escala_tecnicos_dados garante isso
   // também do lado do servidor, essa checagem na tela é só UX).
   function podeEditar(){
-    return papelAtual === "admin";
+    return papelAtual === "admin" || papelAtual === "editor";
   }
 
   function carregarPapelAtual(sessao){

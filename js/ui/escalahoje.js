@@ -13,7 +13,7 @@
  * uma regra lá? Muda aqui também.
  *
  * Editar continua sendo na escala.html, numa guia nova, e o botão
- * só aparece pra admin.
+ * só aparece pra admin/editor.
  */
 
 const ESCALA_FERIADOS = {
@@ -210,7 +210,7 @@ async function renderizarEscalaHoje() {
     if (!container) return;
 
     const botaoEditar = document.getElementById("btnEditarEscala");
-    if (botaoEditar) botaoEditar.hidden = !ehAdmin();
+    if (botaoEditar) botaoEditar.hidden = !podeEditarOperacao();
 
     escalaHojeData ??= hojeMeiaNoite();
     const data = escalaHojeData;

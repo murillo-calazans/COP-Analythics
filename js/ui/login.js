@@ -99,8 +99,8 @@ function mostrarAppAutenticado() {
 
 /**
  * Esconde ações restritas conforme o papel (ver js/services/auth.js):
- * Importar e o card de Diagnósticos Não Resolvidos liberam pra
- * admin+editor; Apagar Dados e Logs de Importação continuam só admin.
+ * Importar, Apagar Dados, Logs de Importação e o card de Diagnósticos
+ * Não Resolvidos liberam pra admin+editor (patch-17).
  */
 function aplicarGateDePapel() {
     const botaoImportar = document.getElementById("btnAbrirImportar");
@@ -108,10 +108,10 @@ function aplicarGateDePapel() {
     const botaoLogs = document.getElementById("btnAbrirLogs");
     const cardDiagnosticosNaoResolvidos = document.getElementById("cardDiagnosticosNaoResolvidos");
 
-    const admin = ehAdmin();
+    const operacao = podeEditarOperacao();
     const importar = podeImportar();
     if (botaoImportar) botaoImportar.hidden = !importar;
-    if (botaoLimpar) botaoLimpar.hidden = !admin;
-    if (botaoLogs) botaoLogs.hidden = !admin;
+    if (botaoLimpar) botaoLimpar.hidden = !operacao;
+    if (botaoLogs) botaoLogs.hidden = !operacao;
     if (cardDiagnosticosNaoResolvidos) cardDiagnosticosNaoResolvidos.hidden = !importar;
 }

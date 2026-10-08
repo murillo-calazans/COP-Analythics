@@ -18,8 +18,8 @@
  */
 
 const PAPEIS_USUARIO = {
-    admin: { rotulo: "Admin", descricao: "Tudo: importar, apagar, editar escala, pré-agendamento, usuários" },
-    editor: { rotulo: "Editor", descricao: "Importa dados e vê tudo" },
+    admin: { rotulo: "Admin", descricao: "Tudo o que o editor faz + usuários e Auditor IA" },
+    editor: { rotulo: "Editor", descricao: "Importa e apaga dados, logs, edita escala, pré-agendamento e agenda" },
     leitor: { rotulo: "Leitor", descricao: "Só consulta" }
 };
 
@@ -177,7 +177,7 @@ function registrarLinhaUsuarioAdmin(tr) {
     botaoSalvar.addEventListener("click", async () => {
         const c = campos();
         if (c.papel === "admin" && usuario.papel !== "admin"
-            && !confirm(`Dar acesso de ADMIN para ${usuario.email}? Admin pode importar, apagar dados e gerenciar usuários.`)) return;
+            && !confirm(`Dar acesso de ADMIN para ${usuario.email}? Admin pode gerenciar usuários e tudo o que o editor faz.`)) return;
 
         botaoSalvar.disabled = true;
         botaoSalvar.textContent = "Salvando...";

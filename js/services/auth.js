@@ -83,9 +83,19 @@ function ehAdmin() {
     return APP.usuario?.papel === "admin";
 }
 
+/**
+ * admin ou editor — operação do dia a dia: importar e apagar dados, ver
+ * logs de importação, editar escala, pré-agendar e publicar a agenda
+ * (no banco: patch-11 e patch-17). Só admin continua com usuários e
+ * Auditor IA (ehAdmin).
+ */
+function podeEditarOperacao() {
+    return APP.usuario?.papel === "admin" || APP.usuario?.papel === "editor";
+}
+
 /** admin ou editor — os dois podem importar dados (ver aplicarGateDePapel). */
 function podeImportar() {
-    return APP.usuario?.papel === "admin" || APP.usuario?.papel === "editor";
+    return podeEditarOperacao();
 }
 
 function traduzirErroLogin(error) {

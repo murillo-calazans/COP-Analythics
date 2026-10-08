@@ -916,7 +916,7 @@ $('#btnCSV').addEventListener('click', () => {
 });
 
 // Publica o plano como a agenda do dia (tabela agenda_publicada, database/patch-15) — é o que a
-// tela "Agenda do dia" do COP Analytics mostra. Só admin consegue gravar (RLS). Publicar de novo
+// tela "Agenda do dia" do COP Analytics mostra. Só admin/editor consegue gravar (RLS). Publicar de novo
 // o mesmo dia substitui a agenda anterior.
 $('#btnPublicar').addEventListener('click', async () => {
   if (!ultimo) return;
@@ -959,7 +959,7 @@ $('#btnPublicar').addEventListener('click', async () => {
 })();
 </script>
 <script>
-// Pré-agendamento é só pra admin: usa a sessão do COP Analytics (mesmo navegador) e o papel em
+// Pré-agendamento é só pra admin/editor: usa a sessão do COP Analytics (mesmo navegador) e o papel em
 // "perfis". Sem login ou sem ser admin, troca a página por um aviso com link pro COP.
 (async function(){
   const bloquear = msg => {
@@ -972,7 +972,7 @@ $('#btnPublicar').addEventListener('click', async () => {
     const sessao = (await supabaseClient.auth.getSession()).data.session;
     if (!sessao) return bloquear('Entre no COP Analytics com sua conta para usar o pré-agendamento.');
     const { data } = await supabaseClient.from('perfis').select('papel').eq('id', sessao.user.id).maybeSingle();
-    if (data?.papel !== 'admin') bloquear('O pré-agendamento é só para administradores.');
+    if (!['admin', 'editor'].includes(data?.papel)) bloquear('O pré-agendamento é só para administradores e editores.');
   } catch (e) {
     bloquear('Não deu pra conferir seu acesso: ' + (e.message || e));
   }

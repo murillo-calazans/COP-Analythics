@@ -584,8 +584,8 @@ async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
  * navegador de cada um, não dado compartilhado.
  */
 async function limparDadosImportados() {
-    if (!ehAdmin()) {
-        alert("Só administradores podem apagar os dados compartilhados.");
+    if (!podeEditarOperacao()) {
+        alert("Só administradores e editores podem apagar os dados compartilhados.");
         return;
     }
 
