@@ -9,7 +9,26 @@
  * abre a lista completa num popup, pra página não ficar comprida
  * demais com ranking grande (técnico, cidade, assunto, etc.).
  * Tooltip acessível por mouse e teclado.
+ *
+ * Com opcoes.campoFiltro (ex.: "assuntos", "operadores", "cidades",
+ * "diagnosticos" — ver CAMPOS_FILTRO_INTERATIVO em
+ * js/ui/filtrointerativo.js), clicar numa barra filtra a tela inteira
+ * por ela (Ctrl+clique soma várias), e, com esse campo filtrado, as
+ * barras fora do filtro ficam opacas em vez de sumir (realce estilo
+ * Power BI — pra isso o gráfico precisa receber os dados calculados
+ * SEM esse campo no filtro, ver dadosComRealce). Valor escolhido que
+ * ficaria fora do top "limite" entra na lista mesmo assim.
  */
+
+/**
+ * Dados de um gráfico com campoFiltro: se o campo estiver filtrado,
+ * recalcula ignorando ele (FiltroEngine.ordensFiltradasExceto), senão
+ * reaproveita o que já foi calculado pro resto da tela (sem custo extra).
+ */
+function dadosComRealce(campo, dadosJaCalculados, calcular) {
+    if (!campoInterativoAtivo(campo)) return dadosJaCalculados;
+    return calcular(FiltroEngine.ordensFiltradasExceto(CAMPOS_FILTRO_INTERATIVO[campo].chaveEstado));
+}
 
 function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
     const container = document.getElementById(containerId);
@@ -20,9 +39,15 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
     const formatoValor = opcoes.formatoValor ?? (v => String(v));
     const titulo = opcoes.titulo ?? "Lista completa";
 
-    container._dadosGrafico = { dados, formatoValor, opcoesOriginais: opcoes, titulo };
+    const campoFiltro = opcoes.campoFiltro ?? null;
+    const comRealce = campoFiltro !== null && campoInterativoAtivo(campoFiltro);
+
+    container._dadosGrafico = { dados, formatoValor, opcoesOriginais: opcoes, titulo, campoFiltro };
 
     const lista = dados.slice(0, limite);
+    if (comRealce) {
+        lista.push(...dados.slice(limite).filter(item => rotuloEstaNoFiltro(campoFiltro, item.rotulo)));
+    }
 
     if (lista.length === 0) {
         container.innerHTML = '<p class="grafico-vazio">Sem dados suficientes ainda.</p>';
@@ -38,10 +63,24 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
 
     lista.forEach(item => {
         const linha = document.createElement("div");
-        linha.className = opcoes.aoClicar ? "grafico-linha clicavel" : "grafico-linha";
+        const clicavel = Boolean(opcoes.aoClicar || campoFiltro);
+        linha.className = clicavel ? "grafico-linha clicavel" : "grafico-linha";
         linha.tabIndex = 0;
-        linha.setAttribute("role", opcoes.aoClicar ? "button" : "img");
+        linha.setAttribute("role", clicavel ? "button" : "img");
         linha.setAttribute("aria-label", `${item.rotulo}: ${formatoValor(item.valor)}`);
+
+        if (campoFiltro) {
+            // O clique em si é tratado pelo listener delegado de js/ui/filtrointerativo.js.
+            linha.classList.add("filtro-clicavel");
+            linha.dataset.campo = campoFiltro;
+            linha.dataset.valor = item.rotulo;
+            linha.title = "Clique pra filtrar — Ctrl+clique pra escolher vários";
+            if (comRealce) {
+                const escolhido = rotuloEstaNoFiltro(campoFiltro, item.rotulo);
+                linha.classList.toggle("barra-opaca", !escolhido);
+                linha.setAttribute("aria-pressed", String(escolhido));
+            }
+        }
 
         const rotulo = document.createElement("span");
         rotulo.className = "grafico-rotulo";
@@ -70,7 +109,33 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
         linha.addEventListener("focus", evento => mostrarTooltipGrafico(evento, item, formatoValor));
         linha.addEventListener("blur", ocultarTooltipGrafico);
 
-        if (opcoes.aoClicar) {
+        if (campoFiltro) {
+            linha.addEventListener("keydown", evento => {
+                if (evento.target !== linha) return; // Enter no botão de ação é dele
+                if (evento.key === "Enter" || evento.key === " ") {
+                    evento.preventDefault();
+                    cliqueFiltroInterativo(campoFiltro, item.rotulo, evento, linha);
+                }
+            });
+
+            // Clique na barra agora filtra — a ação antiga (ex.: abrir a
+            // ficha do técnico) vai pra um botão próprio no fim da linha.
+            if (opcoes.aoClicar) {
+                linha.classList.add("com-acao");
+                const acao = document.createElement("button");
+                acao.type = "button";
+                acao.className = "grafico-acao";
+                acao.dataset.acaoGrafico = "";
+                acao.textContent = "›";
+                acao.title = opcoes.rotuloAcao ?? "Ver detalhes";
+                acao.setAttribute("aria-label", `${opcoes.rotuloAcao ?? "Ver detalhes"}: ${item.rotulo}`);
+                acao.addEventListener("click", evento => {
+                    evento.stopPropagation();
+                    opcoes.aoClicar(item);
+                });
+                linha.appendChild(acao);
+            }
+        } else if (opcoes.aoClicar) {
             linha.addEventListener("click", () => opcoes.aoClicar(item));
             linha.addEventListener("keydown", evento => {
                 if (evento.key === "Enter" || evento.key === " ") {
@@ -106,7 +171,7 @@ function abrirGraficoCompleto(containerId) {
     const container = document.getElementById(containerId);
     if (!container || !container._dadosGrafico) return;
 
-    const { dados, formatoValor, titulo } = container._dadosGrafico;
+    const { dados, formatoValor, titulo, campoFiltro } = container._dadosGrafico;
 
     document.getElementById("modalGraficoCompletoTitulo").textContent = titulo;
 
@@ -119,7 +184,9 @@ function abrirGraficoCompleto(containerId) {
             <tbody>
                 ${dados.map(item => `
                     <tr>
-                        <td>${escaparHtml(String(item.rotulo))}</td>
+                        <td>${campoFiltro
+                            ? `<span class="filtro-clicavel" data-campo="${campoFiltro}" data-valor="${escaparHtml(String(item.rotulo))}" title="Clique pra filtrar">${escaparHtml(String(item.rotulo))}</span>`
+                            : escaparHtml(String(item.rotulo))}</td>
                         <td>${escaparHtml(String(formatoValor(item.valor)))}</td>
                     </tr>
                 `).join("")}

@@ -96,6 +96,13 @@ async function importarOrdens() {
             // tabela HTML com extensão .xlsx — lida à parte do SheetJS.
             nomeAba = "(tabela HTML)";
             linhas = lerTabelaHtml(buffer);
+        } else if (tipoArquivo === "zip" && planilhaGrandeDemaisParaSheetJS(buffer)) {
+            // Aba grande demais pro SheetJS (ver lerXlsxEmStreaming em
+            // js/utils/planilha.js) — lida aos pedaços.
+            status.textContent = "Planilha grande, lendo em partes...";
+            ({ nomeAba, linhas } = await lerXlsxEmStreaming(buffer, total => {
+                status.textContent = `Planilha grande, lendo em partes... ${total.toLocaleString("pt-BR")} linhas lidas`;
+            }));
         } else {
             const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
             ({ nomeAba, linhas } = lerPrimeiraAbaComDados(workbook));

@@ -57,7 +57,7 @@ function renderizarResultadosTecnicos(termo) {
     const linhas = filtradas.map(ficha => `
         <tr data-tecnico="${escaparHtml(ficha.nome)}" class="linha-clicavel">
             <td>#${ficha.ranking}</td>
-            <td>${escaparHtml(ficha.nome)}</td>
+            <td>${textoFiltravel("operadores", ficha.nome)}</td>
             <td>${ficha.totalFinalizadas}</td>
             <td>${formatarDuracaoHoras(ficha.tmsHoras)}</td>
             <td>${ficha.indiceReaberturaPercentual.toFixed(1)}%</td>

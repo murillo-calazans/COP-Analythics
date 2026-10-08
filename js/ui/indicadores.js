@@ -75,6 +75,15 @@ const FUNCOES_TEMPO_POR_DIMENSAO = {
     }
 };
 
+// Clicar numa barra de uma quebra de tempo filtra a tela por aquele valor (ver js/ui/filtrointerativo.js).
+const CAMPO_FILTRO_POR_DIMENSAO_TEMPO = {
+    cidade: "cidades",
+    setor: "setores",
+    tecnico: "operadores",
+    assunto: "assuntos",
+    diagnostico: "diagnosticos"
+};
+
 /** HTML de uma coluna (TMS/TMA/TMR/TME): título + um grafico-card por dimensão (mês + o que a métrica tiver). */
 function construirColunaTempo(metrica) {
     const dimensoes = ["mes", "cidade", "setor", ...(metrica.temTecnico ? ["tecnico"] : []), "assunto", "diagnostico"];
@@ -116,12 +125,16 @@ function renderizarColunaTempo(metrica, ordensFiltradas, meses) {
     });
 
     for (const [dimensao, obterDados] of Object.entries(FUNCOES_TEMPO_POR_DIMENSAO[metrica.chave])) {
-        const dados = obterDados(ordensFiltradas);
+        const campoFiltro = CAMPO_FILTRO_POR_DIMENSAO_TEMPO[dimensao];
+        const dados = campoInterativoAtivo(campoFiltro)
+            ? obterDados(FiltroEngine.ordensFiltradasExceto(CAMPOS_FILTRO_INTERATIVO[campoFiltro].chaveEstado))
+            : obterDados(ordensFiltradas);
         renderizarGraficoBarras(`tempo-${metrica.chave}-${dimensao}`, dados, {
             serie: metrica.serie,
             limite: dimensao === "tecnico" ? 5 : dados.length,
             formatoValor: formatarDuracaoHoras,
-            titulo: `${metrica.nome} ${ROTULOS_DIMENSAO_TEMPO[dimensao]}`
+            titulo: `${metrica.nome} ${ROTULOS_DIMENSAO_TEMPO[dimensao]}`,
+            campoFiltro
         });
     }
 }
@@ -311,16 +324,21 @@ function renderizarSecaoIndicadores() {
         titulo: "Motivos mais frequentes de reagendamento"
     });
 
-    renderizarGraficoBarras("graficoAssuntosCompleto", painel.porAssunto, {
+    renderizarGraficoBarras("graficoAssuntosCompleto",
+        dadosComRealce("assuntos", painel.porAssunto, ordens => IndicatorEngine.calcularContagemPorAssunto(ordens)), {
         serie: "serie-1",
         limite: 5,
-        titulo: "Assuntos com maior volume"
+        titulo: "Assuntos com maior volume",
+        campoFiltro: "assuntos"
     });
 
-    renderizarGraficoBarras("graficoDiagnosticosCompleto", painel.diagnosticosMaisUsados, {
+    renderizarGraficoBarras("graficoDiagnosticosCompleto",
+        dadosComRealce("diagnosticos", painel.diagnosticosMaisUsados,
+            ordens => IndicatorEngine.calcularDiagnosticosMaisUsados(ordens, IndicatorEngine.analisarEventosDeTodas(ordens))), {
         serie: "serie-1",
         limite: 5,
-        titulo: "Diagnósticos mais utilizados"
+        titulo: "Diagnósticos mais utilizados",
+        campoFiltro: "diagnosticos"
     });
 
     renderizarGraficoBarras("graficoSoloVsDupla", [
@@ -347,16 +365,22 @@ function renderizarSecaoIndicadores() {
         limite: 3
     });
 
-    renderizarGraficoBarras("graficoAbandonosTecnico", painel.deslocamentosAbandonados.porTecnico, {
+    renderizarGraficoBarras("graficoAbandonosTecnico",
+        dadosComRealce("operadores", painel.deslocamentosAbandonados.porTecnico,
+            ordens => IndicatorEngine.calcularDeslocamentosAbandonados(ordens).porTecnico), {
         serie: "serie-2",
         limite: 5,
-        titulo: "Deslocamentos abandonados por técnico"
+        titulo: "Deslocamentos abandonados por técnico",
+        campoFiltro: "operadores"
     });
 
-    renderizarGraficoBarras("graficoReagendamentosTecnico", IndicatorEngine.calcularReagendamentosPorTecnico(ordensFiltradas), {
+    renderizarGraficoBarras("graficoReagendamentosTecnico",
+        IndicatorEngine.calcularReagendamentosPorTecnico(
+            campoInterativoAtivo("operadores") ? FiltroEngine.ordensFiltradasExceto("operadores") : ordensFiltradas), {
         serie: "serie-2",
         limite: 5,
-        titulo: "Reagendamentos por técnico"
+        titulo: "Reagendamentos por técnico",
+        campoFiltro: "operadores"
     });
 
     for (const metrica of METRICAS_TEMPO) {

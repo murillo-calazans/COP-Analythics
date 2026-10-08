@@ -466,3 +466,82 @@
     padding: 16px;
 
 }
+
+/*
+ * Filtro interativo (js/ui/filtrointerativo.js): barra clicável filtra
+ * a tela; com o campo filtrado, as barras fora do filtro ficam opacas
+ * (realce estilo Power BI) e a seleção com Ctrl ainda não aplicada
+ * ganha um contorno.
+ */
+.grafico-linha.filtro-clicavel {
+
+    user-select: none; /* Shift+clique não seleciona texto */
+
+}
+
+.grafico-linha.barra-opaca {
+
+    opacity: .3;
+    transition: opacity .15s ease;
+
+}
+
+.grafico-linha.barra-opaca:hover,
+.grafico-linha.barra-opaca:focus-visible {
+
+    opacity: .65;
+
+}
+
+.filtro-pendente {
+
+    outline: 2px dashed var(--cor-primaria);
+    outline-offset: 1px;
+    opacity: 1 !important;
+
+}
+
+.grafico-linha.com-acao {
+
+    grid-template-columns: 140px 1fr 48px 24px;
+
+}
+
+.grafico-acao {
+
+    width: 24px;
+    height: 24px;
+
+    border: 1px solid var(--cor-borda);
+    border-radius: 6px;
+    background: var(--cor-fundo-card);
+    color: var(--cor-texto-suave);
+
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+
+}
+
+.grafico-acao:hover,
+.grafico-acao:focus-visible {
+
+    color: var(--cor-primaria);
+    border-color: var(--cor-primaria);
+
+}
+
+/* Nome clicável em tabela (Ordens, Técnicos, Auditoria) e no popup "Ver todos". */
+span.filtro-clicavel {
+
+    cursor: pointer;
+    border-bottom: 1px dotted var(--cor-texto-suave);
+
+}
+
+span.filtro-clicavel:hover {
+
+    color: var(--cor-primaria);
+    border-bottom-color: var(--cor-primaria);
+
+}

@@ -1,0 +1,47 @@
+# Evolution API (conexão do chip do bot com o WhatsApp).
+# Na VPS: copie esta pasta, troque as 2 senhas abaixo e rode
+#   docker compose up -d
+services:
+  evolution:
+    image: evoapicloud/evolution-api:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_URL: http://IP_DA_VPS:8080
+      AUTHENTICATION_API_KEY: TROQUE_ESTA_CHAVE_LONGA
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:TROQUE_SENHA_BANCO@postgres:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: bot_pendencias
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: "false"
+      LOG_LEVEL: ERROR,WARN
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: TROQUE_SENHA_BANCO
+      POSTGRES_DB: evolution
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+
+volumes:
+  evolution_instances:
+  postgres_data:
+  redis_data:

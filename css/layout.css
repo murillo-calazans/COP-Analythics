@@ -382,3 +382,175 @@ main{
     display: block;
 
 }
+
+/*
+ * Filtros ativos do Filtro Global sempre visíveis (ver
+ * js/ui/filtrointerativo.js): faixa logo abaixo do cabeçalho, alinhada
+ * à direita (embaixo do botão do filtro). No celular vira um botão
+ * flutuante com o resumo.
+ */
+.barra-filtros-ativos{
+
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+
+    padding: 8px 30px;
+
+    background: var(--cor-fundo-card);
+    border-bottom: 1px solid var(--cor-borda);
+
+}
+
+.etiqueta-filtro{
+
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 320px;
+
+    padding: 3px 4px 3px 10px;
+
+    border: 1px solid color-mix(in srgb, var(--cor-primaria) 40%, var(--cor-borda));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--cor-primaria) 10%, var(--cor-fundo-card));
+    color: var(--cor-texto);
+
+    font-size: 12px;
+
+}
+
+.etiqueta-filtro-texto{
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+}
+
+.etiqueta-filtro-remover,
+.filtro-flutuante-limpar{
+
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+
+    font-size: 15px;
+    line-height: 1;
+
+}
+
+.etiqueta-filtro-remover{
+
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: var(--cor-texto-suave);
+
+}
+
+.etiqueta-filtro-remover:hover{
+
+    background: var(--cor-borda);
+    color: var(--cor-erro);
+
+}
+
+.etiqueta-filtro-limpar{
+
+    border: none;
+    background: transparent;
+    color: var(--cor-primaria);
+    cursor: pointer;
+
+    font-size: 12px;
+    text-decoration: underline;
+
+}
+
+.filtro-flutuante{
+
+    display: none;
+
+}
+
+.aviso-filtro-ctrl:not([hidden]){
+
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 1000;
+
+    padding: 8px 16px;
+    border-radius: 999px;
+
+    background: var(--cor-texto);
+    color: var(--cor-fundo-card);
+    box-shadow: 0 4px 16px var(--cor-sombra);
+
+    font-size: 13px;
+    pointer-events: none;
+
+}
+
+body.nao-autenticado .barra-filtros-ativos,
+body.nao-autenticado .filtro-flutuante{
+
+    display: none !important;
+
+}
+
+@media (max-width: 720px){
+
+    .barra-filtros-ativos{
+
+        display: none !important;
+
+    }
+
+    .filtro-flutuante:not([hidden]){
+
+        display: flex;
+        align-items: center;
+
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 900;
+        max-width: calc(100vw - 32px);
+
+        border-radius: 999px;
+        background: var(--cor-primaria);
+        color: white;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, .3);
+
+    }
+
+    .filtro-flutuante-resumo{
+
+        padding: 10px 6px 10px 16px;
+
+        border: none;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+    }
+
+    .filtro-flutuante-limpar{
+
+        padding: 10px 14px 10px 8px;
+        font-size: 18px;
+
+    }
+
+}

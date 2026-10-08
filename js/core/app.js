@@ -32,6 +32,7 @@ async function iniciarSistema() {
     registrarFormularioConfig();
     registrarFiltroAssuntos();
     registrarFiltroGlobal();
+    registrarFiltroInterativo();
     registrarFunilAssuntos();
     registrarDiagnosticosExcluidos();
     registrarDiagnosticosExcluidosRecorrencia();

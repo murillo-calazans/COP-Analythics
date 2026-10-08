@@ -300,6 +300,8 @@ function atualizarBadgeFiltroGlobal() {
     const total = FiltroEngine.contarFiltrosAtivos(APP.filtrosGlobais);
     badge.textContent = total;
     badge.hidden = total === 0;
+
+    renderizarFiltrosAtivos(); // etiquetas fora do popup (ver js/ui/filtrointerativo.js)
 }
 
 function atualizarTodasAsTelas() {

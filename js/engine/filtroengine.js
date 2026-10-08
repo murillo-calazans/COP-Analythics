@@ -54,6 +54,23 @@ const FiltroEngine = {
         return this.aplicar(APP.dados.ordens, APP.filtrosGlobais);
     },
 
+    /** O campo (chave de APP.filtrosGlobais, ex.: "assuntos", "diagnosticosOcultos") tem algum valor no filtro atual? */
+    campoAtivo(campo) {
+        return (APP.filtrosGlobais?.[campo]?.length ?? 0) > 0;
+    },
+
+    /**
+     * Mesmo recorte do Filtro Global, mas IGNORANDO um campo — usado
+     * pelo realce estilo Power BI (ver js/ui/graficos.js ->
+     * dadosComRealce): o gráfico de Assunto, com Assunto filtrado,
+     * continua mostrando todos os assuntos (os escolhidos destacados,
+     * os demais opacos), enquanto período/cidade/etc. continuam valendo.
+     */
+    ordensFiltradasExceto(campo) {
+        if (!this.campoAtivo(campo)) return this.ordensFiltradas();
+        return this.aplicar(APP.dados.ordens, { ...APP.filtrosGlobais, [campo]: [] });
+    },
+
     aplicar(ordens, filtros) {
         if (!this.temFiltroAtivo(filtros)) return ordens;
 

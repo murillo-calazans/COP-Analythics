@@ -246,10 +246,10 @@ function renderizarTabelaOrdens(linhas) {
                         <tr data-id="${escaparHtml(String(linha.id))}" class="linha-clicavel">
                             <td>${escaparHtml(String(linha.id))}</td>
                             <td>${escaparHtml(linha.cliente ?? "-")} (${escaparHtml(linha.login ?? "-")})</td>
-                            <td>${escaparHtml(linha.assunto ?? "-")}</td>
-                            <td>${escaparHtml(linha.diagnostico ?? "-")}</td>
+                            <td>${textoFiltravel("assuntos", linha.assunto)}</td>
+                            <td>${textoFiltravel("diagnosticos", linha.diagnostico)}</td>
                             <td>${escaparHtml(linha.proximaTarefa ?? "-")}</td>
-                            <td>${escaparHtml(linha.tecnico ?? "-")}</td>
+                            <td>${textoFiltravel("operadores", linha.tecnico)}</td>
                             <td>${formatarDataHora(linha.dataFinal)}</td>
                         </tr>
                     `).join("")}

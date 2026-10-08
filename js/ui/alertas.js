@@ -192,10 +192,13 @@ function renderizarIndicadoresAlertas(indicadores) {
         </div>
     `;
 
+    // Clicar numa cidade filtra as OUTRAS telas (Filtro Global) — Alertas
+    // em si continua independente dele, só realça a cidade escolhida.
     renderizarGraficoBarras("graficoAlertasCidade", indicadores.porCidade, {
         serie: "serie-2",
         limite: 5,
-        titulo: "Recorrência por cidade"
+        titulo: "Recorrência por cidade",
+        campoFiltro: "cidades"
     });
 }
 

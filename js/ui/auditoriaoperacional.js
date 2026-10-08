@@ -596,9 +596,9 @@ function renderizarListaAchadosAuditoria(termo) {
                         <tr data-id="${escaparHtml(String(achado.ordemId))}" class="linha-clicavel">
                             <td>${escaparHtml(String(achado.ordemId))}</td>
                             <td>${escaparHtml(achado.cliente ?? "-")} (${escaparHtml(achado.login ?? "-")})</td>
-                            <td>${escaparHtml(achado.assunto ?? "-")}</td>
+                            <td>${textoFiltravel("assuntos", achado.assunto)}</td>
                             <td>${escaparHtml(ROTULOS_TIPO_ACHADO_AUDITORIA[achado.tipo] ?? achado.tipo)}</td>
-                            <td>${escaparHtml(achado.diagnostico ?? "-")}</td>
+                            <td>${textoFiltravel("diagnosticos", achado.diagnostico)}</td>
                             <td>${escaparHtml(achado.proximaTarefa ?? "-")}</td>
                             <td>${escaparHtml((achado.proximaTarefaEsperada ?? []).join(" ou ") || "-")}</td>
                             <td>${escaparHtml(achado.motivo ?? "-")}</td>

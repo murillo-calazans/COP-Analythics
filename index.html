@@ -140,6 +140,18 @@
 
     </header>
 
+    <!-- Filtros ativos do Filtro Global, sempre visíveis (ver js/ui/filtrointerativo.js). -->
+    <div id="barraFiltrosAtivos" class="barra-filtros-ativos" aria-label="Filtros ativos" hidden></div>
+
+    <!-- Celular: resumo do filtro num botão flutuante, × limpa tudo. -->
+    <div id="filtroFlutuante" class="filtro-flutuante" hidden>
+        <button type="button" id="filtroFlutuanteResumo" class="filtro-flutuante-resumo">Filtros ativos</button>
+        <button type="button" class="filtro-flutuante-limpar" data-limpar-filtros aria-label="Limpar todos os filtros">×</button>
+    </div>
+
+    <!-- Seleção com Ctrl+clique ainda não aplicada. -->
+    <div id="avisoFiltroCtrl" class="aviso-filtro-ctrl" role="status" hidden></div>
+
     <div id="carregandoDados" class="carregando-dados-overlay" hidden>
         <div class="carregando-dados-spinner"></div>
         <p id="carregandoDadosTexto">Carregando dados do banco compartilhado...</p>
@@ -916,6 +928,7 @@
 <script src="js/ui/configuracoes.js"></script>
 <script src="js/ui/filtroglobal.js"></script><script src="js/ui/assuntosincluidoscancelamento.js"></script>
 <script src="js/ui/filtroperiodo.js"></script>
+<script src="js/ui/filtrointerativo.js"></script>
 <script src="js/ui/funilassuntos.js"></script>
 <script src="js/ui/setorescop.js"></script>
 <script src="js/ui/diagnosticosexcluidos.js"></script><script src="js/ui/diagnosticosexcluidosrecorrencia.js"></script><script src="js/ui/diagnosticosimprodutivos.js"></script><script src="js/ui/diagnosticosnaoresolvidos.js"></script><script src="js/ui/tabela.js"></script>

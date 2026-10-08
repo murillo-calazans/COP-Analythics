@@ -135,8 +135,21 @@ function renderizarDashboard() {
 
     const aoClicarTecnico = item => abrirModalTecnico(item.rotulo);
 
-    renderizarGraficoBarras("graficoAssuntos", painel.porAssunto, { serie: "serie-1", limite: 5, titulo: "OS por Assunto" });
-    renderizarGraficoBarras("graficoDiagnosticos", painel.diagnosticosMaisUsados, { serie: "serie-1", limite: 5, titulo: "Diagnósticos mais utilizados" });
-    renderizarGraficoBarras("graficoRankingTecnicos", painel.rankingTecnicos, { serie: "serie-1", limite: 5, aoClicar: aoClicarTecnico, titulo: "Técnicos por volume" });
-    renderizarGraficoBarras("graficoRecorrenciaTecnicos", painel.recorrenciaPorTecnico, { serie: "serie-2", limite: 5, aoClicar: aoClicarTecnico, titulo: "Recorrência por técnico" });
+    // campoFiltro: clicar na barra filtra a tela inteira; com o campo já
+    // filtrado, dadosComRealce recalcula sem ele pra manter as demais
+    // barras visíveis (opacas) — ver js/ui/graficos.js.
+    renderizarGraficoBarras("graficoAssuntos",
+        dadosComRealce("assuntos", painel.porAssunto, ordens => IndicatorEngine.calcularContagemPorAssunto(ordens)),
+        { serie: "serie-1", limite: 5, titulo: "OS por Assunto", campoFiltro: "assuntos" });
+    renderizarGraficoBarras("graficoDiagnosticos",
+        dadosComRealce("diagnosticos", painel.diagnosticosMaisUsados,
+            ordens => IndicatorEngine.calcularDiagnosticosMaisUsados(ordens, IndicatorEngine.analisarEventosDeTodas(ordens))),
+        { serie: "serie-1", limite: 5, titulo: "Diagnósticos mais utilizados", campoFiltro: "diagnosticos" });
+    renderizarGraficoBarras("graficoRankingTecnicos",
+        dadosComRealce("operadores", painel.rankingTecnicos,
+            ordens => IndicatorEngine.calcularRankingTecnicos(IndicatorEngine.analisarEventosDeTodas(ordens))),
+        { serie: "serie-1", limite: 5, aoClicar: aoClicarTecnico, rotuloAcao: "Ver ficha do técnico", titulo: "Técnicos por volume", campoFiltro: "operadores" });
+    renderizarGraficoBarras("graficoRecorrenciaTecnicos",
+        dadosComRealce("operadores", painel.recorrenciaPorTecnico, ordens => IndicatorEngine.calcularRecorrenciaPorTecnico(ordens)),
+        { serie: "serie-2", limite: 5, aoClicar: aoClicarTecnico, rotuloAcao: "Ver ficha do técnico", titulo: "Recorrência por técnico", campoFiltro: "operadores" });
 }
