@@ -66,8 +66,20 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
     if (!rows.length || typeof Motor === "undefined") return { grupos: [], total: 0, alertas: 0, omitidas: 0, capturadoEm, resumo: {} };
 
     const hoje = ixcMeiaNoite();
+    const pad = n => String(n).padStart(2, "0");
+    const hojeIso = `${hoje.getFullYear()}-${pad(hoje.getMonth() + 1)}-${pad(hoje.getDate())}`;
+
+    // AGENDAMENTO (data real pra quando a OS está marcada) por OS -> ISO.
+    // Filtramos por ISSO (não mais pelo "marcadaHoje" do motor, que acumulava
+    // todos os agendamentos antigos em aberto).
+    const agPorOs = {};
+    for (const r of rows) {
+        const m = String(r.AGENDAMENTO || "").match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m && m[3] !== "0000") agPorOs[String(r["ID OS"])] = `${m[3]}-${m[2]}-${m[1]}`;
+    }
+
     const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
-    const doDia = os.filter(o => o.marcadaHoje && o.agendaIxc && o.agendaIxc.tecnico);
+    const doDia = os.filter(o => agPorOs[String(o.id)] === hojeIso);
 
     const techs = Array.isArray(techsEscala) ? techsEscala : [];
     const separar = typeof separarTerceira === "function" ? separarTerceira : (n => ({ nome: n, terceira: null }));
@@ -77,13 +89,17 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
     let alertas = 0, omitidas = 0;
 
     for (const o of doDia) {
+        // técnico = o do agendamento, ou (se já foi a campo) o último que visitou
+        const tecnicoNome = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
+        if (!tecnicoNome) { omitidas++; continue; }
+
         // só entra quem está na escala (= técnico de campo dos setores da Base)
-        const tech = techs.find(t => Motor.nomeBate(o.agendaIxc.tecnico, t));
+        const tech = techs.find(t => Motor.nomeBate(tecnicoNome, t));
         if (!tech) { omitidas++; continue; }
 
         const info = separar(tech.nome);
         const chave = tech.id || info.nome;
-        const diaMsg = o.agendaIxc.dia;
+        const diaMsg = o.agendaIxc && o.agendaIxc.dia;
         const alerta = diaMsg && diaMsg.toDateString() !== hoje.toDateString();
         if (alerta) alertas++;
 
