@@ -54,53 +54,62 @@ async function buscarOsPendentes() {
     return linhas;
 }
 
-/** Monta o modelo da Agenda IXC: OS marcadas pra hoje, agrupadas por técnico. */
-function montarAgendaIxc(linhasBrutas) {
+/**
+ * Monta o modelo da Agenda IXC: OS marcadas pra hoje, SÓ dos técnicos que
+ * estão na escala (casados pelo nome via Motor.nomeBate), agrupadas por
+ * técnico. Quem não está na escala (terceirizada de fora, pessoa de
+ * escritório que agendou, etc.) não entra — é a regra do setor da Base.
+ */
+function montarAgendaIxc(linhasBrutas, techsEscala) {
     const rows = linhasBrutas.map(l => l.dados);
     const capturadoEm = linhasBrutas.length ? linhasBrutas[0].capturado_em : null;
-    if (!rows.length || typeof Motor === "undefined") return { grupos: [], total: 0, alertas: 0, capturadoEm, resumo: {} };
+    if (!rows.length || typeof Motor === "undefined") return { grupos: [], total: 0, alertas: 0, omitidas: 0, capturadoEm, resumo: {} };
 
     const hoje = ixcMeiaNoite();
     const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
-    const doDia = os.filter(o => o.marcadaHoje);
+    const doDia = os.filter(o => o.marcadaHoje && o.agendaIxc && o.agendaIxc.tecnico);
+
+    const techs = Array.isArray(techsEscala) ? techsEscala : [];
+    const separar = typeof separarTerceira === "function" ? separarTerceira : (n => ({ nome: n, terceira: null }));
 
     const porTec = new Map();
     const resumo = {};
-    let alertas = 0;
+    let alertas = 0, omitidas = 0;
 
     for (const o of doDia) {
-        const tecnico = (o.agendaIxc && o.agendaIxc.tecnico) || "Sem técnico definido";
-        const diaMsg = o.agendaIxc && o.agendaIxc.dia;
+        // só entra quem está na escala (= técnico de campo dos setores da Base)
+        const tech = techs.find(t => Motor.nomeBate(o.agendaIxc.tecnico, t));
+        if (!tech) { omitidas++; continue; }
+
+        const info = separar(tech.nome);
+        const chave = tech.id || info.nome;
+        const diaMsg = o.agendaIxc.dia;
         const alerta = diaMsg && diaMsg.toDateString() !== hoje.toDateString();
         if (alerta) alertas++;
 
         const st = ixcNorm(o.status);
         resumo[o.status] = (resumo[o.status] || 0) + 1;
 
-        if (!porTec.has(tecnico)) porTec.set(tecnico, []);
-        porTec.get(tecnico).push({
+        if (!porTec.has(chave)) porTec.set(chave, { nome: info.nome, terceira: info.terceira, setor: tech.setor, oss: [] });
+        porTec.get(chave).oss.push({
             id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto,
             status: o.status, statusNorm: st, reagendamentos: o.reagendamentos || 0,
-            alerta, diaMsg: alerta ? diaMsg : null,
-            finalizada: st === "finalizada"
+            alerta, diaMsg: alerta ? diaMsg : null, finalizada: st === "finalizada"
         });
     }
 
-    const grupos = [...porTec.entries()]
-        .map(([tecnico, oss]) => ({
-            tecnico,
-            oss: oss.sort((a, b) => Number(b.alerta) - Number(a.alerta) || a.cliente?.localeCompare(b.cliente || "", "pt-BR")),
-            total: oss.length,
-            feitas: oss.filter(o => o.finalizada).length,
-            alertas: oss.filter(o => o.alerta).length
+    const grupos = [...porTec.values()]
+        .map(g => ({
+            tecnico: g.nome, terceira: g.terceira, setor: g.setor,
+            oss: g.oss.sort((a, b) => Number(b.alerta) - Number(a.alerta) || (a.cliente || "").localeCompare(b.cliente || "", "pt-BR")),
+            total: g.oss.length,
+            feitas: g.oss.filter(o => o.finalizada).length,
+            alertas: g.oss.filter(o => o.alerta).length
         }))
-        .sort((a, b) => {
-            if ((a.tecnico === "Sem técnico definido") !== (b.tecnico === "Sem técnico definido"))
-                return a.tecnico === "Sem técnico definido" ? 1 : -1;  // "sem técnico" por último
-            return b.total - a.total;
-        });
+        .sort((a, b) => b.total - a.total);
 
-    return { grupos, total: doDia.length, alertas, capturadoEm, resumo };
+    const total = grupos.reduce((s, g) => s + g.total, 0);
+    return { grupos, total, alertas, omitidas, capturadoEm, resumo };
 }
 
 function badgeStatus(statusNorm, rotuloOriginal) {
@@ -145,15 +154,16 @@ function renderizarAgendaIxc(model) {
     const cards = model.grupos.map(g => `
       <div class="ixc-card">
         <div class="ixc-card-topo">
-          <span class="ixc-tec">${escaparHtml(g.tecnico)}</span>
+          <span class="ixc-tec">${escaparHtml(g.tecnico)}${g.terceira ? `<span class="ixc-tag">${escaparHtml(g.terceira)}</span>` : ""}${g.setor ? `<span class="ixc-setor">${escaparHtml(g.setor)}</span>` : ""}</span>
           <span class="ixc-contagem">${g.feitas}/${g.total} feitas${g.alertas ? ` · <b class="ixc-alertas">${g.alertas} ⚠</b>` : ""}</span>
         </div>
         ${g.oss.map(htmlOsIxc).join("")}
       </div>`).join("");
 
+    const omit = model.omitidas ? ` · <span class="ixc-quando">${model.omitidas} OS de técnicos fora da escala omitidas</span>` : "";
     alvo.innerHTML = `
       <div class="ixc-resumo">
-        <div><b>${model.total}</b> OS marcadas pra hoje · <b>${model.grupos.length}</b> técnicos${model.alertas ? ` · <b class="ixc-alertas">${model.alertas}</b> alerta(s) de outro dia` : ""}</div>
+        <div><b>${model.total}</b> OS marcadas pra hoje · <b>${model.grupos.length}</b> técnicos da escala${model.alertas ? ` · <b class="ixc-alertas">${model.alertas}</b> alerta(s) de outro dia` : ""}${omit}</div>
         <div class="ixc-chips">${chips}</div>
         <div class="ixc-quando">Retrato do IXC às ${quando} (atualiza de hora em hora)</div>
       </div>
@@ -169,8 +179,11 @@ async function carregarAgendaIxc(forcar = false) {
     agendaIxcCarregando = true;
     alvo.innerHTML = `<div class="ixc-vazio"><p>Carregando a agenda do IXC…</p></div>`;
     try {
-        const linhas = await buscarOsPendentes();
-        agendaIxcCache = montarAgendaIxc(linhas);
+        const [linhas, techs] = await Promise.all([
+            buscarOsPendentes(),
+            typeof carregarEscalaTecnicos === "function" ? carregarEscalaTecnicos().catch(() => []) : []
+        ]);
+        agendaIxcCache = montarAgendaIxc(linhas, techs);
         renderizarAgendaIxc(agendaIxcCache);
     } catch (erro) {
         console.error("Agenda IXC:", erro);
