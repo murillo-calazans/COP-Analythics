@@ -466,6 +466,31 @@ window.Agendador = {
   resultado(){ return ultimo; },
 };
 
+// Carrega as OS pendentes direto do Supabase (tabela os_pendentes, atualizada
+// pelo robô de hora em hora). O upload de .xlsx continua valendo como
+// alternativa — se você subir um arquivo, ele substitui. Sem login/sem tabela,
+// a página segue só com o upload, como antes.
+async function carregarPendentesDoBanco(){
+  if (typeof supabaseClient === 'undefined') return;
+  try {
+    const sessao = (await supabaseClient.auth.getSession()).data.session;
+    if (!sessao) return;
+    const linhas = [];
+    for (let de = 0; ; de += 1000) {
+      const { data, error } = await supabaseClient.from('os_pendentes').select('dados').order('id').range(de, de + 999);
+      if (error || !data || !data.length) break;
+      linhas.push(...data.map(r => r.dados));
+      if (data.length < 1000) break;
+    }
+    if (linhas.length && !linhasOS) {           // não atropela um upload que você já tenha feito
+      window.Agendador.carregarOS(linhas);
+      const ids = new Set(linhas.map(r => r['ID OS'])).size;
+      marcarDrop($('#dropOS'), 'Supabase (automático)', linhas.length.toLocaleString('pt-BR') + ' eventos · ' + ids.toLocaleString('pt-BR') + ' OS em aberto');
+    }
+  } catch (e) { /* sem conexão/login: segue com o upload manual */ }
+}
+carregarPendentesDoBanco();
+
 // Mostrada no resumo para saber se o navegador está usando a página atual (e não uma cópia em cache).
 const VERSAO = '39 · 07/10';
 const URL_MAPA_REGIOES = 'https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html';
