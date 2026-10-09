@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="css/tabela.css">
     <link rel="stylesheet" href="css/modal.css">
     <link rel="stylesheet" href="css/modulos.css">
+    <link rel="stylesheet" href="css/agendaixc.css">
     <link rel="stylesheet" href="css/responsive.css">
 
 </head>
@@ -231,7 +232,7 @@
                 <p id="agendaHojeData"></p>
             </div>
             <div class="escala-topo-acoes">
-                <div class="escala-segmentado" role="group" aria-label="Escolher o dia">
+                <div class="escala-segmentado" id="agendaNavDia" role="group" aria-label="Escolher o dia">
                     <button type="button" id="btnAgendaDiaAnterior" title="Dia anterior" aria-label="Dia anterior">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
                     </button>
@@ -247,7 +248,12 @@
                 </a>
             </div>
         </div>
+        <div class="agenda-abas" role="tablist" aria-label="Agenda IA ou Agenda IXC">
+            <button type="button" class="ativo" data-aba-agenda="ia">Agenda IA</button>
+            <button type="button" data-aba-agenda="ixc">Agenda IXC</button>
+        </div>
         <div id="agendaHojeConteudo"></div>
+        <div id="agendaIxcConteudo" hidden></div>
     </section>
 
     <section id="secao-dashboard" class="secao">
@@ -1120,6 +1126,8 @@
 <script src="js/ui/alertas.js"></script>
 <script src="js/ui/escalahoje.js"></script>
 <script src="js/ui/agendahoje.js"></script>
+<script src="js/agendador/motor.js"></script>
+<script src="js/ui/agendaixc.js"></script>
 <script src="js/ui/inicio.js"></script>
 <script src="js/ui/adminusuarios.js"></script>
 <script src="js/ui/terceiras.js"></script>

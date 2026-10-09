@@ -1,0 +1,100 @@
+/* ==========================================================
+   Agenda IXC (aba do Agendador IA) — ver js/ui/agendaixc.js
+   Usa os tokens do tema (com fallback) pra funcionar claro/escuro.
+   ========================================================== */
+
+.agenda-abas {
+    display: flex;
+    gap: 6px;
+    margin: 14px 0 16px;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.agenda-abas button {
+    appearance: none;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 9px 14px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--text-muted, #6b7280);
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+}
+.agenda-abas button:hover { color: var(--text, #111827); background: var(--sunken, rgba(0,0,0,.04)); }
+.agenda-abas button.ativo { color: var(--text, #111827); border-bottom-color: var(--accent, #2563eb); }
+
+.ixc-resumo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+    font-size: 14px;
+    color: var(--text, #111827);
+}
+.ixc-chips { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; }
+.ixc-quando { font-size: 12px; color: var(--text-muted, #6b7280); }
+.ixc-alertas { color: #dc2626; }
+
+.ixc-grade {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+.ixc-card {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 14px;
+    padding: 12px 12px 6px;
+}
+.ixc-card-topo {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.ixc-tec { font-weight: 700; color: var(--text, #111827); }
+.ixc-contagem { font-size: 12px; color: var(--text-muted, #6b7280); white-space: nowrap; }
+
+.ixc-os {
+    border-top: 1px solid var(--border, #eef0f3);
+    padding: 9px 0;
+}
+.ixc-os:first-of-type { border-top: none; }
+.ixc-os-alerta {
+    background: rgba(220, 38, 38, .06);
+    border-left: 3px solid #dc2626;
+    margin: 0 -12px;
+    padding: 9px 12px;
+}
+.ixc-os-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ixc-os-cliente { font-weight: 600; color: var(--text, #111827); }
+.ixc-os-sub { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 2px; }
+.ixc-os-assunto { font-size: 12px; color: var(--text, #374151); margin-top: 2px; }
+.ixc-alerta { font-size: 12px; color: #b91c1c; margin-top: 5px; font-weight: 600; }
+
+.ixc-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--c, #6b7280);
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.ixc-tag {
+    font-size: 11px;
+    color: var(--text-muted, #6b7280);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 999px;
+    padding: 1px 7px;
+    margin-left: 6px;
+}
+.ixc-vazio {
+    padding: 36px 16px;
+    text-align: center;
+    color: var(--text-muted, #6b7280);
+}
