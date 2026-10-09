@@ -149,6 +149,10 @@ async function inicializarDadosAutenticado() {
     const secaoAntes = secaoAtiva();
     abrirSecaoDoEndereco();
     if (secaoAtiva() === secaoAntes && secaoAntes !== "dashboard") renderizarSecaoAtiva();
+
+    // Atualização automática enquanto a tela fica aberta (robô de hora em hora
+    // / importações de outras pessoas aparecem sozinhas — ver js/services/aovivo.js).
+    iniciarAoVivo();
 }
 
 function registrarEventos() {
