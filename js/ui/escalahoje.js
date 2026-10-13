@@ -6,30 +6,17 @@
  * linha do Supabase que a escala.html edita
  * (escala_tecnicos_dados, ver database/patch-14).
  *
- * As regras de "como fica o técnico nesse dia" são uma cópia das
- * de escala.html (getResumoDiaMensal, getDiaData, horarioEfetivo,
- * ehFolgaPadraoNaoEditado, getTempCidadeEfetiva, getSetorEfetivo,
- * getDuplaInfo) — lá elas vivem presas dentro de um IIFE. Mudou
- * uma regra lá? Muda aqui também.
+ * As regras de "como fica o técnico nesse dia" ficam em
+ * js/agendador/escala-dia.js (cópia das de escala.html, compartilhada
+ * com o pré-agendamento e a publicação automática da agenda).
  *
  * Editar continua sendo na escala.html, numa guia nova, e o botão
  * só aparece pra admin/editor.
  */
 
-const ESCALA_FERIADOS = {
-    "2026-01-01": "Confraternização Universal",
-    "2026-02-16": "Carnaval",
-    "2026-02-17": "Carnaval",
-    "2026-04-03": "Sexta-feira Santa",
-    "2026-04-21": "Tiradentes",
-    "2026-05-01": "Dia do Trabalho",
-    "2026-06-04": "Corpus Christi",
-    "2026-09-07": "Independência do Brasil",
-    "2026-10-12": "Nossa Senhora Aparecida",
-    "2026-11-02": "Finados",
-    "2026-11-15": "Proclamação da República",
-    "2026-12-25": "Natal"
-};
+// Feriados e regras do dia vêm de js/agendador/escala-dia.js (compartilhado com o
+// pré-agendamento e a publicação automática da agenda).
+const ESCALA_FERIADOS = EscalaDia.FERIADOS;
 
 const ESCALA_DIAS_JS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
 
@@ -71,95 +58,11 @@ async function carregarEscalaTecnicos(forcar = false) {
     return techs;
 }
 
-const EscalaRegras = {
-    dentroDoPeriodo(data, inicioIso, fimIso) {
-        if (!inicioIso || !fimIso) return false;
-        return data >= new Date(`${inicioIso}T00:00:00`) && data <= new Date(`${fimIso}T00:00:00`);
-    },
+const EscalaRegras = EscalaDia.regras;
 
-    diaData(tech, diaKey, dataIso) {
-        return tech.excecoes?.[dataIso] || tech.horarios?.[diaKey] || {};
-    },
-
-    horario(tech, dia) {
-        if (dia.custom) return { inicio: dia.inicio, fim: dia.fim };
-        return { inicio: tech.horarioPadrao?.inicio ?? "07:00", fim: tech.horarioPadrao?.fim ?? "15:00" };
-    },
-
-    folgaPadrao(tech, diaKey, dataIso, dia) {
-        const temExcecao = !!tech.excecoes?.[dataIso];
-        const intocado = !dia.custom && !dia.folga && !dia.atestado && !dia.outras;
-        return !temExcecao && intocado && (diaKey === "sab" || diaKey === "dom" || !!ESCALA_FERIADOS[dataIso]);
-    },
-
-    cidadeTemporaria(tech, diaKey, dataIso) {
-        const exc = tech.excecoes?.[dataIso];
-        if (exc && Object.prototype.hasOwnProperty.call(exc, "tempCidadeOverride")) return exc.tempCidadeOverride || null;
-        return (tech.alocacoesTemporarias || []).find(a => a.dias.includes(diaKey))?.cidade ?? null;
-    },
-
-    setor(tech, dataIso) {
-        return tech.excecoes?.[dataIso]?.setorOverride || tech.setor;
-    },
-
-    temDuplaOverride(tech, dataIso) {
-        const exc = tech.excecoes?.[dataIso];
-        return !!(exc && Object.prototype.hasOwnProperty.call(exc, "duplaOverride"));
-    },
-
-    // Mesma precedência de getDuplaInfo na escala.html.
-    parceiro(tech, techs, dataIso) {
-        const porId = id => techs.find(t => t.id === id);
-        const exc = tech.excecoes?.[dataIso];
-
-        if (this.temDuplaOverride(tech, dataIso)) return exc.duplaOverride ? porId(exc.duplaOverride) ?? null : null;
-
-        const escolheu = techs.find(o => o.id !== tech.id && this.temDuplaOverride(o, dataIso) && o.excecoes[dataIso].duplaOverride === tech.id);
-        if (escolheu) return escolheu;
-
-        if (tech.dupla) {
-            const fixo = porId(tech.dupla);
-            return fixo && !this.temDuplaOverride(fixo, dataIso) ? fixo : null;
-        }
-        return techs.find(o => o.id !== tech.id && o.dupla === tech.id && !this.temDuplaOverride(o, dataIso)) ?? null;
-    },
-
-    /** { situacao, cidade, temporaria, inicio, fim } do técnico na data. */
-    resumo(tech, data) {
-        const diaKey = ESCALA_DIAS_JS[data.getDay()];
-        const dataIso = isoDataLocal(data);
-
-        if (tech.status === "ferias" && this.dentroDoPeriodo(data, tech.feriasInicio, tech.feriasFim)) return { situacao: "ferias" };
-
-        const dia = this.diaData(tech, diaKey, dataIso);
-        if (this.folgaPadrao(tech, diaKey, dataIso, dia) || dia.folga) return { situacao: "folga" };
-        if (dia.atestado) return { situacao: "atestado" };
-        if (dia.outras) return { situacao: "outras" };
-
-        const { inicio, fim } = this.horario(tech, dia);
-        if (!inicio || !fim) return { situacao: "folga" };
-
-        const temporaria = this.cidadeTemporaria(tech, diaKey, dataIso);
-        return {
-            situacao: this.setor(tech, dataIso) === "Manutenção" ? "manutencao" : "instalador",
-            cidade: temporaria || tech.cidade,
-            temporaria: !!temporaria,
-            inicio,
-            fim
-        };
-    }
-};
-
-/** Lista { tech, resumo, parceiro } de todos os técnicos na data. */
+/** Lista { tech, resumo, trabalha, parceiro } de todos os técnicos na data. */
 function montarEscalaDoDia(techs, data) {
-    const dataIso = isoDataLocal(data);
-    return techs.map(tech => {
-        const resumo = EscalaRegras.resumo(tech, data);
-        const trabalha = resumo.situacao === "instalador" || resumo.situacao === "manutencao";
-        let parceiro = trabalha ? EscalaRegras.parceiro(tech, techs, dataIso) : null;
-        if (parceiro && !["instalador", "manutencao"].includes(EscalaRegras.resumo(parceiro, data).situacao)) parceiro = null;
-        return { tech, resumo, trabalha, parceiro };
-    });
+    return EscalaDia.montarDia(techs, data);
 }
 
 function formatarDataLonga(data) {

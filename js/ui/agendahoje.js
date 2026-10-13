@@ -24,6 +24,14 @@ const AGENDA_PARADAS_VISIVEIS = 5;
 // Limites de OS por técnico do pré-agendamento (07/10) — só pra estimar a barra de agendas antigas.
 const AGENDA_LIMITE_OS = { instalador: 5, manutencao: 8 };
 
+/** "publicada automaticamente às 17:02 de 13/10" ou "publicada por fulano às …" (ver js/agendador/publicar-agenda.js). */
+function origemAgenda(linha) {
+    const quando = linha.atualizado_em ? new Date(linha.atualizado_em) : null;
+    const hora = quando ? ` às ${quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} de ${quando.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : "";
+    if (linha.publicado_por === "Agenda automática (IA)") return `publicada automaticamente${hora}`;
+    return `publicada${linha.publicado_por ? " por " + linha.publicado_por.split("@")[0] : " pelo pré-agendamento"}${hora}`;
+}
+
 async function buscarAgendaPublicada(data) {
     const { data: linha, error } = await supabaseClient
         .from("agenda_publicada")
@@ -127,7 +135,7 @@ async function renderizarAgendaHoje(usarCache = false) {
         agendaCache = { iso, linha };
     }
 
-    if (subtitulo) subtitulo.textContent = `${formatarDataLonga(data)}${linha ? " · publicado pelo pré-agendamento" : ""}`;
+    if (subtitulo) subtitulo.textContent = `${formatarDataLonga(data)}${linha ? " · " + origemAgenda(linha) : ""}`;
 
     if (!linha || !(linha.itens ?? []).length) {
         container.innerHTML = `

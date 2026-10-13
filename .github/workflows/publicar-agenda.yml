@@ -1,0 +1,54 @@
+# Publica sozinha a Agenda IA do dia seguinte (agenda_publicada no Supabase),
+# com as OS em aberto (os_pendentes, do robô) e a escala do COP.
+# Não substitui agenda publicada à mão pelo botão "Publicar agenda".
+#
+# Segredos (GitHub > Settings > Secrets and variables > Actions):
+#   SUPABASE_URL          https://ldpiitymhvdhemdrntlx.supabase.co
+#   SUPABASE_SERVICE_KEY  a chave service_role / secret do Supabase
+#
+# Rodar à mão: aba Actions > "Publicar agenda do dia seguinte" > Run workflow.
+name: Publicar agenda do dia seguinte
+
+on:
+  schedule:
+    # 20:00 UTC = 17:00 em Brasília, todos os dias (o GitHub pode atrasar alguns minutos).
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+    inputs:
+      data:
+        description: "Dia da agenda (AAAA-MM-DD). Vazio = amanhã."
+        required: false
+        default: ""
+      simular:
+        description: "Só simular (não grava)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: publicar-agenda
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Gerar e publicar
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # As datas da agenda são calculadas no horário de Brasília.
+          TZ: America/Sao_Paulo
+          DATA_AGENDA: ${{ github.event.inputs.data }}
+          SIMULAR: ${{ github.event.inputs.simular }}
+        run: |
+          set --
+          if [ -n "$DATA_AGENDA" ]; then set -- "$@" "--data=$DATA_AGENDA"; fi
+          if [ "$SIMULAR" = "true" ]; then set -- "$@" --simular; fi
+          node scripts/publicar-agenda.js "$@"

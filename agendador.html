@@ -333,6 +333,8 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
 <!-- Suba o ?v= a cada alteração do motor para o navegador não usar a versão antiga em cache. -->
 <script src="js/agendador/mapa-regioes-dados.js?v=1"></script>
 <script src="js/agendador/motor.js?v=34"></script>
+<script src="js/agendador/escala-dia.js?v=1"></script>
+<script src="js/agendador/agenda-publicacao.js?v=1"></script>
 <script>
 (function(){
 'use strict';
@@ -340,25 +342,12 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const norm = Motor.norm;
 
-const REGIOES_PADRAO = [
-  'Agro Brasil e Sambaetiba = Agro Brasil; Sambaetiba',
-  'Japuíba e Papucaia = Japuíba; Papucaia',
-  // A Região Sul de Friburgo no mapa junta dois lados da cidade: Olaria/Cônego e Ponte da Saudade/Mury
-  // ficam perto em linha reta, mas pela estrada é preciso atravessar o Centro.
-  'Sul - Mury / Ponte da Saudade = Ponte da Saudade; Mury; Stucky',
-].join('\n');
+// Padrões compartilhados com a publicação automática (js/agendador/agenda-publicacao.js).
+const REGIOES_PADRAO = AgendaPublicacao.REGIOES_PADRAO;
 // Lista padrão anterior: quem nunca editou as regiões recebe a nova automaticamente.
 const REGIOES_PADRAO_ANTIGO = 'Agro Brasil e Sambaetiba = Agro Brasil; Sambaetiba\nJapuíba e Papucaia = Japuíba; Papucaia';
 
-const MAPA_PADRAO = [
-  'Cachoeiras de Macacu = Cachoeiras de Macacu; Japuíba; Papucaia',
-  'Itaboraí = Cachoeiras de Macacu; Japuíba; Papucaia',
-  'Magé = Guapimirim',
-  'Cruzeiro = São Paulo',
-  'Guaratinguetá = São Paulo',
-  'Lavrinhas = São Paulo',
-  'Queluz = São Paulo',
-].join('\n');
+const MAPA_PADRAO = AgendaPublicacao.MAPA_PADRAO;
 
 const store = {
   get(k, d){ try { const v = localStorage.getItem('agendador.' + k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } },
@@ -447,7 +436,7 @@ $('#arqEsc').addEventListener('change', e => {
   rd.onload = () => {
     const r = lerEscala(rd.result);
     if (!r.lista.length){ alert('Não encontrei técnicos escalados nesse arquivo.'); techs = null; habilitar(); return; }
-    techs = r.lista; escalaData = r.data;
+    techs = r.lista; escalaData = r.data; escalaManual = true;
     const secoes = new Set(techs.map(t => t.secao)).size;
     marcarDrop($('#dropEsc'), f.name, techs.length + ' equipes em ' + secoes + ' cidades' + (r.data ? ' · ' + r.data.toLocaleDateString('pt-BR') : ''));
     if (r.data) $('#dataRef').value = r.data.toISOString().slice(0, 10);
@@ -491,9 +480,47 @@ async function carregarPendentesDoBanco(){
 }
 carregarPendentesDoBanco();
 
+// Escala direto do COP (tabela escala_tecnicos_dados, a mesma que a escala.html edita), para o
+// dia escolhido — sem exportar o HTML da escala. Subir o arquivo da escala continua valendo e,
+// se você subir, ele vale até recarregar a página. O dia padrão é amanhã.
+let escalaDoBanco = null, escalaManual = false;
+function dataEscolhida(){
+  const v = $('#dataRef').value;
+  if (!v) return null;
+  const [a, m, d] = v.split('-').map(Number);
+  return new Date(a, m - 1, d);
+}
+function aplicarEscalaDoBanco(){
+  if (escalaManual || !escalaDoBanco) return;
+  const dia = dataEscolhida();
+  if (!dia) return;
+  techs = EscalaDia.equipesParaAgendador(escalaDoBanco, dia);
+  escalaData = dia;
+  const secoes = new Set(techs.map(t => t.secao)).size;
+  marcarDrop($('#dropEsc'), 'Escala do COP (automático)', techs.length + ' equipes em ' + secoes + ' cidades · ' + dia.toLocaleDateString('pt-BR'));
+  habilitar();
+}
+async function carregarEscalaDoBanco(){
+  if (typeof supabaseClient === 'undefined') return;
+  try {
+    const sessao = (await supabaseClient.auth.getSession()).data.session;
+    if (!sessao) return;
+    const { data, error } = await supabaseClient.from('escala_tecnicos_dados').select('dados').eq('id', 'default').maybeSingle();
+    if (error || !Array.isArray(data?.dados)) return;
+    escalaDoBanco = data.dados;
+    aplicarEscalaDoBanco();
+  } catch (e) { /* sem conexão/login: segue com o upload da escala */ }
+}
+if (!$('#dataRef').value) {
+  const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+  $('#dataRef').value = EscalaDia.isoData(amanha);
+}
+$('#dataRef').addEventListener('change', aplicarEscalaDoBanco);
+carregarEscalaDoBanco();
+
 // Mostrada no resumo para saber se o navegador está usando a página atual (e não uma cópia em cache).
-const VERSAO = '39 · 07/10';
-const URL_MAPA_REGIOES = 'https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html';
+const VERSAO = '40 · 13/10';
+const URL_MAPA_REGIOES = AgendaPublicacao.URL_MAPA_REGIOES;
 let mapaCache = null;
 async function carregarMapaRegioes(){
   if (mapaCache) return mapaCache;
@@ -949,40 +976,8 @@ $('#btnPublicar').addEventListener('click', async () => {
   const d = ultimo.ref;
   const dataIso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const dataBr = dataIso.split('-').reverse().join('/');
-  const itens = [];
-  // Dados da rota (repetidos em cada parada): jornada, ocupação (mesma conta da barra "carga" da aba
-  // Rotas) e se a última OS termina depois do fim da jornada — a Agenda do dia usa pra barra e o filtro.
-  const daRota = r => {
-    const usado = r.paradas.reduce((s, p) => s + p.os.dur, 0);
-    const ultima = r.paradas[r.paradas.length - 1];
-    return {
-      jornada: r.tech.horario || null,
-      termino: r.termino || null,
-      cargaPct: r.cap ? Math.min(100, Math.round(usado / r.cap * 100)) : null,
-      passaJornada: !!(ultima && ultima.fimMin > r.fim)
-    };
-  };
-  // Da OS: há quanto tempo está aberta (até o dia do plano) e quantas vezes já foi reagendada/visitada.
-  const daOS = o => ({
-    abertura: o.abertura instanceof Date && !isNaN(o.abertura) ? o.abertura.toISOString() : null,
-    idadeDias: o.idadeDias ?? null,
-    reagendamentos: o.reagendamentos ?? 0,
-    visitas: o.visitas ?? 0
-  });
-  ultimo.plano.rotas.forEach(r => r.paradas.forEach((p, i) => itens.push({
-    ...daRota(r),
-    ...daOS(p.os),
-    tecnico: r.tech.nome, dupla: r.tech.dupla || null, setor: r.tech.setor, grupo: r.grupo, ordem: i + 1,
-    chegada: p.chegada, saida: p.saida, os: p.os.id, cliente: p.os.cliente, login: p.os.login,
-    cidade: p.os.cidade, bairro: p.os.bairro, assunto: p.os.assunto, prioridade: p.os.prioridade,
-    observacao: [p.alerta, p.foraRota].filter(Boolean).join(' · ') || null
-  })));
-  ultimo.plano.semTecnico.forEach(s => itens.push({
-    ...daOS(s.os),
-    tecnico: null, setor: s.os.setor, os: s.os.id, cliente: s.os.cliente, login: s.os.login,
-    cidade: s.os.cidade, bairro: s.os.bairro, assunto: s.os.assunto, prioridade: s.os.prioridade, observacao: s.motivo || null
-  }));
-  const agendadas = itens.filter(i => i.tecnico).length;
+  const { itens, resumo } = AgendaPublicacao.montarAgenda(ultimo.plano);
+  const agendadas = resumo.agendadas;
   if (!confirm('Publicar a agenda de ' + dataBr + ' (' + agendadas + ' OS agendadas)? Se já houver uma agenda publicada nesse dia, ela será substituída.')) return;
 
   btn.disabled = true; btn.textContent = 'Publicando…';
@@ -991,7 +986,7 @@ $('#btnPublicar').addEventListener('click', async () => {
     const { error } = await supabaseClient.from('agenda_publicada').upsert({
       data: dataIso,
       itens,
-      resumo: { agendadas, semTecnico: itens.length - agendadas, tecnicos: ultimo.plano.rotas.filter(r => r.paradas.length).length },
+      resumo,
       publicado_por: sessao?.user?.email ?? null,
       atualizado_em: new Date().toISOString()
     });
