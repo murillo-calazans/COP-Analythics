@@ -223,20 +223,20 @@ function htmlCidadesEscala(trabalhando) {
                     <h3>${escaparHtml(cidade)}</h3>
                     <span class="escala-pilula">${linhas.length} ${linhas.length === 1 ? "equipe" : "equipes"}</span>
                 </div>
-                <ul class="escala-lista">${visiveis.map(linhaEscala).join("")}</ul>
+                <ul class="escala-lista">${visiveis.map((item, i) => linhaEscala(item, i > 0 && item.resumo.situacao !== visiveis[i - 1].resumo.situacao)).join("")}</ul>
                 ${escondidas > 0 ? `<button type="button" class="escala-ver-mais" data-ver-mais="${escaparHtml(cidade)}">${aberta ? "Ver menos" : `Ver mais ${escondidas}`}</button>` : ""}
             </div>`;
     }).join("")}</div>`;
 }
 
-function linhaEscala(item) {
+function linhaEscala(item, divisoria = false) {
     const { tech, resumo, parceiro } = item;
     const { nome, terceira } = separarTerceira(tech.nome);
     const padrao = { inicio: tech.horarioPadrao?.inicio ?? "07:00", fim: tech.horarioPadrao?.fim ?? "15:00" };
     const foraDoPadrao = resumo.inicio !== padrao.inicio || resumo.fim !== padrao.fim;
 
     return `
-        <li>
+        <li${divisoria ? ' class="escala-divisoria"' : ""}>
             <i class="escala-ponto ponto-${resumo.situacao}" title="${ESCALA_SITUACOES[resumo.situacao]}"></i>
             <span class="escala-nome">
                 <strong>${escaparHtml(nome)}</strong>${parceiro ? `<span class="escala-dupla"> + ${escaparHtml(nomeCurto(parceiro.nome))}</span>` : ""}

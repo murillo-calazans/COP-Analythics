@@ -371,6 +371,15 @@ html[data-tema="dark"] #secao-agenda-hoje{
 
 }
 
+/* Separa o bloco de manutenção do de instalação dentro da cidade. */
+.escala-lista li.escala-divisoria{
+
+    border-top: 1px solid var(--cor-borda);
+    margin-top: 4px;
+    padding-top: 13px;
+
+}
+
 .escala-ponto{
 
     display: inline-block;
