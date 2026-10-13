@@ -495,9 +495,13 @@ document.addEventListener("click", e => {
     const li = e.target.closest("[data-ixc-os]");
     if (!li) return;
     const id = li.dataset.ixcOs;
-    if (li.dataset.ixcFonte === "ordens" && typeof abrirModalOS === "function" && AuditEngine.obterDetalhes(id)) {
+    const fonte = li.dataset.ixcFonte;
+    if (fonte === "ordens" && typeof abrirModalOS === "function" && AuditEngine.obterDetalhes(id)) {
         fecharPopupIxc();
         abrirModalOS(id);
+    } else if (fonte === "cop") {
+        // OS do COP: usa os eventos capturados pelo módulo Gestão do COP
+        abrirTimelineIxc(id, typeof copAbertasCache !== "undefined" ? copAbertasCache : null);
     } else {
         abrirTimelineIxc(id);
     }
@@ -508,8 +512,8 @@ document.addEventListener("click", e => {
  * relatório de ordens). Monta a ordem cronológica com os eventos do próprio
  * 529 — mesma ideia da gestão de ordens, com o que o IXC exporta.
  */
-function abrirTimelineIxc(id) {
-    const model = agendaIxcCache;
+function abrirTimelineIxc(id, fonte) {
+    const model = fonte || agendaIxcCache;
     const corpo = document.getElementById("modalOsIxcCorpo");
     const titulo = document.getElementById("modalOsIxcTitulo");
     if (!corpo || !titulo) return;

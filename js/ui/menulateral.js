@@ -22,6 +22,7 @@
     const ICONES = {
         inicio: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
         ordens: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+        cop: '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-3v-5h3a2 2 0 0 1 2 2zM3 19a2 2 0 0 0 2 2h3v-5H5a2 2 0 0 0-2 2z"/>',
         terceiras: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
         auditoria: '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>',
         agendador: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/>',
@@ -35,6 +36,7 @@
     const MODULOS = [
         { id: "inicio",    titulo: "Início",                  href: "index.html",               secao: "inicio" },
         { id: "ordens",    titulo: "Gestão de Ordens",        href: "index.html#dashboard",     secao: "dashboard" },
+        { id: "cop",       titulo: "Gestão do COP",           href: "index.html#cop-abertas",   secao: "cop-abertas" },
         { id: "terceiras", titulo: "Gestão de Terceiras",     href: "index.html#terceiras",     secao: "terceiras" },
         { id: "auditoria", titulo: "Auditoria",               href: "index.html#auditoria",     secao: "auditoria" },
         { id: "agendador", titulo: "Agendador IA",            href: "index.html#agenda-hoje",   secao: "agenda-hoje" },

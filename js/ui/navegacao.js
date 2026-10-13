@@ -18,7 +18,8 @@ const MODULO_DA_SECAO = {
     "dashboard": "ordens",
     "tempos": "ordens",
     "indicadores": "ordens",
-    "gestao-cop": "ordens",
+    "cop-abertas": "cop",
+    "gestao-cop": "cop",
     "alertas": "ordens",
     "ordens": "ordens",
     "tecnicos": "ordens",
@@ -120,6 +121,7 @@ function mostrarSecao(nome) {
 
     if (nome === "inicio") renderizarInicio();
     if (nome === "dashboard") renderizarDashboard();
+    if (nome === "cop-abertas") renderizarCopAbertas();
     if (nome === "auditoria") renderizarPainelAuditoriaOperacional();
     if (nome === "ordens") renderizarOrdens();
     if (nome === "tecnicos") renderizarSecaoTecnicos();

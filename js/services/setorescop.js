@@ -28,3 +28,44 @@ function carregarSetoresCop() {
 function salvarSetoresCop(setores) {
     localStorage.setItem(SETORES_COP_CHAVE_STORAGE, JSON.stringify(setores));
 }
+
+/**
+ * Assuntos que pertencem ao COP (setor 52 no IXC). Como o pré-agendamento
+ * não exporta o setor, só o assunto, identificamos a OS do COP pelo assunto —
+ * e no IXC cada assunto pertence a um único setor, então a lista é estável.
+ * Vem um default no código (funciona pra todos sem configurar); o usuário pode
+ * sobrescrever pelo site, e aí fica no localStorage. Ver assuntoEhDoCop().
+ */
+const ASSUNTOS_COP_CHAVE_STORAGE = "cop_analytics_assuntos_cop";
+
+const ASSUNTOS_COP_PADRAO = [
+    "AUDITORIA INSTALAÇÃO/TRANSFERÊNCIA",
+    "AUDITORIA MANUTENÇÃO",
+    "EXCLUSÃO DE ACESSO E EQUIPAMENTOS",
+    "CLIENTE INDISPONÍVEL",
+    "MANUTENÇÃO - CHIP",
+    "CONFIGURAÇÃO TELEFONIA VOIP - SUPORTE",
+    "TROCA DE PACOTE - CHIP",
+    "CONFIGURAR CONEXÃO - TROCA DE TITULARIDADE",
+    "VERIFICAR TROCA DE PLANO - ATUALIZAÇÃO",
+    "NOVA TENTATIVA DE INSTALAÇÃO",
+    "REMOÇÃO DE CHIP",
+    "CONFIGURAÇÃO DE ESIM",
+    "REMOÇÃO TELEFONIA VOIP"
+];
+
+function carregarAssuntosCop() {
+    const bruta = localStorage.getItem(ASSUNTOS_COP_CHAVE_STORAGE);
+    if (!bruta) return ASSUNTOS_COP_PADRAO.slice();
+    try {
+        const salvo = JSON.parse(bruta);
+        return Array.isArray(salvo) && salvo.length ? salvo : ASSUNTOS_COP_PADRAO.slice();
+    } catch (erro) {
+        console.error("Falha ao carregar assuntos do COP:", erro);
+        return ASSUNTOS_COP_PADRAO.slice();
+    }
+}
+
+function salvarAssuntosCop(assuntos) {
+    localStorage.setItem(ASSUNTOS_COP_CHAVE_STORAGE, JSON.stringify(assuntos));
+}

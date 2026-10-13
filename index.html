@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="css/modal.css">
     <link rel="stylesheet" href="css/modulos.css">
     <link rel="stylesheet" href="css/agendaixc.css">
+    <link rel="stylesheet" href="css/gestaocop.css">
     <link rel="stylesheet" href="css/responsive.css">
 
 </head>
@@ -77,9 +78,14 @@
                 Indicadores
             </button>
 
+            <button data-secao="cop-abertas">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-3v-5h3a2 2 0 0 1 2 2zM3 19a2 2 0 0 0 2 2h3v-5H5a2 2 0 0 0-2 2z"/></svg>
+                COP em aberto
+            </button>
+
             <button data-secao="gestao-cop">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                Gestão COP
+                Produção · TMR
             </button>
 
             <button data-secao="alertas">
@@ -415,6 +421,16 @@
             </div>
         </div>
         <div id="temposConteudo" class="dashboard-grid"></div>
+    </section>
+
+    <section id="secao-cop-abertas" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>COP em aberto</h2>
+                <p>OS do Controle de Operações ainda em aberto, agrupadas por assunto</p>
+            </div>
+        </div>
+        <div id="copAbertasConteudo"></div>
     </section>
 
     <section id="secao-gestao-cop" class="secao">
@@ -1153,6 +1169,7 @@
 <script src="js/ui/agendahoje.js"></script>
 <script src="js/agendador/motor.js?v=35"></script>
 <script src="js/ui/agendaixc.js"></script>
+<script src="js/ui/gestaocop.js"></script>
 <script src="js/ui/robocomando.js"></script>
 <script src="js/ui/inicio.js"></script>
 <script src="js/ui/adminusuarios.js"></script>
