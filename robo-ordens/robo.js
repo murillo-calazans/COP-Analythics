@@ -3,21 +3,26 @@
  * Robô de Ordens (COP-Analytics) — IXC Query Builder -> Supabase
  * ==========================================================
  * Mantém um navegador ABERTO e logado (perfil C:\cop-robo\perfil). Você
- * loga 1x por dia; o robô, às 7h e 16h, abre uma aba escondida na
+ * loga 1x por dia; o robô, de hora em hora (7h às 19h), abre uma aba escondida na
  * MESMA sessão (sem segunda sessão, sem te derrubar do IXC), puxa as
  * linhas recentes da visão do Query Builder pelo endpoint que a própria
  * tela usa (get-query-data) e grava em ordens/movimentacoes do Supabase,
  * do mesmo jeito e com a mesma regra de não-duplicar que a importação por
  * Excel do site (chaveMovimentacao em js/services/armazenamento.js).
  *
- * Não baixa as ~588 mil linhas do ano toda hora: pede ordenado pela data
- * (mais novo primeiro) e para nos últimos JANELA_DIAS dias.
+ * Puxada incremental: cada rodada só pede o que mudou desde a anterior
+ * (horário guardado em estado-puxadas.json, com FOLGA_MIN de sobra):
+ *  - ordens (343): OS finalizadas desde a última puxada;
+ *  - pré-agendamento (529): retrato COMPLETO na 1ª rodada do dia (7h); nas
+ *    outras, só as movimentações novas das OS em aberto, e as OS que vieram
+ *    finalizadas na 343 saem da lista.
+ * Sem estado salvo (1ª vez), as ordens puxam os últimos JANELA_DIAS dias.
  *
  * Modos:
  *   node --env-file=.env robo.js --simular    -> puxa do IXC e MOSTRA o que
  *        achou (status, datas, amostra), SEM gravar. Não precisa da chave.
  *   node --env-file=.env robo.js --uma-vez     -> uma passada completa (grava).
- *   node --env-file=.env robo.js               -> fica rodando (rodadas às 7h e 16h).
+ *   node --env-file=.env robo.js               -> fica rodando (de hora em hora, 7h às 19h).
  */
 
 const { chromium } = require("playwright");
@@ -43,10 +48,13 @@ const TAM_PAGINA = 2000;      // linhas por pedido ao IXC
 const MAX_PAGINAS = 80;       // trava de segurança (~160 mil linhas)
 const TAM_LOTE_SUPA = 500;
 const COL_DATA = 14;          // índice da coluna su_oss_chamado_mensagem_data (ordenação)
-// Rodadas automáticas só nesses horários (hora do PC). Cada rodada prende a
-// sessão do IXC por alguns minutos (a puxada do pré-agendamento é pesada) e
-// trava a tela de quem usa a janela; puxada extra = botão "Atualizar banco".
-const HORARIOS_RODADA = [7, 16];
+// Rodadas automáticas: de hora em hora, das 7h às 19h (hora do PC). A rodada
+// prende a sessão do IXC enquanto puxa, por isso é incremental (só o que mudou
+// desde a anterior); a puxada completa do pré-agendamento fica só na 1ª do dia.
+// Puxada extra = botão "Atualizar banco".
+const HORARIOS_RODADA = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+const FOLGA_MIN = 10;   // cada janela começa 10 min antes do fim da anterior (o repetido é ignorado)
+const ARQ_ESTADO = path.join(__dirname, "estado-puxadas.json");
 const PULSO_MS = 5 * 60 * 1000;   // mantém a sessão viva a cada 5 min (auto-refresh interno)
 
 // Só a visão de ORDENS entra no Supabase (ordens/movimentacoes) por ora.
@@ -220,38 +228,51 @@ const listaIn = ids => `(${ids.map(id => `"${id}"`).join(",")})`;
 const p2 = n => String(n).padStart(2, "0");
 const ymd = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 
-/** Ajusta o molde cirurgicamente (sem reescrever o campo json gigante):
- *  troca start/length/draw e ESTREITA o filtro data_final pro período recente.
- *  O IXC ignora a ordenação por DataTables, então o jeito de pegar só os
- *  recentes é filtrar no próprio pedido: trocamos as duas datas do BETWEEN
- *  (ano inteiro) por [hoje-janela, hoje]. Datas vêm codificadas (espaço=+, :=%3A). */
-function montarPayload(molde, start, length, draw, janelaDias) {
+const dataHora = d => `${ymd(d)} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+// mesma data/hora como vem codificada no molde (espaço=+, :=%3A)
+const dataHoraCod = d => `${ymd(d)}+${p2(d.getHours())}%3A${p2(d.getMinutes())}%3A${p2(d.getSeconds())}`;
+const fimDoDia = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+const CAMPO_ABERTURA = "su_oss_chamado_mensagem_su_oss_chamado.data_abertura";
+const CAMPO_MOVIMENTACAO = "su_oss_chamado_mensagem.data";
+const regraCod = campo => `%22id%22%3A%22${campo}%22%2C%22field%22%3A%22${campo}%22`;
+
+/** Ajusta o molde cirurgicamente, direto no texto codificado (NÃO remontar com
+ *  URLSearchParams: o IXC devolveu 0 linhas quando o campo json foi recodificado).
+ *  Troca start/length/draw e, com `janela`, ESTREITA o filtro de data do molde
+ *  (BETWEEN do ano inteiro) pra [janela.ini, janela.fim], com hora. O IXC
+ *  ignora a ordenação por DataTables, então o jeito de pegar só os recentes é
+ *  filtrar no próprio pedido.
+ *  janela.porMovimentacao (pré-agendamento): o filtro do molde é pela data de
+ *  ABERTURA da OS — troca o campo pela data da MOVIMENTAÇÃO, pra pegar o que
+ *  mudou na janela (OS aberta em agosto e reagendada hoje entra). */
+function montarPayload(molde, start, length, draw, janela) {
     let p = molde.payload;
     p = p.replace(/(^|&)start=\d+/, `$1start=${start}`);
     p = p.replace(/(^|&)length=\d+/, `$1length=${length}`);
     p = p.replace(/(^|&)draw=\d+/, `$1draw=${draw}`);
-
-    // janelaDias só pra 343 (ordens fechadas): estreita o filtro de data pro
-    // período recente. A 529 (pré-agendamento) passa janelaDias falsy e NÃO
-    // mexe nas datas — precisa de TODAS as OS em aberto, não só as recentes.
-    if (janelaDias) {
-        const ini = ymd(new Date(Date.now() - janelaDias * 86400000));
-        const fim = ymd(new Date());
-        p = p.replace(/\d{4}-\d{2}-\d{2}\+00%3A00%3A00/g, `${ini}+00%3A00%3A00`);
-        p = p.replace(/\d{4}-\d{2}-\d{2}\+23%3A59%3A59/g, `${fim}+23%3A59%3A59`);
+    if (janela) {
+        if (janela.porMovimentacao) {
+            const antes = p;
+            p = p.split(regraCod(CAMPO_ABERTURA)).join(regraCod(CAMPO_MOVIMENTACAO))
+                 .split(`${CAMPO_ABERTURA}+BETWEEN+`).join(`${CAMPO_MOVIMENTACAO}+BETWEEN+`);
+            // sem trocar o campo, a janela cairia na data de abertura e só viriam OS novas: melhor parar
+            if (p === antes) throw new Error("molde sem filtro de data de abertura — não dá pra puxar por movimentação");
+        }
+        p = p.replace(/\d{4}-\d{2}-\d{2}\+00%3A00%3A00/g, dataHoraCod(janela.ini));
+        p = p.replace(/\d{4}-\d{2}-\d{2}\+23%3A59%3A59/g, dataHoraCod(janela.fim));
     }
     return p;
 }
 
-/** Puxa as linhas da visão JÁ filtrada pelo período recente (data_final nos
- *  últimos janelaDias dias), paginando até o fim. O corte é feito no servidor
- *  (no filtro do pedido), então aqui é só juntar as páginas. */
-async function puxarRecentes(pagina, molde, janelaDias) {
+/** Puxa as linhas da visão (filtrada por `janela`, ou o molde inteiro se
+ *  null), paginando até o fim. O corte é feito no servidor (no filtro do
+ *  pedido), então aqui é só juntar as páginas. */
+async function puxarRecentes(pagina, molde, janela) {
     const linhas = [];
     let total = null;
 
     for (let i = 0; i < MAX_PAGINAS; i++) {
-        const body = montarPayload(molde, i * TAM_PAGINA, TAM_PAGINA, i + 1, janelaDias);
+        const body = montarPayload(molde, i * TAM_PAGINA, TAM_PAGINA, i + 1, janela);
         const txt = await pagina.evaluate(async ({ url, body }) => {
             const r = await fetch(url, {
                 method: "POST", credentials: "include",
@@ -270,6 +291,7 @@ async function puxarRecentes(pagina, molde, janelaDias) {
             const ds = bloco.map(r => r.su_oss_chamado_mensagem_data);
             try {
                 fs.writeFileSync(path.join(__dirname, "debug.txt"),
+                    `visão ${molde.viewId} | janela ${janela ? `${dataHora(janela.ini)} → ${dataHora(janela.fim)}` : "molde inteiro"}\n` +
                     `status ${txt.status} | recordsTotal ${j.recordsTotal} | linhas na 1ª pág ${bloco.length}\n` +
                     `amostra de datas: ${ds.slice(0, 10).join(" | ")}\n`, "utf8");
             } catch {}
@@ -486,27 +508,113 @@ function paraLinhaPlanilha(r) {
     return o;
 }
 
+// estado das puxadas incrementais (sobrevive a reiniciar o robô)
+const lerEstado = () => { try { return JSON.parse(fs.readFileSync(ARQ_ESTADO, "utf8")); } catch { return {}; } };
+const salvarEstado = e => { try { fs.writeFileSync(ARQ_ESTADO, JSON.stringify(e, null, 2), "utf8"); } catch (x) { log("não salvou o estado das puxadas: " + x.message); } };
+const desdeComFolga = iso => new Date(new Date(iso).getTime() - FOLGA_MIN * 60000);
+
+const ID_OS = "ID OS";
+const FILTRO_ID_OS = "dados->>ID%20OS";
+// colunas que são da OS (e não da movimentação): repetem em toda linha da OS
+const CAMPOS_DA_OS = Object.entries(PARA_PLANILHA)
+    .filter(([alias]) => !alias.startsWith("su_oss_chamado_mensagem_") || alias.startsWith("su_oss_chamado_mensagem_su_oss_chamado_"))
+    .map(([, header]) => header);
+const chavePendente = d => [d[ID_OS], d.DATA, d.EVENTO, d.STATUS, d["COLABORADOR RESPONSAVEL"], d.MENSAGEM].join("|");
+
+/** Início do filtro de data de abertura do molde (ex.: 2026-01-01), pra a
+ *  puxada por movimentação respeitar o mesmo corte do retrato completo. */
+function inicioAberturaDoMolde(molde) {
+    const m = (new URLSearchParams(molde.payload).get("json") || "").match(/data_abertura BETWEEN \\"(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+
 /**
- * Pré-agendamento: puxa TODAS as OS em aberto (visão 529, sem janela de data)
- * e grava um RETRATO na tabela os_pendentes — apaga o retrato anterior e
- * insere o novo (OS já agendadas/fechadas saem sozinhas). O Agendador lê daí.
+ * Pré-agendamento (visão 529) -> tabela os_pendentes, que o Agendador e a
+ * Agenda IXC leem.
+ *  - 1ª rodada do dia: RETRATO completo — apaga tudo e reinsere todas as OS em
+ *    aberto (limpa o que a incremental não pega: cancelada, apagada...).
+ *  - demais: só as movimentações novas desde a última puxada. As OS que vieram
+ *    finalizadas na 343 (`finalizadas`) saem; as movimentações novas entram sem
+ *    duplicar; e as linhas antigas das OS mexidas recebem os campos da OS
+ *    atualizados (agendamento, diagnóstico...).
  */
-async function sincronizarPendentes(pagina, moldes, simular) {
+async function sincronizarPendentes(pagina, moldes, simular, { finalizadas, estado, inicio }) {
     if (!VISAO_PENDENTES) return;
     const molde = moldes.find(m => m.viewId === VISAO_PENDENTES);
     if (!molde) { log(`molde da visão ${VISAO_PENDENTES} (pré-agendamento) não encontrado em templates.json`); return; }
 
-    log(`Pré-agendamento: visão ${VISAO_PENDENTES} "${molde.viewName}" — puxando OS em aberto...`);
-    const linhas = await puxarRecentes(pagina, molde, null); // null = sem janela (todas)
-    const dados = linhas.map(r => ({ dados: paraLinhaPlanilha(r) }));
-    const idsOs = new Set(linhas.map(r => r.su_oss_chamado_mensagem_su_oss_chamado_id)).size;
+    const hoje = ymd(inicio);
+    if (estado.pendentesCompletaDia !== hoje || !estado.pendentesDesde || estado.pendentesForcarCompleta) {
+        log(`Pré-agendamento: visão ${VISAO_PENDENTES} "${molde.viewName}" — retrato completo do dia (todas as OS em aberto)...`);
+        const linhas = await puxarRecentes(pagina, molde, null); // null = molde inteiro
+        const dados = linhas.map(r => ({ dados: paraLinhaPlanilha(r) }));
+        const idsOs = new Set(linhas.map(r => r.su_oss_chamado_mensagem_su_oss_chamado_id)).size;
 
-    if (simular) { log(`  (simulação) ${linhas.length} eventos, ${idsOs} OS em aberto — não gravou.`); return; }
+        if (simular) { log(`  (simulação) ${linhas.length} eventos, ${idsOs} OS em aberto — não gravou.`); return; }
 
-    // retrato novo: apaga tudo e reinsere
-    await supabase("DELETE", "os_pendentes?id=gt.0", undefined, "return=minimal");
-    for (const lote of emLotes(dados, TAM_LOTE_SUPA)) await supabase("POST", "os_pendentes", lote, "return=minimal");
-    log(`  os_pendentes atualizada: ${linhas.length} eventos, ${idsOs} OS em aberto.`);
+        // retrato novo: apaga tudo e reinsere
+        await supabase("DELETE", "os_pendentes?id=gt.0", undefined, "return=minimal");
+        for (const lote of emLotes(dados, TAM_LOTE_SUPA)) await supabase("POST", "os_pendentes", lote, "return=minimal");
+        log(`  os_pendentes atualizada: ${linhas.length} eventos, ${idsOs} OS em aberto.`);
+        estado.pendentesCompletaDia = hoje;
+        estado.pendentesDesde = inicio.toISOString();
+        delete estado.pendentesForcarCompleta;
+        return;
+    }
+
+    const janela = { ini: desdeComFolga(estado.pendentesDesde), fim: fimDoDia(inicio), porMovimentacao: true };
+    log(`Pré-agendamento: movimentações desde ${janela.ini.toLocaleString("pt-BR")}...`);
+    const corte = inicioAberturaDoMolde(molde);
+    let brutas;
+    try { brutas = await puxarRecentes(pagina, molde, janela); }
+    catch (e) {
+        if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected/i.test(e.message)) throw e;
+        // o IXC não aceitou o filtro por movimentação: não deixa a lista parada — faz o retrato completo
+        log(`  puxada por movimentação falhou (${e.message}) — fazendo o retrato completo.`);
+        estado.pendentesForcarCompleta = true;
+        return sincronizarPendentes(pagina, moldes, simular, { finalizadas, estado, inicio });
+    }
+    if (brutas.length > 5000) log(`  ⚠ ${brutas.length} linhas numa puxada por hora — o filtro por movimentação pode não estar valendo.`);
+    const linhas = brutas
+        .filter(r => !corte || (paraData(r.su_oss_chamado_mensagem_su_oss_chamado_data_abertura) || inicio) >= corte);
+    const dados = linhas.map(paraLinhaPlanilha);
+    const idsMexidas = [...new Set(dados.map(d => String(d[ID_OS])).filter(Boolean))];
+    const idsFinalizadas = finalizadas.filter(id => !idsMexidas.includes(id));
+
+    if (simular) { log(`  (simulação) ${dados.length} movimentação(ões) em ${idsMexidas.length} OS em aberto; ${idsFinalizadas.length} OS finalizadas sairiam — não gravou.`); return; }
+
+    // 1) finalizadas no período saem da lista de abertas
+    for (const lote of emLotes(idsFinalizadas, 150))
+        await supabase("DELETE", `os_pendentes?${FILTRO_ID_OS}=in.${listaIn(lote)}`, undefined, "return=minimal");
+
+    // 2) linhas que já existem das OS mexidas: pra não duplicar e pra atualizar os campos da OS
+    const existentes = [];
+    for (const lote of emLotes(idsMexidas, 150))
+        existentes.push(...await buscarTodas("os_pendentes", "id,dados", "id", `&${FILTRO_ID_OS}=in.${listaIn(lote)}`));
+    const vistas = new Set(existentes.map(l => chavePendente(l.dados)));
+    const novas = dados.filter(d => { const k = chavePendente(d); if (vistas.has(k)) return false; vistas.add(k); return true; });
+
+    // campos da OS mais recentes (a última movimentação puxada de cada OS)
+    const camposOs = new Map();
+    for (const d of dados) {
+        const atual = camposOs.get(String(d[ID_OS]));
+        if (!atual || (paraData(d.DATA) || 0) >= (paraData(atual.DATA) || 0)) camposOs.set(String(d[ID_OS]), d);
+    }
+    const atualizadas = [];
+    for (const l of existentes) {
+        const fonte = camposOs.get(String(l.dados[ID_OS]));
+        if (!fonte || CAMPOS_DA_OS.every(c => l.dados[c] === fonte[c])) continue;
+        const dadosNovos = { ...l.dados };
+        for (const c of CAMPOS_DA_OS) dadosNovos[c] = fonte[c];
+        atualizadas.push({ id: l.id, dados: dadosNovos });
+    }
+
+    for (const lote of emLotes(atualizadas, TAM_LOTE_SUPA))
+        await supabase("POST", "os_pendentes?on_conflict=id", lote, "resolution=merge-duplicates,return=minimal");
+    for (const lote of emLotes(novas.map(d => ({ dados: d })), TAM_LOTE_SUPA))
+        await supabase("POST", "os_pendentes", lote, "return=minimal");
+    log(`  os_pendentes: ${novas.length} movimentação(ões) nova(s) em ${idsMexidas.length} OS, ${atualizadas.length} linha(s) atualizada(s), ${idsFinalizadas.length} OS finalizada(s) saíram.`);
+    estado.pendentesDesde = inicio.toISOString();
 }
 
 /** Baixa os módulos do agendador do site e carrega num objeto (IIFEs: this=ctx). */
@@ -548,15 +656,26 @@ async function publicarAgendaSeNaHora() {
 }
 
 async function umaPassada(pagina, moldes, simular) {
+    const inicio = new Date();
+    const estado = lerEstado();
+    const finalizadas = new Set();   // OS finalizadas na janela (saem do pré-agendamento)
+
+    // ordens: OS finalizadas desde a última puxada (1ª vez: últimos JANELA_DIAS dias)
+    const ini = estado.ordensDesde ? desdeComFolga(estado.ordensDesde) : new Date(inicio.getTime() - JANELA_DIAS * 86400000);
     for (const id of VISOES_PARA_SINCRONIZAR) {
         const molde = moldes.find(m => m.viewId === id);
         if (!molde) { log(`molde da visão ${id} não encontrado em templates.json`); continue; }
-        log(`Visão ${id} "${molde.viewName}" (total ${molde.recordsTotal}): puxando últimos ${JANELA_DIAS} dia(s)...`);
-        const linhas = await puxarRecentes(pagina, molde, JANELA_DIAS);
+        log(`Visão ${id} "${molde.viewName}": puxando OS finalizadas desde ${ini.toLocaleString("pt-BR")}...`);
+        const linhas = await puxarRecentes(pagina, molde, { ini, fim: fimDoDia(inicio) });
+        for (const r of linhas) if (!vazio(r.su_oss_chamado_mensagem_su_oss_chamado_id)) finalizadas.add(String(r.su_oss_chamado_mensagem_su_oss_chamado_id));
         const r = await processarEGravar(linhas, { simular });
         if (!simular) log(`  gravado: ${r.ordens} OS, ${r.inseridas} movimentação(ões) nova(s), ${r.ignoradas} já existiam.`);
     }
-    await sincronizarPendentes(pagina, moldes, simular);
+    await sincronizarPendentes(pagina, moldes, simular, { finalizadas: [...finalizadas], estado, inicio });
+    // só grava o estado com a rodada inteira OK: se o pré-agendamento falhar, a
+    // próxima repete a janela das ordens (o repetido é ignorado) e não perde finalizadas
+    if (!simular) { estado.ordensDesde = inicio.toISOString(); salvarEstado(estado); }
+    log(`Rodada concluída em ${Math.round((Date.now() - inicio.getTime()) / 1000)} s.`);
 }
 
 async function principal() {
@@ -696,7 +815,7 @@ async function principal() {
         if (await rodar()) rodadasFeitas.add(chave);
     };
 
-    log(`Pronto. Rodadas automáticas às ${HORARIOS_RODADA.map(h => h + "h").join(" e ")} (extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
+    log(`Pronto. Rodadas de hora em hora, das ${HORARIOS_RODADA[0]}h às ${HORARIOS_RODADA.at(-1)}h (extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
     setInterval(pulso, PULSO_MS);
     setInterval(agenda, 60 * 1000);
     setInterval(verificarComandos, 30 * 1000);

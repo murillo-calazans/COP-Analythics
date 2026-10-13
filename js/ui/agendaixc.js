@@ -157,7 +157,8 @@ function mesclarFinalizadasHoje(porTec, techs, separar, hoje) {
 
 function montarAgendaIxc(linhasBrutas, techsEscala) {
     const rows = linhasBrutas.map(l => l.dados);
-    const capturadoEm = linhasBrutas.length ? linhasBrutas[0].capturado_em : null;
+    // a puxada mais recente: o robô acrescenta linhas de hora em hora (a 1ª linha é a do retrato das 7h)
+    const capturadoEm = linhasBrutas.reduce((max, l) => (l.capturado_em && (!max || l.capturado_em > max) ? l.capturado_em : max), null);
     if (!rows.length || typeof Motor === "undefined") return { grupos: [], total: 0, alertas: 0, omitidas: 0, capturadoEm, resumo: {} };
 
     const hoje = ixcMeiaNoite();
@@ -576,7 +577,7 @@ function ixcHaQuanto(ms) {
 }
 
 /** Horários das rodadas automáticas do robô (igual a HORARIOS_RODADA no robo.js). */
-const IXC_HORARIOS_RODADA = [7, 16];
+const IXC_HORARIOS_RODADA = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 
 /** Horário da rodada agendada que veio `n` rodadas antes de agora (n=0: a última). */
 function ixcRodadaAnterior(n) {
@@ -592,7 +593,7 @@ function ixcRodadaAnterior(n) {
 }
 
 /**
- * Banner de atualização. O robô roda às 7h e 16h (e sob demanda pelo botão
+ * Banner de atualização. O robô roda de hora em hora, das 7h às 19h (e sob demanda pelo botão
  * "Atualizar banco"). Verde se o dado é da última rodada agendada (com 30 min
  * de folga pra ela terminar); amarelo se perdeu uma rodada; vermelho se perdeu
  * mais (robô provavelmente parado). Assim o horário nunca passa por "fresco" à toa.
@@ -626,7 +627,7 @@ function bannerAtualizacaoIxc(capturadoEm) {
     return `<div class="ixc-atualizado ${classe}">
         <span class="ixc-atualizado-ponto"></span>
         ${texto}
-        <span class="ixc-atualizado-obs">o robô atualiza às 7h e 16h · extra pelo botão Atualizar banco</span>
+        <span class="ixc-atualizado-obs">o robô atualiza de hora em hora (7h às 19h) · extra pelo botão Atualizar banco</span>
     </div>`;
 }
 
