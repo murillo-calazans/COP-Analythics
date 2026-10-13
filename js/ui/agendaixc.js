@@ -108,6 +108,53 @@ async function buscarOsPendentes() {
  * técnico. Quem não está na escala (terceirizada de fora, pessoa de
  * escritório que agendou, etc.) não entra — é a regra do setor da Base.
  */
+/**
+ * Acrescenta aos grupos do dia as OS que o técnico FINALIZOU hoje. Elas não
+ * estão no pré-agendamento (529 só traz OS em aberto) — vêm do relatório de
+ * ordens, já reconstruído em APP.dados.ordens. O técnico é quem FECHOU (mesmo
+ * nome que a gestão de ordens usa), casado com a escala por Motor.nomeBate.
+ * É isso que fecha o "X/Y do dia": o pré-agendamento dá o que falta fazer, o
+ * de ordens dá o que já foi feito.
+ */
+function mesclarFinalizadasHoje(porTec, techs, separar, hoje) {
+    const ordens = APP?.dados?.ordens;
+    if (!ordens || !ordens.size || typeof IndicatorEngine === "undefined" || typeof Motor === "undefined") return;
+    const amanha = hoje.getTime() + 24 * 3600 * 1000;
+    const dentroDeHoje = d => d && d.getTime() >= hoje.getTime() && d.getTime() < amanha;
+
+    for (const ordem of ordens.values()) {
+        if (!dentroDeHoje(ordem.dataFechamento)) continue;          // pré-filtro barato
+        if (ixcNorm(ordem.statusAtual) !== "finalizada") continue;
+
+        const info = IndicatorEngine.analisarEventosOS(ordem);
+        const fech = info?.ultimoFechamento;
+        const quando = fech?.data || ordem.dataFechamento;
+        if (!dentroDeHoje(quando)) continue;                        // o fechamento em si é de hoje?
+
+        const nomeFechou = IndicatorEngine.nomeResponsavelFechamento(fech);
+        if (!nomeFechou) continue;
+        const tech = techs.find(t => Motor.nomeBate(nomeFechou, t));
+        if (!tech) continue;            // quem fechou não é técnico de campo da escala (COP, terceira fora da escala…)
+
+        const infoT = separar(tech.nome);
+        const chave = tech.id || infoT.nome;
+        if (!porTec.has(chave)) {
+            const diaEscala = typeof EscalaDia !== "undefined" ? EscalaDia.regras.resumo(tech, hoje) : {};
+            const setorChave = diaEscala.situacao === "instalador" || diaEscala.situacao === "manutencao"
+                ? diaEscala.situacao
+                : (ixcNorm(tech.setor).startsWith("manut") ? "manutencao" : "instalador");
+            porTec.set(chave, { nome: infoT.nome, terceira: infoT.terceira, setor: tech.setor, setorChave, cidade: diaEscala.cidade || tech.cidade || "Sem cidade", oss: [] });
+        }
+        const grupo = porTec.get(chave);
+        if (grupo.oss.some(x => String(x.id) === String(ordem.id))) continue;   // já veio do 529: não duplica
+        grupo.oss.push({
+            id: ordem.id, cliente: ordem.cliente, cidade: ordem.cidade, bairro: ordem.bairro, assunto: ordem.assunto,
+            status: "Finalizada", statusNorm: "finalizada", reagendamentos: 0,
+            alerta: false, diaMsg: null, finalizada: true, fonte: "ordens", horaFim: quando
+        });
+    }
+}
+
 function montarAgendaIxc(linhasBrutas, techsEscala) {
     const rows = linhasBrutas.map(l => l.dados);
     const capturadoEm = linhasBrutas.length ? linhasBrutas[0].capturado_em : null;
@@ -122,12 +169,14 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
     // todos os agendamentos antigos em aberto).
     const agPorOs = {};      // id -> ISO do agendamento
     const agDate = {};       // id -> Date do agendamento
-    const msgsPorOs = {};    // id -> [{data, evento, msg}] (pra ler o dia pedido)
+    const msgsPorOs = {};    // id -> [{data, evento, status, msg}] (dia pedido + timeline do pop-up)
+    const osInfo = {};       // id -> {cliente, assunto, bairro, cidade} (cabeçalho da timeline)
     for (const r of rows) {
         const id = String(r["ID OS"]);
         const d = ixcDataBR(r.AGENDAMENTO);
         if (d) { agDate[id] = d; agPorOs[id] = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-        (msgsPorOs[id] = msgsPorOs[id] || []).push({ data: ixcDataBR(r.DATA), evento: r.EVENTO, msg: r.MENSAGEM });
+        (msgsPorOs[id] = msgsPorOs[id] || []).push({ data: ixcDataBR(r.DATA), evento: r.EVENTO, status: r.STATUS, msg: r.MENSAGEM });
+        if (!osInfo[id]) osInfo[id] = { cliente: r.CLIENTE, assunto: r.ASSUNTO, bairro: r.BAIRRO, cidade: r.CIDADE };
     }
 
     const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
@@ -241,14 +290,25 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
         porTec.get(chave).oss.push({
             id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto,
             status: o.status, statusNorm: st, reagendamentos: o.reagendamentos || 0,
-            alerta, diaMsg: alerta ? diaMsg : null, finalizada: st === "finalizada"
+            alerta, diaMsg: alerta ? diaMsg : null, finalizada: st === "finalizada", fonte: "ixc"
         });
     }
+
+    // Finalizadas HOJE (vêm do relatório de ORDENS — 343, OS já fechadas, que
+    // por isso saíram do pré-agendamento). Cruzamos pelo NOME do técnico que
+    // FECHOU (igual à gestão de ordens) com a escala, pra fechar o "X/Y do dia":
+    // o pré-agendamento dá o que falta, o de ordens dá o que já foi feito.
+    mesclarFinalizadasHoje(porTec, techs, separar, hoje);
 
     const grupos = [...porTec.values()]
         .map(g => ({
             tecnico: g.nome, terceira: g.terceira, setor: g.setor, setorChave: g.setorChave, cidade: g.cidade,
-            oss: g.oss.sort((a, b) => Number(b.alerta) - Number(a.alerta) || (a.cliente || "").localeCompare(b.cliente || "", "pt-BR")),
+            // feitas no topo (em ordem de quando fecharam), depois alerta, depois cliente
+            oss: g.oss.sort((a, b) =>
+                Number(b.finalizada) - Number(a.finalizada) ||
+                (a.finalizada ? (a.horaFim || 0) - (b.horaFim || 0) : 0) ||
+                Number(b.alerta) - Number(a.alerta) ||
+                (a.cliente || "").localeCompare(b.cliente || "", "pt-BR")),
             total: g.oss.length,
             feitas: g.oss.filter(o => o.finalizada).length,
             alertas: g.oss.filter(o => o.alerta).length
@@ -256,7 +316,8 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
         .sort((a, b) => b.total - a.total);
 
     const total = grupos.reduce((s, g) => s + g.total, 0);
-    return { grupos, total, alertas, omitidas, capturadoEm, resumo, gruposFuturos, gruposEmAberto };
+    const feitas = grupos.reduce((s, g) => s + g.feitas, 0);
+    return { grupos, total, feitas, alertas, omitidas, capturadoEm, resumo, gruposFuturos, gruposEmAberto, eventosPorOs: msgsPorOs, osInfo };
 }
 
 // Visual no padrão da "Escala de hoje" (js/ui/escalahoje.js): três cartões no
@@ -268,7 +329,7 @@ const agendaIxcTecnicosAbertos = new Set();  // técnicos com "Ver mais" aberto 
 
 // Cartões do topo: o que cada um conta e mostra no pop-up.
 const AGENDA_IXC_CARTOES = [
-    { id: "agendadas", rotulo: "Agendadas", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', titulo: "OS marcadas pra hoje no IXC", grupos: m => m.grupos },
+    { id: "agendadas", rotulo: "Do dia", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', titulo: "Todas as OS do dia do técnico: as já finalizadas hoje + as ainda em aberto marcadas pra hoje", grupos: m => m.grupos },
     { id: "alertas", rotulo: "Alertas", icone: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', titulo: "Primeiro quem pediu outro dia na mensagem, depois as OS já reagendadas", grupos: m => gruposComFiltro(m.grupos, o => o.alerta || o.reagendamentos > 0, true) },
     { id: "outroDia", rotulo: "Para outro dia", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M10 14l4 4M14 14l-4 4"/>', titulo: "OS que não estão marcadas pra hoje: agendadas para os próximos dias e em aberto (sem data ou vencidas)", grupos: m => [...(m.gruposFuturos || []), ...(m.gruposEmAberto || [])] }
 ];
@@ -291,16 +352,19 @@ function htmlOsIxc(o) {
         ? `<span class="escala-tag ixc-data${o.atrasada ? " ixc-data-vencida" : ""}" title="${o.atrasada ? "Agendamento vencido" : "Agendada no IXC para"}">📅 ${o.atrasada ? "venceu " : ""}${o.agendadoPara.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}</span>`
         : "";
     const reag = o.reagendamentos > 0 ? `<span class="escala-tag" title="Reagendamentos">↻ ${o.reagendamentos}</span>` : "";
+    const feita = o.finalizada && o.horaFim
+        ? `<span class="escala-tag ixc-feita-hora" title="Finalizada">✔ ${o.horaFim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>`
+        : "";
     const aviso = o.alerta
         ? `<div class="ixc-alerta">⚠ Cliente pediu outro dia: <b>${o.diaMsg.toLocaleDateString("pt-BR")}</b> — confira a mensagem no IXC</div>`
         : "";
     return `
-      <li class="ixc-os${o.alerta ? " ixc-os-alerta" : ""}${o.finalizada ? " ixc-os-feita" : ""}">
+      <li class="ixc-os ixc-os-click${o.alerta ? " ixc-os-alerta" : ""}${o.finalizada ? " ixc-os-feita" : ""}" data-ixc-os="${escaparHtml(String(o.id))}" data-ixc-fonte="${o.fonte || "ixc"}" title="Ver a ordem completa">
         <div class="ixc-os-linha">
-          <span class="ixc-os-cliente" title="OS ${escaparHtml(String(o.id))}">${escaparHtml(o.cliente || "—")}</span>
+          <span class="ixc-os-cliente">#${escaparHtml(String(o.id))} · ${escaparHtml(o.cliente || "—")}</span>
           ${badgeStatus(o.statusNorm, o.status)}
         </div>
-        <div class="ixc-os-sub">${escaparHtml(o.bairro || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))} ${reag} ${marcada}</div>
+        <div class="ixc-os-sub">${escaparHtml(o.bairro || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))} ${feita} ${reag} ${marcada}</div>
         ${aviso}
       </li>`;
 }
@@ -317,7 +381,7 @@ function htmlTecnicoIxc(g, limitar) {
             <strong>${escaparHtml(g.tecnico)}</strong>
             ${g.terceira ? `<span class="escala-tag">${escaparHtml(g.terceira)}</span>` : ""}
           </span>
-          <span class="ixc-tec-conta" title="Finalizadas / marcadas pra hoje">${g.feitas}/${g.total}${g.alertas ? ` <b class="ixc-alertas" title="Cliente pediu outro dia">⚠ ${g.alertas}</b>` : ""}</span>
+          <span class="ixc-tec-conta" title="Finalizadas hoje / total do dia (feitas + em aberto)">${g.feitas}/${g.total}${g.alertas ? ` <b class="ixc-alertas" title="Cliente pediu outro dia">⚠ ${g.alertas}</b>` : ""}</span>
         </div>
         <ul class="ixc-lista">${visiveis.map(htmlOsIxc).join("")}</ul>
         ${limitar && escondidas > 0 ? `<button type="button" class="escala-ver-mais" data-ixc-ver-mais="${escaparHtml(g.tecnico)}">${aberto ? "Ver menos" : `Ver mais ${escondidas}`}</button>` : ""}
@@ -422,6 +486,56 @@ function fecharPopupIxc() {
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape") fecharPopupIxc(); });
 
+// Clicar numa OS da Agenda IXC abre a ordem cronológica (igual à gestão de
+// ordens). Finalizada veio do relatório de ordens -> modal da gestão de ordens;
+// em aberto só existe no pré-agendamento -> timeline montada com os eventos do 529.
+// Delegado no documento pra pegar tanto a lista da página quanto a do pop-up.
+document.addEventListener("click", e => {
+    const li = e.target.closest("[data-ixc-os]");
+    if (!li) return;
+    const id = li.dataset.ixcOs;
+    if (li.dataset.ixcFonte === "ordens" && typeof abrirModalOS === "function" && AuditEngine.obterDetalhes(id)) {
+        fecharPopupIxc();
+        abrirModalOS(id);
+    } else {
+        abrirTimelineIxc(id);
+    }
+});
+
+/**
+ * Timeline de uma OS ainda EM ABERTO (só existe no pré-agendamento, não no
+ * relatório de ordens). Monta a ordem cronológica com os eventos do próprio
+ * 529 — mesma ideia da gestão de ordens, com o que o IXC exporta.
+ */
+function abrirTimelineIxc(id) {
+    const model = agendaIxcCache;
+    const corpo = document.getElementById("modalOsIxcCorpo");
+    const titulo = document.getElementById("modalOsIxcTitulo");
+    if (!corpo || !titulo) return;
+    const eventos = (model?.eventosPorOs?.[String(id)] || []).slice().sort((a, b) => (a.data || 0) - (b.data || 0));
+    const info = model?.osInfo?.[String(id)] || {};
+
+    titulo.textContent = `OS ${id}`;
+    corpo.innerHTML = !eventos.length
+        ? `<p class="alerta-vazio">Sem histórico no pré-agendamento para esta OS.</p>`
+        : `
+          <div class="modal-resumo resumo-grid">
+            <div><span>Cliente</span><strong>${escaparHtml(info.cliente || "—")}</strong></div>
+            <div><span>Cidade / Bairro</span><strong>${escaparHtml(info.cidade || "—")} / ${escaparHtml(info.bairro || "—")}</strong></div>
+            <div><span>Assunto</span><strong>${escaparHtml(info.assunto || "—")}</strong></div>
+          </div>
+          <ol class="ixc-timeline">${eventos.map(ev => `
+            <li class="ixc-timeline-item">
+              <div class="ixc-timeline-topo">
+                <span class="ixc-timeline-data">${ev.data ? ev.data.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+                ${badgeStatus(ixcNorm(ev.status), ev.status)}
+              </div>
+              <div class="ixc-timeline-evento">${escaparHtml(ev.evento || "—")}</div>
+              ${ev.msg ? `<div class="ixc-timeline-msg">${escaparHtml(ev.msg)}</div>` : ""}
+            </li>`).join("")}</ol>`;
+    abrirModal("modalOsIxc");
+}
+
 /** Top 5 assuntos e Top 5 cidades das OS marcadas pra hoje (as mesmas do card "Agendadas"). */
 function htmlTopsIxc(model) {
     const oss = model.grupos.flatMap(g => g.oss);
@@ -450,6 +564,53 @@ function htmlTopsIxc(model) {
     return `<div class="ixc-tops">${painel("Top 5 assuntos do dia", top5(o => ixcAssuntoCurto(o.assunto)))}${painel("Top 5 cidades com mais OS", top5(o => o.cidade))}</div>`;
 }
 
+/** "há 8 min", "há 2 h", "há 3 dias" — idade de um horário até agora. */
+function ixcHaQuanto(ms) {
+    const min = Math.max(0, Math.round(ms / 60000));
+    if (min < 1) return "agora mesmo";
+    if (min < 60) return `há ${min} min`;
+    const h = Math.round(min / 60);
+    if (h < 24) return `há ${h} h`;
+    const d = Math.round(h / 24);
+    return `há ${d} ${d === 1 ? "dia" : "dias"}`;
+}
+
+/**
+ * Banner de atualização. O verde ("em dia") só aparece quando o dado é
+ * REALMENTE recente — o robô roda de hora em hora, então acima de ~90 min já
+ * avisa que pode estar atrasado, e acima de 3 h/dia anterior marca em vermelho
+ * (robô provavelmente parado). Assim o horário nunca passa por "fresco" à toa.
+ */
+function bannerAtualizacaoIxc(capturadoEm) {
+    if (!capturadoEm) {
+        return `<div class="ixc-atualizado ixc-atu-parado">
+            <span class="ixc-atualizado-ponto"></span>
+            <b>Sem atualização ainda</b> — o robô não populou a tabela. Verifique se ele está rodando.
+        </div>`;
+    }
+    const d = new Date(capturadoEm);
+    const idade = Date.now() - d.getTime();
+    const completo = d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", " às");
+    const min = idade / 60000;
+
+    let classe, texto;
+    if (min <= 90) {
+        classe = "ixc-atu-ok";
+        texto = `Atualizado <b>${ixcHaQuanto(idade)}</b> (${completo})`;
+    } else if (min <= 180) {
+        classe = "ixc-atu-atraso";
+        texto = `⚠ Última atualização <b>${ixcHaQuanto(idade)}</b> (${completo}) — o robô pode estar atrasado`;
+    } else {
+        classe = "ixc-atu-parado";
+        texto = `⚠ Desatualizado — última atualização <b>${ixcHaQuanto(idade)}</b> (${completo}). Verifique o robô.`;
+    }
+    return `<div class="ixc-atualizado ${classe}">
+        <span class="ixc-atualizado-ponto"></span>
+        ${texto}
+        <span class="ixc-atualizado-obs">o robô atualiza de hora em hora</span>
+    </div>`;
+}
+
 function renderizarAgendaIxc(model) {
     const alvo = document.getElementById("agendaIxcConteudo");
     if (!alvo) return;
@@ -463,10 +624,11 @@ function renderizarAgendaIxc(model) {
 
     const contar = cartao => cartao.grupos(model).reduce((s, g) => s + g.oss.length, 0);
     const feitas = model.grupos.reduce((s, g) => s + g.feitas, 0);
-    const quando = model.capturadoEm ? new Date(model.capturadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
     const icone = caminhos => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${caminhos}</svg>`;
 
     alvo.innerHTML = `
+      ${bannerAtualizacaoIxc(model.capturadoEm)}
+
       <div class="escala-kpis ixc-cartoes" role="group" aria-label="Resumo da agenda do IXC">
         ${AGENDA_IXC_CARTOES.map(c => `
           <button type="button" class="escala-kpi kpi-ixc-${c.id}" data-cartao-ixc="${c.id}" title="${escaparHtml(c.titulo)} — clique para ver todas">
@@ -484,7 +646,6 @@ function renderizarAgendaIxc(model) {
         <span><i class="ixc-amostra setor-manutencao"></i>Manutenção</span>
         <span>${feitas} de ${model.total} finalizadas</span>
         ${model.omitidas ? `<span>${model.omitidas} OS de técnicos fora da escala não aparecem</span>` : ""}
-        <span class="escala-atualizada">Retrato do IXC às ${quando} (o robô atualiza de hora em hora)</span>
       </div>`;
 
     alvo.querySelectorAll("[data-cartao-ixc]").forEach(botao => botao.addEventListener("click", () => {

@@ -14,3 +14,6 @@ database/*.csv
 Thumbs.db
 .DS_Store
 *.log
+
+# Cache local do Supabase CLI
+supabase/.temp/
