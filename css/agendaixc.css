@@ -332,3 +332,24 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 .robo-toast.aberto { opacity: 1; transform: translateX(-50%) translateY(0); }
 .robo-toast[data-tipo="ok"] { background: #16a34a; }
 .robo-toast[data-tipo="erro"] { background: #dc2626; }
+
+/* ---------- Painel inicial: pendências de reagendamento (#2) ---------- */
+.atrasadas-card {
+    background: rgba(220, 38, 38, .06);
+    border: 1px solid rgba(220, 38, 38, .3);
+    border-radius: 14px;
+    padding: 14px 16px;
+}
+.atrasadas-topo { margin: 0 0 10px; color: var(--text, #111827); font-size: 14px; }
+.atrasadas-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+.atrasadas-tec {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
+    border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 13px;
+    color: var(--text, #111827);
+}
+.atrasadas-nome small { color: var(--text-muted, #6b7280); }
+.atrasadas-qtd {
+    min-width: 22px; text-align: center; font-weight: 700; font-size: 12px;
+    color: #fff; background: #dc2626; border-radius: 999px; padding: 1px 7px;
+}

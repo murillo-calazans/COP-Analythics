@@ -537,3 +537,48 @@ function registrarAbasAgenda() {
         if (aba === "ixc") carregarAgendaIxc();
     }));
 }
+
+/**
+ * Pendências de reagendamento: OS ainda EM ABERTO cujo AGENDAMENTO é de um
+ * dia ANTERIOR a hoje (dentro dos últimos ATRASADAS_DIAS dias) — ou seja, o
+ * técnico começou o dia com OS que ficaram de trás e ninguém reagendou.
+ * Agrupa por técnico (da escala). Usado no painel inicial (#2).
+ */
+const ATRASADAS_DIAS = 7;
+async function calcularAtrasadas() {
+    if (typeof Motor === "undefined") return { grupos: [], total: 0 };
+    const [linhas, techs] = await Promise.all([
+        buscarOsPendentes(),
+        typeof carregarEscalaTecnicos === "function" ? carregarEscalaTecnicos().catch(() => []) : []
+    ]);
+    const rows = linhas.map(l => l.dados);
+    if (!rows.length) return { grupos: [], total: 0 };
+
+    const hoje = ixcMeiaNoite();
+    const limite = new Date(hoje); limite.setDate(limite.getDate() - ATRASADAS_DIAS);
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const hojeIso = iso(hoje), limiteIso = iso(limite);
+
+    const agIso = {};
+    for (const r of rows) { const d = ixcDataBR(r.AGENDAMENTO); if (d) agIso[String(r["ID OS"])] = iso(d); }
+
+    const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
+    const separar = typeof separarTerceira === "function" ? separarTerceira : (n => ({ nome: n, terceira: null }));
+    const porTec = new Map();
+    for (const o of os) {
+        const dia = agIso[String(o.id)];
+        if (!dia || dia >= hojeIso || dia < limiteIso) continue;   // só agendamento passado recente (últimos dias)
+        const nome = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
+        if (!nome) continue;
+        const tech = (techs || []).find(t => Motor.nomeBate(nome, t));
+        if (!tech) continue;
+        const info = separar(tech.nome);
+        const chave = tech.id || info.nome;
+        if (!porTec.has(chave)) porTec.set(chave, { nome: info.nome, terceira: info.terceira, oss: [] });
+        porTec.get(chave).oss.push({ id: o.id, cliente: o.cliente, dia: dia.split("-").reverse().join("/") });
+    }
+    const grupos = [...porTec.values()]
+        .map(g => ({ tecnico: g.nome, terceira: g.terceira, oss: g.oss.sort((a, b) => a.dia.localeCompare(b.dia)), total: g.oss.length }))
+        .sort((a, b) => b.total - a.total);
+    return { grupos, total: grupos.reduce((s, g) => s + g.total, 0) };
+}

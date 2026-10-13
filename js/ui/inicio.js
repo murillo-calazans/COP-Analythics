@@ -45,12 +45,43 @@ function renderizarInicio() {
             ${tileInicio("OS na agenda do dia", '<span id="inicioAgendaHoje">…</span>', "agenda-hoje")}
             ${tileInicio("Alertas de recorrência", (APP.indicadores.recorrenciaAlertas?.size ?? 0).toLocaleString("pt-BR"), "alertas")}
         </div>
+
+        <div id="inicioAtrasadas"></div>
     `;
 
     container.querySelectorAll("[data-ir-secao]").forEach(botao =>
         botao.addEventListener("click", () => mostrarSecao(botao.dataset.irSecao)));
 
     preencherHojeNoCop();
+    preencherAtrasadas();
+}
+
+/**
+ * Card do painel: técnicos que começaram o dia com OS de dias anteriores
+ * ainda em aberto (ninguém reagendou). Só admin/editor vê (é dado operacional).
+ */
+async function preencherAtrasadas() {
+    const alvo = document.getElementById("inicioAtrasadas");
+    if (!alvo || typeof calcularAtrasadas !== "function") return;
+    if (typeof podeEditarOperacao === "function" && !podeEditarOperacao()) return;
+    try {
+        const { grupos, total } = await calcularAtrasadas();
+        if (!total) { alvo.innerHTML = ""; return; }
+        const cards = grupos.map(g => `
+            <div class="atrasadas-tec">
+                <span class="atrasadas-nome">${escaparHtml(g.tecnico)}${g.terceira ? ` <small>(${escaparHtml(g.terceira)})</small>` : ""}</span>
+                <span class="atrasadas-qtd">${g.total}</span>
+            </div>`).join("");
+        alvo.innerHTML = `
+            <div class="indicadores-secao-titulo">⚠ Pendências de reagendamento</div>
+            <div class="atrasadas-card">
+                <p class="atrasadas-topo"><b>${total}</b> OS de dias anteriores ainda em aberto — os técnicos começaram o dia sem reagendar. Veja na Agenda IXC.</p>
+                <div class="atrasadas-lista">${cards}</div>
+            </div>`;
+    } catch (e) {
+        console.warn("Atrasadas:", e);
+        alvo.innerHTML = "";
+    }
 }
 
 function conteudoMeuMes() {
