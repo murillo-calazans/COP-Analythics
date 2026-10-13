@@ -55,7 +55,9 @@
   // ajuste de potência, CTO sem vaga, verificar viabilidade) e "Pós terceirizada", eSIM, licitação e inviabilidade
   // (ex.: "INVIABILIDADE - ÁREA DE RISCO", fica no setor do COP — 08/10) também
   // não entra: não é visita a cliente.
-  const NAO_CAMPO = /auditoria|exclusao de acesso|instalacao nao concluida|mudanca de tecnologia nao concluida|nova tentativa de instalacao|configurar conexao|configuracao telefonia|verificar troca de plano|chip|orcamento|remocao telefonia|area de manutencao|expansao de rede|rearranjo|cto sem potencia|ajuste de potencia|melhoria de rede|cto sem vaga|verificar viabilidade|pos terceirizada|esim|licitacao|inviabilidade/;
+  // 13/10: Construção de rede FTTH (infra), Reagendamento suporte e Cliente indisponível (COP liga pro cliente),
+  // Faturar débitos contratuais (faturamento) e Tratativa de IP fixo (CGR) também não contam pra agendamento.
+  const NAO_CAMPO = /auditoria|exclusao de acesso|instalacao nao concluida|mudanca de tecnologia nao concluida|nova tentativa de instalacao|configurar conexao|configuracao telefonia|verificar troca de plano|chip|orcamento|remocao telefonia|area de manutencao|expansao de rede|rearranjo|cto sem potencia|ajuste de potencia|melhoria de rede|cto sem vaga|verificar viabilidade|pos terceirizada|esim|licitacao|inviabilidade|construcao de rede|reagendamento suporte|cliente indisponivel|faturar debitos|ip fixo/;
 
   const RE_VISITANTE = /Usu[aá]rio\s+(.+?)\s*,\s*(?:iniciou o deslocamento|executou)/i;
 

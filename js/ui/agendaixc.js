@@ -131,13 +131,14 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
     }
 
     const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
-    const doDia = os.filter(o => agPorOs[String(o.id)] === hojeIso);
+    // Só o que conta pra agendamento (o.campo do motor): fora infra, COP, faturamento, CGR, recolhimento…
+    const doDia = os.filter(o => o.campo && agPorOs[String(o.id)] === hojeIso);
 
     const techs = Array.isArray(techsEscala) ? techsEscala : [];
     const separar = typeof separarTerceira === "function" ? separarTerceira : (n => ({ nome: n, terceira: null }));
 
     // OS de técnicos da escala já marcadas pra um dia DEPOIS de hoje (card "Para outro dia").
-    const futuras = os.filter(o => agPorOs[String(o.id)] > hojeIso);
+    const futuras = os.filter(o => o.campo && agPorOs[String(o.id)] > hojeIso);
     const gruposFuturos = agruparPorTecnico(futuras, o => ({ agendadoPara: agDate[String(o.id)] }));
 
     // OS de campo EM ABERTO que não estão marcadas pra hoje nem pra frente: sem agendamento ou
