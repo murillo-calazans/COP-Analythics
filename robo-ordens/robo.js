@@ -746,6 +746,7 @@ async function principal() {
         return true;
     };
 
+    const abertoEm = new Date();   // antes da 1ª rodada: ela pode terminar já na hora seguinte
     await rodar();
 
     if (simular || umaVez) { await ctx.close(); process.exit(0); }
@@ -806,7 +807,7 @@ async function principal() {
     // não rodou nele hoje. Se estiver ocupado (comando/pulso), tenta no minuto seguinte.
     const chaveRodada = d => `${ymd(d)} ${d.getHours()}h`;
     // a rodada da abertura já vale pelo horário, se o robô abriu dentro de um (ex.: 7h20)
-    const rodadasFeitas = new Set([chaveRodada(new Date())]);
+    const rodadasFeitas = new Set([chaveRodada(abertoEm)]);
     const agenda = async () => {
         const agora = new Date();
         if (!HORARIOS_RODADA.includes(agora.getHours())) return;
