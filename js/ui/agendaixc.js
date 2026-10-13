@@ -59,16 +59,21 @@ function ixcDataBR(s) {
  */
 function ixcDiaPedido(texto, dataMsg) {
     const t = ixcNorm(texto);
-    const m = t.match(/(?:para|pro|dia|volta\w*|reagend\w*|remarc\w*|agend\w*)[^\d]{0,15}(\d{1,2})\/(\d{1,2})/);
-    if (m && +m[2] >= 1 && +m[2] <= 12) return new Date(dataMsg.getFullYear(), +m[2] - 1, +m[1]);
-    for (const [nome, dow] of Object.entries(IXC_DOW)) {
-        if (new RegExp(`(^|[^a-z])${nome}`).test(t)) {
-            const d = new Date(dataMsg); d.setHours(0, 0, 0, 0);
-            let add = (dow - d.getDay() + 7) % 7; if (add === 0) add = 7; // próxima ocorrência após a msg
-            d.setDate(d.getDate() + add);
-            return d;
-        }
+    const dias = Object.keys(IXC_DOW).join("|");
+    // o dia só conta quando vem logo depois de uma palavra de PEDIDO — assim
+    // "plantão de domingo" (contexto) não vira pedido, mas "pediu para terça" sim.
+    // Pega o ÚLTIMO pedido do texto (costuma ser a conclusão da mensagem).
+    const re = new RegExp(`(?:para|pro|pediu|solicit\\w*|reagend\\w*|remarc\\w*|volta\\w*)[^.;\\d]{0,20}?(?:\\b(${dias})\\b|(\\d{1,2})\\/(\\d{1,2}))`, "g");
+    let last = null, m;
+    while ((m = re.exec(t))) last = m;
+    if (!last) return null;
+    if (last[1]) { // dia da semana resolvido a partir da data da mensagem
+        const d = new Date(dataMsg); d.setHours(0, 0, 0, 0);
+        let add = (IXC_DOW[last[1]] - d.getDay() + 7) % 7; if (add === 0) add = 7;
+        d.setDate(d.getDate() + add);
+        return d;
     }
+    if (last[2] && +last[3] >= 1 && +last[3] <= 12) return new Date(dataMsg.getFullYear(), +last[3] - 1, +last[2]);
     return null;
 }
 
