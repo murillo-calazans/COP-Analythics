@@ -93,6 +93,20 @@ function mostrarSecao(nome) {
         return mostrarSecao("inicio");
     }
 
+    // Filtro Global isolado por aba: ao trocar de MÓDULO, o filtro volta pro
+    // padrão (mês atual), pra o recorte de um relatório não vazar pro outro.
+    // Dentro do mesmo módulo (ex.: Dashboard -> Técnicos) o filtro é mantido.
+    const moduloFiltro = MODULO_DA_SECAO[nome] || "ordens";
+    if (APP.moduloFiltroAtual && APP.moduloFiltroAtual !== moduloFiltro) {
+        APP.filtrosGlobais = {
+            dataInicio: inicioMesAtual(), dataFim: fimDeHoje(),
+            assuntos: [], cidades: [], bairros: [], operadores: [], setores: [], diagnosticosOcultos: []
+        };
+        if (typeof atualizarBadgeFiltroGlobal === "function") atualizarBadgeFiltroGlobal();
+        if (typeof renderizarFiltrosAtivos === "function") renderizarFiltrosAtivos();
+    }
+    APP.moduloFiltroAtual = moduloFiltro;
+
     document.querySelectorAll("section.secao").forEach(secao => {
         secao.classList.toggle("ativa", secao.id === `secao-${nome}`);
     });
