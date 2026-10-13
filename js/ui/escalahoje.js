@@ -186,10 +186,12 @@ async function renderizarEscalaHoje() {
 function htmlCidadesEscala(trabalhando) {
     const filtrados = escalaHojeFiltro === "todos" ? trabalhando : trabalhando.filter(d => d.resumo.situacao === escalaHojeFiltro);
 
-    // Dupla vira uma linha só (no primeiro dos dois em ordem alfabética).
+    // Dupla vira uma linha só, no nome do principal (como na escala.html): os
+    // auxiliares passam por último, então o principal já levou o par.
     const jaListados = new Set();
     const porCidade = new Map();
-    for (const item of [...filtrados].sort((a, b) => a.tech.nome.localeCompare(b.tech.nome, "pt-BR"))) {
+    const auxiliar = item => (item.parceiro && item.papel === "auxiliar" ? 1 : 0);
+    for (const item of [...filtrados].sort((a, b) => auxiliar(a) - auxiliar(b))) {
         if (jaListados.has(item.tech.id)) continue;
         jaListados.add(item.tech.id);
         if (item.parceiro) jaListados.add(item.parceiro.id);
@@ -199,6 +201,14 @@ function htmlCidadesEscala(trabalhando) {
     }
 
     if (porCidade.size === 0) return '<p class="alerta-vazio">Ninguém nesse filtro neste dia.</p>';
+
+    // Dentro da cidade: manutenção primeiro, depois instalação; cada bloco em ordem alfabética.
+    const ordemSituacao = { manutencao: 0, instalador: 1 };
+    for (const linhas of porCidade.values()) {
+        linhas.sort((a, b) =>
+            (ordemSituacao[a.resumo.situacao] ?? 2) - (ordemSituacao[b.resumo.situacao] ?? 2)
+            || a.tech.nome.localeCompare(b.tech.nome, "pt-BR"));
+    }
 
     const cidades = [...porCidade.keys()].sort((a, b) => porCidade.get(b).length - porCidade.get(a).length || a.localeCompare(b, "pt-BR"));
 
