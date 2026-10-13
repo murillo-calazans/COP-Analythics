@@ -243,6 +243,9 @@ html[data-tema="dark"] .ixc-alerta{ color: #FCA5A5; }
 }
 .ixc-popup-secao ~ .ixc-popup-secao{ margin-top: 26px; }
 .ixc-data{ background: var(--ixc-manut-fundo); color: var(--ixc-manut-cor); }
+.ixc-data-vencida{ background: rgba(220, 38, 38, .08); color: #B91C1C; }
+html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
+.ixc-tec-sem{ background: var(--cor-fundo-card) !important; border-style: dashed !important; }
 .ixc-popup-corpo{
     overflow: auto;
     padding: 18px 22px 22px;
