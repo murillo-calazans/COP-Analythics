@@ -56,6 +56,56 @@ html[data-tema="dark"]{
 .kpi-ixc-alertas .escala-kpi-icone{ color: #D97706; }
 .kpi-ixc-outroDia .escala-kpi-icone{ color: #DC2626; }
 
+/* Top 5 assuntos / cidades: barras de uma cor só (magnitude), valor ao lado. */
+.ixc-tops{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 20px;
+}
+.ixc-top-lista{
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+}
+.ixc-top-lista li{
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+}
+.ixc-top-nome{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    color: var(--cor-texto);
+}
+.ixc-top-barra{
+    height: 8px;
+    border-radius: 999px;
+    background: var(--cor-borda);
+    overflow: hidden;
+}
+.ixc-top-barra i{
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--ixc-manut-cor);
+}
+.ixc-top-valor{
+    min-width: 64px;
+    text-align: right;
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+    white-space: nowrap;
+}
+.ixc-top-valor b{
+    color: var(--cor-texto);
+    font-size: 14px;
+}
+
 .ixc-cidades{
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     align-items: start;
@@ -254,6 +304,7 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 @media (max-width: 720px){
     .ixc-cidades{ grid-template-columns: 1fr; }
     .ixc-cartoes{ grid-template-columns: 1fr; }
+    .ixc-tops{ grid-template-columns: 1fr; }
 }
 
 /* ---------- Botão "Atualizar banco" (robô) + toast ---------- */

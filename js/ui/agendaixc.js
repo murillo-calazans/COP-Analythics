@@ -421,6 +421,34 @@ function fecharPopupIxc() {
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape") fecharPopupIxc(); });
 
+/** Top 5 assuntos e Top 5 cidades das OS marcadas pra hoje (as mesmas do card "Agendadas"). */
+function htmlTopsIxc(model) {
+    const oss = model.grupos.flatMap(g => g.oss);
+    if (!oss.length) return "";
+    const top5 = chave => {
+        const cont = new Map();
+        for (const o of oss) {
+            const k = chave(o) || "—";
+            cont.set(k, (cont.get(k) || 0) + 1);
+        }
+        return [...cont.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR")).slice(0, 5);
+    };
+    const painel = (titulo, itens) => {
+        const maior = itens[0]?.[1] || 1;
+        return `
+          <div class="escala-cidade ixc-top">
+            <div class="escala-cidade-topo"><h3>${titulo}</h3><span class="escala-pilula">${oss.length} OS hoje</span></div>
+            <ol class="ixc-top-lista">${itens.map(([nome, n]) => `
+              <li title="${escaparHtml(nome)}: ${n} OS (${Math.round(n / oss.length * 100)}% do dia)">
+                <span class="ixc-top-nome">${escaparHtml(nome)}</span>
+                <span class="ixc-top-barra"><i style="width:${Math.max(4, Math.round(n / maior * 100))}%"></i></span>
+                <span class="ixc-top-valor"><b>${n}</b> ${Math.round(n / oss.length * 100)}%</span>
+              </li>`).join("")}</ol>
+          </div>`;
+    };
+    return `<div class="ixc-tops">${painel("Top 5 assuntos do dia", top5(o => ixcAssuntoCurto(o.assunto)))}${painel("Top 5 cidades com mais OS", top5(o => o.cidade))}</div>`;
+}
+
 function renderizarAgendaIxc(model) {
     const alvo = document.getElementById("agendaIxcConteudo");
     if (!alvo) return;
@@ -445,6 +473,8 @@ function renderizarAgendaIxc(model) {
             <span><span class="escala-kpi-rotulo">${c.rotulo}</span><span class="escala-kpi-valor">${contar(c)}</span></span>
           </button>`).join("")}
       </div>
+
+      ${htmlTopsIxc(model)}
 
       ${htmlCidadesIxc(model.grupos, true)}
 
