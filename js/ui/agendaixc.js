@@ -60,10 +60,12 @@ function ixcDataBR(s) {
 function ixcDiaPedido(texto, dataMsg) {
     const t = ixcNorm(texto);
     const dias = Object.keys(IXC_DOW).join("|");
-    // o dia só conta quando vem logo depois de uma palavra de PEDIDO — assim
-    // "plantão de domingo" (contexto) não vira pedido, mas "pediu para terça" sim.
-    // Pega o ÚLTIMO pedido do texto (costuma ser a conclusão da mensagem).
-    const re = new RegExp(`(?:para|pro|pediu|solicit\\w*|reagend\\w*|remarc\\w*|volta\\w*)[^.;\\d]{0,20}?(?:\\b(${dias})\\b|(\\d{1,2})\\/(\\d{1,2}))`, "g");
+    // o dia só conta quando vem logo depois de um VERBO DE PEDIDO ATIVO — assim
+    // "plantão de domingo" (contexto) e "havia sido feita para sábado" (narrativa
+    // de pedido passado) NÃO viram pedido, mas "pediu/solicita/reagendar ... terça"
+    // sim. NÃO uso "para" sozinho de propósito. Pega o ÚLTIMO pedido do texto.
+    // verbos de pedido (formas de verbo, não o substantivo "solicitação"/"agendamento"):
+    const re = new RegExp(`(?:pediu|pede|solicit(?:a|ou|ar|am)\\b|reagendar|reagendou|remarcar|remarcou|volta\\w*|retorn\\w*|agendar)[^.;\\d]{0,25}?(?:\\b(${dias})\\b|(\\d{1,2})\\/(\\d{1,2}))`, "g");
     let last = null, m;
     while ((m = re.exec(t))) last = m;
     if (!last) return null;
@@ -162,7 +164,14 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
         const st = ixcNorm(o.status);
         resumo[o.status] = (resumo[o.status] || 0) + 1;
 
-        if (!porTec.has(chave)) porTec.set(chave, { nome: info.nome, terceira: info.terceira, setor: tech.setor, oss: [] });
+        if (!porTec.has(chave)) {
+            // cidade e função do técnico HOJE pela escala (temporária, remanejamento do dia…)
+            const diaEscala = typeof EscalaDia !== "undefined" ? EscalaDia.regras.resumo(tech, hoje) : {};
+            const setorChave = diaEscala.situacao === "instalador" || diaEscala.situacao === "manutencao"
+                ? diaEscala.situacao
+                : (ixcNorm(tech.setor).startsWith("manut") ? "manutencao" : "instalador");
+            porTec.set(chave, { nome: info.nome, terceira: info.terceira, setor: tech.setor, setorChave, cidade: diaEscala.cidade || tech.cidade || "Sem cidade", oss: [] });
+        }
         porTec.get(chave).oss.push({
             id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto,
             status: o.status, statusNorm: st, reagendamentos: o.reagendamentos || 0,
@@ -172,7 +181,7 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
 
     const grupos = [...porTec.values()]
         .map(g => ({
-            tecnico: g.nome, terceira: g.terceira, setor: g.setor,
+            tecnico: g.nome, terceira: g.terceira, setor: g.setor, setorChave: g.setorChave, cidade: g.cidade,
             oss: g.oss.sort((a, b) => Number(b.alerta) - Number(a.alerta) || (a.cliente || "").localeCompare(b.cliente || "", "pt-BR")),
             total: g.oss.length,
             feitas: g.oss.filter(o => o.finalizada).length,
@@ -184,28 +193,132 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
     return { grupos, total, alertas, omitidas, capturadoEm, resumo };
 }
 
+// Visual no padrão da "Escala de hoje" (js/ui/escalahoje.js): três cartões no
+// topo (Agendadas, Alertas, Para outro dia — cada um abre um pop-up com as OS),
+// um cartão por cidade e, dentro dele, um bloco por técnico — verde-claro
+// instalação, azul-claro manutenção — com até 5 OS e "Ver mais".
+const AGENDA_IXC_OS_VISIVEIS = 5;
+const agendaIxcTecnicosAbertos = new Set();  // técnicos com "Ver mais" aberto (na página)
+
+// Cartões do topo: o que cada um conta e mostra no pop-up.
+const AGENDA_IXC_CARTOES = [
+    { id: "agendadas", rotulo: "Agendadas", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', titulo: "OS marcadas pra hoje no IXC", filtro: () => true },
+    { id: "alertas", rotulo: "Alertas", icone: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', titulo: "OS já reagendadas (voltaram pra agenda)", filtro: o => o.reagendamentos > 0 },
+    { id: "outroDia", rotulo: "Para outro dia", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M10 14l4 4M14 14l-4 4"/>', titulo: "Cliente marcado hoje que pediu outro dia na mensagem", filtro: o => o.alerta }
+];
+
 function badgeStatus(statusNorm, rotuloOriginal) {
     const info = AGENDA_IXC_STATUS[statusNorm] || { rotulo: rotuloOriginal || "—", cor: "#6b7280" };
-    return `<span class="ixc-badge" style="--c:${info.cor}">${escaparHtml(info.rotulo)}</span>`;
+    return `<span class="ixc-status" style="--c:${info.cor}"><i></i>${escaparHtml(info.rotulo)}</span>`;
+}
+
+/** "SEM CONEXÃO / LOS (14)" -> "Sem conexão / LOS" */
+function ixcAssuntoCurto(assunto) {
+    const s = String(assunto || "").replace(/\s*\(\d+\)/g, "").trim().toLowerCase();
+    return (s.charAt(0).toUpperCase() + s.slice(1)).replace(/\blos\b/g, "LOS");
 }
 
 function htmlOsIxc(o) {
-    const local = [o.cidade, o.bairro].filter(Boolean).join(" · ");
+    const reag = o.reagendamentos > 0 ? `<span class="escala-tag" title="Reagendamentos">↻ ${o.reagendamentos}</span>` : "";
     const aviso = o.alerta
         ? `<div class="ixc-alerta">⚠ Cliente pediu outro dia: <b>${o.diaMsg.toLocaleDateString("pt-BR")}</b> — confira a mensagem no IXC</div>`
         : "";
-    const reag = o.reagendamentos > 0 ? `<span class="ixc-tag">↻ ${o.reagendamentos} reagend.</span>` : "";
     return `
-      <div class="ixc-os${o.alerta ? " ixc-os-alerta" : ""}">
-        <div class="ixc-os-topo">
-          <span class="ixc-os-cliente">${escaparHtml(o.cliente || "—")}</span>
+      <li class="ixc-os${o.alerta ? " ixc-os-alerta" : ""}${o.finalizada ? " ixc-os-feita" : ""}">
+        <div class="ixc-os-linha">
+          <span class="ixc-os-cliente" title="OS ${escaparHtml(String(o.id))}">${escaparHtml(o.cliente || "—")}</span>
           ${badgeStatus(o.statusNorm, o.status)}
         </div>
-        <div class="ixc-os-sub">#${escaparHtml(String(o.id))} · ${escaparHtml(local || "—")} ${reag}</div>
-        <div class="ixc-os-assunto">${escaparHtml(o.assunto || "")}</div>
+        <div class="ixc-os-sub">${escaparHtml(o.bairro || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))} ${reag}</div>
         ${aviso}
+      </li>`;
+}
+
+/** Bloco de um técnico. limitar = só as 5 primeiras + "Ver mais" (na página); no pop-up mostra tudo. */
+function htmlTecnicoIxc(g, limitar) {
+    const aberto = !limitar || agendaIxcTecnicosAbertos.has(g.tecnico);
+    const visiveis = aberto ? g.oss : g.oss.slice(0, AGENDA_IXC_OS_VISIVEIS);
+    const escondidas = g.oss.length - AGENDA_IXC_OS_VISIVEIS;
+    return `
+      <div class="ixc-tec setor-${g.setorChave}">
+        <div class="ixc-tec-topo">
+          <span class="escala-nome">
+            <strong>${escaparHtml(g.tecnico)}</strong>
+            ${g.terceira ? `<span class="escala-tag">${escaparHtml(g.terceira)}</span>` : ""}
+          </span>
+          <span class="ixc-tec-conta" title="Finalizadas / marcadas pra hoje">${g.feitas}/${g.total}${g.alertas ? ` <b class="ixc-alertas" title="Cliente pediu outro dia">⚠ ${g.alertas}</b>` : ""}</span>
+        </div>
+        <ul class="ixc-lista">${visiveis.map(htmlOsIxc).join("")}</ul>
+        ${limitar && escondidas > 0 ? `<button type="button" class="escala-ver-mais" data-ixc-ver-mais="${escaparHtml(g.tecnico)}">${aberto ? "Ver menos" : `Ver mais ${escondidas}`}</button>` : ""}
       </div>`;
 }
+
+/** Cartões por cidade (a do técnico hoje, pela escala); dentro dela, manutenção antes de instalação. */
+function htmlCidadesIxc(grupos, limitar) {
+    const porCidade = new Map();
+    for (const g of grupos) {
+        if (!porCidade.has(g.cidade)) porCidade.set(g.cidade, []);
+        porCidade.get(g.cidade).push(g);
+    }
+    if (!porCidade.size) return '<p class="alerta-vazio">Nenhuma OS aqui.</p>';
+
+    const ordemSetor = { manutencao: 0, instalador: 1 };
+    for (const lista of porCidade.values()) {
+        lista.sort((a, b) => (ordemSetor[a.setorChave] ?? 2) - (ordemSetor[b.setorChave] ?? 2) || b.oss.length - a.oss.length || a.tecnico.localeCompare(b.tecnico, "pt-BR"));
+    }
+    const totalDe = lista => lista.reduce((s, g) => s + g.oss.length, 0);
+    const cidades = [...porCidade.keys()].sort((a, b) => totalDe(porCidade.get(b)) - totalDe(porCidade.get(a)) || a.localeCompare(b, "pt-BR"));
+
+    return `<div class="escala-cidades ixc-cidades">${cidades.map(cidade => {
+        const lista = porCidade.get(cidade);
+        return `
+          <div class="escala-cidade">
+            <div class="escala-cidade-topo">
+              <h3>${escaparHtml(cidade)}</h3>
+              <span class="escala-pilula">${totalDe(lista)} OS · ${lista.length} ${lista.length === 1 ? "técnico" : "técnicos"}</span>
+            </div>
+            <div class="ixc-tecnicos">${lista.map(g => htmlTecnicoIxc(g, limitar)).join("")}</div>
+          </div>`;
+    }).join("")}</div>`;
+}
+
+/** Só as OS que passam no filtro do cartão, mantendo o técnico e a cidade. */
+function gruposDoCartao(model, cartao) {
+    return model.grupos
+        .map(g => ({ ...g, oss: g.oss.filter(cartao.filtro) }))
+        .filter(g => g.oss.length);
+}
+
+function abrirPopupIxc(model, cartao) {
+    fecharPopupIxc();
+    const grupos = gruposDoCartao(model, cartao);
+    const total = grupos.reduce((s, g) => s + g.oss.length, 0);
+    const fundo = document.createElement("div");
+    fundo.className = "ixc-popup-fundo";
+    fundo.innerHTML = `
+      <div class="ixc-popup" role="dialog" aria-modal="true" aria-label="${escaparHtml(cartao.rotulo)}">
+        <div class="ixc-popup-topo">
+          <div>
+            <h2>${escaparHtml(cartao.rotulo)} <span class="escala-pilula">${total} OS</span></h2>
+            <p>${escaparHtml(cartao.titulo)}</p>
+          </div>
+          <button type="button" class="ixc-popup-fechar" aria-label="Fechar">✕</button>
+        </div>
+        <div class="ixc-popup-corpo">${htmlCidadesIxc(grupos, false)}</div>
+      </div>`;
+    // Dentro da seção da agenda, pra herdar as cores da escala (tokens --escala-* ficam nela).
+    (document.getElementById("secao-agenda-hoje") || document.body).appendChild(fundo);
+    document.body.classList.add("ixc-popup-aberto");
+    fundo.addEventListener("click", e => { if (e.target === fundo) fecharPopupIxc(); });
+    fundo.querySelector(".ixc-popup-fechar").addEventListener("click", fecharPopupIxc);
+    fundo.querySelector(".ixc-popup-fechar").focus();
+}
+
+function fecharPopupIxc() {
+    document.querySelector(".ixc-popup-fundo")?.remove();
+    document.body.classList.remove("ixc-popup-aberto");
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") fecharPopupIxc(); });
 
 function renderizarAgendaIxc(model) {
     const alvo = document.getElementById("agendaIxcConteudo");
@@ -218,28 +331,39 @@ function renderizarAgendaIxc(model) {
         return;
     }
 
-    const quando = model.capturadoEm ? new Date(model.capturadoEm).toLocaleString("pt-BR") : "—";
-    const chips = Object.entries(model.resumo)
-        .sort((a, b) => b[1] - a[1])
-        .map(([s, n]) => `${badgeStatus(ixcNorm(s), s)} ${n}`).join(" &nbsp; ");
+    const contar = cartao => model.grupos.reduce((s, g) => s + g.oss.filter(cartao.filtro).length, 0);
+    const feitas = model.grupos.reduce((s, g) => s + g.feitas, 0);
+    const quando = model.capturadoEm ? new Date(model.capturadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
+    const icone = caminhos => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${caminhos}</svg>`;
 
-    const cards = model.grupos.map(g => `
-      <div class="ixc-card">
-        <div class="ixc-card-topo">
-          <span class="ixc-tec">${escaparHtml(g.tecnico)}${g.terceira ? `<span class="ixc-tag">${escaparHtml(g.terceira)}</span>` : ""}${g.setor ? `<span class="ixc-setor">${escaparHtml(g.setor)}</span>` : ""}</span>
-          <span class="ixc-contagem">${g.feitas}/${g.total} feitas${g.alertas ? ` · <b class="ixc-alertas">${g.alertas} ⚠</b>` : ""}</span>
-        </div>
-        ${g.oss.map(htmlOsIxc).join("")}
-      </div>`).join("");
-
-    const omit = model.omitidas ? ` · <span class="ixc-quando">${model.omitidas} OS de técnicos fora da escala omitidas</span>` : "";
     alvo.innerHTML = `
-      <div class="ixc-resumo">
-        <div><b>${model.total}</b> OS marcadas pra hoje · <b>${model.grupos.length}</b> técnicos da escala${model.alertas ? ` · <b class="ixc-alertas">${model.alertas}</b> alerta(s) de outro dia` : ""}${omit}</div>
-        <div class="ixc-chips">${chips}</div>
-        <div class="ixc-quando">Retrato do IXC às ${quando} (atualiza de hora em hora)</div>
+      <div class="escala-kpis ixc-cartoes" role="group" aria-label="Resumo da agenda do IXC">
+        ${AGENDA_IXC_CARTOES.map(c => `
+          <button type="button" class="escala-kpi kpi-ixc-${c.id}" data-cartao-ixc="${c.id}" title="${escaparHtml(c.titulo)} — clique para ver todas">
+            <span class="escala-kpi-icone">${icone(c.icone)}</span>
+            <span><span class="escala-kpi-rotulo">${c.rotulo}</span><span class="escala-kpi-valor">${contar(c)}</span></span>
+          </button>`).join("")}
       </div>
-      <div class="ixc-grade">${cards}</div>`;
+
+      ${htmlCidadesIxc(model.grupos, true)}
+
+      <div class="escala-legenda">
+        <span><i class="ixc-amostra setor-instalador"></i>Instalação</span>
+        <span><i class="ixc-amostra setor-manutencao"></i>Manutenção</span>
+        <span>${feitas} de ${model.total} finalizadas</span>
+        ${model.omitidas ? `<span>${model.omitidas} OS de técnicos fora da escala não aparecem</span>` : ""}
+        <span class="escala-atualizada">Retrato do IXC às ${quando} (o robô atualiza de hora em hora)</span>
+      </div>`;
+
+    alvo.querySelectorAll("[data-cartao-ixc]").forEach(botao => botao.addEventListener("click", () => {
+        abrirPopupIxc(model, AGENDA_IXC_CARTOES.find(c => c.id === botao.dataset.cartaoIxc));
+    }));
+    alvo.querySelectorAll("[data-ixc-ver-mais]").forEach(botao => botao.addEventListener("click", () => {
+        const tec = botao.dataset.ixcVerMais;
+        if (agendaIxcTecnicosAbertos.has(tec)) agendaIxcTecnicosAbertos.delete(tec);
+        else agendaIxcTecnicosAbertos.add(tec);
+        renderizarAgendaIxc(model);
+    }));
 }
 
 async function carregarAgendaIxc(forcar = false) {
