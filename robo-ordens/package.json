@@ -1,0 +1,14 @@
+{
+  "name": "robo-ordens",
+  "private": true,
+  "description": "RPA: loga no IXC, exporta a visão do Query Builder e grava no Supabase do COP-Analytics",
+  "scripts": {
+    "login": "node --env-file=C:/cop-robo/.env login.js",
+    "rodar": "node --env-file=C:/cop-robo/.env robo.js",
+    "simular": "node --env-file=C:/cop-robo/.env robo.js --simular"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0",
+    "xlsx": "^0.18.5"
+  }
+}
