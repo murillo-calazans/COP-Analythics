@@ -70,10 +70,12 @@ async function preencherAtrasadas() {
 
         alvo.innerHTML = `
             <div class="indicadores-secao-titulo">⚠ Pendências de reagendamento</div>
-            <button type="button" class="atrasadas-card" id="atrasadasCard">
-                <div class="atrasadas-num">${total}</div>
-                <div class="atrasadas-txt">OS de dias anteriores ainda em aberto<br><small>técnicos começaram o dia sem reagendar · clique para ver</small></div>
-            </button>`;
+            <div class="kpi-row">
+                <button type="button" class="stat-tile stat-tile-link atrasadas-tile" id="atrasadasCard">
+                    <div class="stat-label">OS de dias anteriores em aberto</div>
+                    <div class="stat-valor">${total}</div>
+                </button>
+            </div>`;
 
         const corpo = document.getElementById("modalAtrasadasCorpo");
         if (corpo) {

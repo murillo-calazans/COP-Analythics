@@ -368,3 +368,7 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 .atrasadas-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
 .atrasadas-tabela th, .atrasadas-tabela td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border, #eef0f3); }
 .atrasadas-tabela th { color: var(--text-muted, #6b7280); font-weight: 600; }
+
+/* #2 v3: usa o mesmo tile dos outros KPIs, só com destaque vermelho */
+.atrasadas-tile { border-color: rgba(220, 38, 38, .35); }
+.atrasadas-tile .stat-valor { color: #dc2626; }
