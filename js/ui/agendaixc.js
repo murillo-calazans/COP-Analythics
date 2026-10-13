@@ -40,6 +40,47 @@ function ixcMeiaNoite() {
     const d = new Date(); d.setHours(0, 0, 0, 0); return d;
 }
 
+const IXC_DOW = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
+
+/** "dd/mm/aaaa HH:ii:ss" -> Date (com hora, se houver) ou null (""/00/00/0000). */
+function ixcDataBR(s) {
+    const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    return m && m[3] !== "0000"
+        ? new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0))
+        : null;
+}
+
+/**
+ * Lê na mensagem o DIA que o cliente/técnico pediu pra visita. Resolve dia
+ * da semana ("terça") a partir da DATA DA MENSAGEM (ex.: msg de sex. 10/10
+ * dizendo "terça" => 13/10), e datas explícitas ("dia 15/10", "para 15/10").
+ * IGNORA "hoje"/"amanhã" de propósito — costuma falar de outra coisa (ex.:
+ * "cliente chegará hoje às 17h") e dava alarme falso.
+ */
+function ixcDiaPedido(texto, dataMsg) {
+    const t = ixcNorm(texto);
+    const m = t.match(/(?:para|pro|dia|volta\w*|reagend\w*|remarc\w*|agend\w*)[^\d]{0,15}(\d{1,2})\/(\d{1,2})/);
+    if (m && +m[2] >= 1 && +m[2] <= 12) return new Date(dataMsg.getFullYear(), +m[2] - 1, +m[1]);
+    for (const [nome, dow] of Object.entries(IXC_DOW)) {
+        if (new RegExp(`(^|[^a-z])${nome}`).test(t)) {
+            const d = new Date(dataMsg); d.setHours(0, 0, 0, 0);
+            let add = (dow - d.getDay() + 7) % 7; if (add === 0) add = 7; // próxima ocorrência após a msg
+            d.setDate(d.getDate() + add);
+            return d;
+        }
+    }
+    return null;
+}
+
+/** Dia pedido mais recente a partir das mensagens de Agendada(5)/Reagend(10) da OS. */
+function ixcDiaPedidoDaOs(msgs) {
+    const evs = (msgs || [])
+        .filter(e => ["5", "10"].includes(String(e.evento)) && e.data)
+        .sort((a, b) => b.data - a.data);
+    for (const e of evs) { const p = ixcDiaPedido(e.msg, e.data); if (p) return p; }
+    return null;
+}
+
 /** Lê todas as linhas (eventos) da os_pendentes. */
 async function buscarOsPendentes() {
     if (typeof supabaseClient === "undefined") return [];
@@ -72,10 +113,14 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
     // AGENDAMENTO (data real pra quando a OS está marcada) por OS -> ISO.
     // Filtramos por ISSO (não mais pelo "marcadaHoje" do motor, que acumulava
     // todos os agendamentos antigos em aberto).
-    const agPorOs = {};
+    const agPorOs = {};      // id -> ISO do agendamento
+    const agDate = {};       // id -> Date do agendamento
+    const msgsPorOs = {};    // id -> [{data, evento, msg}] (pra ler o dia pedido)
     for (const r of rows) {
-        const m = String(r.AGENDAMENTO || "").match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-        if (m && m[3] !== "0000") agPorOs[String(r["ID OS"])] = `${m[3]}-${m[2]}-${m[1]}`;
+        const id = String(r["ID OS"]);
+        const d = ixcDataBR(r.AGENDAMENTO);
+        if (d) { agDate[id] = d; agPorOs[id] = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+        (msgsPorOs[id] = msgsPorOs[id] || []).push({ data: ixcDataBR(r.DATA), evento: r.EVENTO, msg: r.MENSAGEM });
     }
 
     const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
@@ -99,8 +144,14 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
 
         const info = separar(tech.nome);
         const chave = tech.id || info.nome;
-        const diaMsg = o.agendaIxc && o.agendaIxc.dia;
-        const alerta = diaMsg && diaMsg.toDateString() !== hoje.toDateString();
+        // alerta = a mensagem pede um dia DIFERENTE do agendamento real
+        const idStr = String(o.id);
+        const pedido = ixcDiaPedidoDaOs(msgsPorOs[idStr]);
+        const ag = agDate[idStr];
+        // alerta só quando o dia pedido é FUTURO (> hoje) e diferente do agendado:
+        // cliente marcado hoje mas pediu pra frente. Datas passadas = menção antiga.
+        const alerta = !!(pedido && ag && pedido.getTime() > hoje.getTime() && pedido.toDateString() !== ag.toDateString());
+        const diaMsg = alerta ? pedido : null;
         if (alerta) alertas++;
 
         const st = ixcNorm(o.status);
