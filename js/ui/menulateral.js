@@ -134,9 +134,12 @@ body.menu-lateral-aberto .menu-lateral-fundo{ opacity:1; pointer-events:auto; }
     // Painel de Administrador só pra admin. Fora do index (onde ehAdmin()
     // não existe) o item fica visível — o próprio index barra quem não pode.
     function atualizarVisibilidadeAdmin() {
-        const item = document.querySelector('.menu-lateral nav a[data-modulo="admin"]');
-        if (!item) return;
-        item.hidden = typeof ehAdmin === "function" && !ehAdmin();
+        const admin = document.querySelector('.menu-lateral nav a[data-modulo="admin"]');
+        if (admin) admin.hidden = typeof ehAdmin === "function" && !ehAdmin();
+        // Gestão de Terceiras: só admin/editor (fora do index, onde a função
+        // não existe, fica visível — o próprio index barra quem não pode).
+        const terceiras = document.querySelector('.menu-lateral nav a[data-modulo="terceiras"]');
+        if (terceiras) terceiras.hidden = typeof podeEditarOperacao === "function" && !podeEditarOperacao();
     }
 
     function marcarModuloAtivo(id) {

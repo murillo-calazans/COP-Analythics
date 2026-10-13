@@ -87,6 +87,12 @@ function atualizarMenuDoModulo(nome) {
 }
 
 function mostrarSecao(nome) {
+    // Gestão de Terceiras é só pra admin/editor — barra o acesso por URL direta
+    // (#terceiras, #terceiras-lpu…) de quem é leitor, mandando pro Início.
+    if (MODULO_DA_SECAO[nome] === "terceiras" && typeof podeEditarOperacao === "function" && !podeEditarOperacao()) {
+        return mostrarSecao("inicio");
+    }
+
     document.querySelectorAll("section.secao").forEach(secao => {
         secao.classList.toggle("ativa", secao.id === `secao-${nome}`);
     });
