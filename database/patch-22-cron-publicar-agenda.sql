@@ -18,7 +18,7 @@ select cron.schedule(
     '0 19 * * *',   -- 19:00 UTC = 16:00 Brasília, todo dia
     $$
     select net.http_post(
-        url     := 'https://ldpiitymhvdhemdrntlx.supabase.co/functions/v1/publicar-agenda?token=TROQUE_PELO_TOKEN',
+        url     := 'https://ldpiitymhvdhemdrntlx.supabase.co/functions/v1/publicas-agenda?token=TROQUE_PELO_TOKEN',
         headers := '{"Content-Type": "application/json"}'::jsonb,
         body    := '{}'::jsonb
     );
@@ -27,4 +27,4 @@ select cron.schedule(
 
 -- Conferir o agendamento:   select * from cron.job where jobname = 'publicar-agenda-diaria';
 -- Desligar:                 select cron.unschedule('publicar-agenda-diaria');
--- Publicar na hora (teste):  select net.http_post(url := 'https://ldpiitymhvdhemdrntlx.supabase.co/functions/v1/publicar-agenda?token=TROQUE_PELO_TOKEN', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb);
+-- Publicar na hora (teste):  select net.http_post(url := 'https://ldpiitymhvdhemdrntlx.supabase.co/functions/v1/publicas-agenda?token=TROQUE_PELO_TOKEN', headers := '{"Content-Type":"application/json"}'::jsonb, body := '{}'::jsonb);
