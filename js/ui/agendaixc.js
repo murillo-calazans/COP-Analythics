@@ -564,21 +564,20 @@ async function calcularAtrasadas() {
 
     const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
     const separar = typeof separarTerceira === "function" ? separarTerceira : (n => ({ nome: n, terceira: null }));
-    const porTec = new Map();
+    const itens = [];
     for (const o of os) {
         const dia = agIso[String(o.id)];
         if (!dia || dia >= hojeIso || dia < limiteIso) continue;   // só agendamento passado recente (últimos dias)
         const nome = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
-        if (!nome) continue;
-        const tech = (techs || []).find(t => Motor.nomeBate(nome, t));
-        if (!tech) continue;
+        const tech = nome ? (techs || []).find(t => Motor.nomeBate(nome, t)) : null;
+        if (!tech) continue;   // só OS de técnicos da escala
         const info = separar(tech.nome);
-        const chave = tech.id || info.nome;
-        if (!porTec.has(chave)) porTec.set(chave, { nome: info.nome, terceira: info.terceira, oss: [] });
-        porTec.get(chave).oss.push({ id: o.id, cliente: o.cliente, dia: dia.split("-").reverse().join("/") });
+        itens.push({
+            id: o.id, cliente: o.cliente, assunto: o.assunto,
+            tecnico: info.nome + (info.terceira ? ` (${info.terceira})` : ""),
+            dia: dia.split("-").reverse().join("/")
+        });
     }
-    const grupos = [...porTec.values()]
-        .map(g => ({ tecnico: g.nome, terceira: g.terceira, oss: g.oss.sort((a, b) => a.dia.localeCompare(b.dia)), total: g.oss.length }))
-        .sort((a, b) => b.total - a.total);
-    return { grupos, total: grupos.reduce((s, g) => s + g.total, 0) };
+    itens.sort((a, b) => a.tecnico.localeCompare(b.tecnico, "pt-BR") || a.dia.localeCompare(b.dia));
+    return { total: itens.length, itens };
 }

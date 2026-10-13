@@ -65,19 +65,32 @@ async function preencherAtrasadas() {
     if (!alvo || typeof calcularAtrasadas !== "function") return;
     if (typeof podeEditarOperacao === "function" && !podeEditarOperacao()) return;
     try {
-        const { grupos, total } = await calcularAtrasadas();
+        const { total, itens } = await calcularAtrasadas();
         if (!total) { alvo.innerHTML = ""; return; }
-        const cards = grupos.map(g => `
-            <div class="atrasadas-tec">
-                <span class="atrasadas-nome">${escaparHtml(g.tecnico)}${g.terceira ? ` <small>(${escaparHtml(g.terceira)})</small>` : ""}</span>
-                <span class="atrasadas-qtd">${g.total}</span>
-            </div>`).join("");
+
         alvo.innerHTML = `
             <div class="indicadores-secao-titulo">⚠ Pendências de reagendamento</div>
-            <div class="atrasadas-card">
-                <p class="atrasadas-topo"><b>${total}</b> OS de dias anteriores ainda em aberto — os técnicos começaram o dia sem reagendar. Veja na Agenda IXC.</p>
-                <div class="atrasadas-lista">${cards}</div>
-            </div>`;
+            <button type="button" class="atrasadas-card" id="atrasadasCard">
+                <div class="atrasadas-num">${total}</div>
+                <div class="atrasadas-txt">OS de dias anteriores ainda em aberto<br><small>técnicos começaram o dia sem reagendar · clique para ver</small></div>
+            </button>`;
+
+        const corpo = document.getElementById("modalAtrasadasCorpo");
+        if (corpo) {
+            corpo.innerHTML = `
+                <p class="modal-resumo">${total} OS marcadas para dias anteriores e ainda em aberto:</p>
+                <table class="atrasadas-tabela">
+                    <thead><tr><th>OS</th><th>Assunto</th><th>Técnico (agenda)</th><th>Dia</th></tr></thead>
+                    <tbody>${itens.map(i => `
+                        <tr>
+                            <td>#${escaparHtml(String(i.id))}</td>
+                            <td>${escaparHtml(i.assunto || "—")}</td>
+                            <td>${escaparHtml(i.tecnico || "—")}</td>
+                            <td>${escaparHtml(i.dia)}</td>
+                        </tr>`).join("")}</tbody>
+                </table>`;
+        }
+        document.getElementById("atrasadasCard")?.addEventListener("click", () => abrirModal("modalAtrasadas"));
     } catch (e) {
         console.warn("Atrasadas:", e);
         alvo.innerHTML = "";
