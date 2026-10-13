@@ -106,6 +106,7 @@ function aplicarGateDePapel() {
     const botaoImportar = document.getElementById("btnAbrirImportar");
     const botaoLimpar = document.getElementById("btnLimparDados");
     const botaoLogs = document.getElementById("btnAbrirLogs");
+    const botaoAtualizarRobo = document.getElementById("btnAtualizarRobo");
     const cardDiagnosticosNaoResolvidos = document.getElementById("cardDiagnosticosNaoResolvidos");
 
     const operacao = podeEditarOperacao();
@@ -113,5 +114,6 @@ function aplicarGateDePapel() {
     if (botaoImportar) botaoImportar.hidden = !importar;
     if (botaoLimpar) botaoLimpar.hidden = !operacao;
     if (botaoLogs) botaoLogs.hidden = !operacao;
+    if (botaoAtualizarRobo) botaoAtualizarRobo.hidden = !operacao;
     if (cardDiagnosticosNaoResolvidos) cardDiagnosticosNaoResolvidos.hidden = !importar;
 }

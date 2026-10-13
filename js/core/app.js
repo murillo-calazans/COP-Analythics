@@ -31,6 +31,7 @@ async function iniciarSistema() {
     registrarEscalaHoje();
     registrarAgendaHoje();
     registrarAbasAgenda();
+    registrarRoboComando();
     registrarAdminUsuarios();
     registrarTerceiras();
     registrarTema();

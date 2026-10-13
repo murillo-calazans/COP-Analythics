@@ -243,3 +243,29 @@ html[data-tema="dark"] .ixc-alerta{ color: #FCA5A5; }
     .ixc-cidades{ grid-template-columns: 1fr; }
     .ixc-cartoes{ grid-template-columns: 1fr; }
 }
+
+/* ---------- Botão "Atualizar banco" (robô) + toast ---------- */
+#btnAtualizarRobo.girando .icone { animation: roboGira 1s linear infinite; }
+@keyframes roboGira { to { transform: rotate(360deg); } }
+
+.robo-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    max-width: 90vw;
+    background: #111827;
+    color: #fff;
+    padding: 11px 18px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 9999;
+}
+.robo-toast.aberto { opacity: 1; transform: translateX(-50%) translateY(0); }
+.robo-toast[data-tipo="ok"] { background: #16a34a; }
+.robo-toast[data-tipo="erro"] { background: #dc2626; }
