@@ -136,10 +136,51 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
     const techs = Array.isArray(techsEscala) ? techsEscala : [];
     const separar = typeof separarTerceira === "function" ? separarTerceira : (n => ({ nome: n, terceira: null }));
 
-    const porTec = new Map();
+    // OS de técnicos da escala já marcadas pra um dia DEPOIS de hoje (card "Para outro dia").
+    const futuras = os.filter(o => agPorOs[String(o.id)] > hojeIso);
+    const gruposFuturos = agruparPorTecnico(futuras, o => ({ agendadoPara: agDate[String(o.id)] }));
+
     const resumo = {};
     let alertas = 0, omitidas = 0;
 
+    // Agrupa OS pelo técnico da escala (cidade e função dele HOJE, pela escala).
+    // extra(o) acrescenta campos à OS (alerta, data marcada…).
+    function agruparPorTecnico(lista, extra) {
+        const porTecnico = new Map();
+        let fora = 0;
+        for (const o of lista) {
+            // técnico = o do agendamento, ou (se já foi a campo) o último que visitou
+            const tecnicoNome = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
+            const tech = tecnicoNome ? techs.find(t => Motor.nomeBate(tecnicoNome, t)) : null;
+            if (!tech) { fora++; continue; }
+            const info = separar(tech.nome);
+            const chave = tech.id || info.nome;
+            if (!porTecnico.has(chave)) {
+                const diaEscala = typeof EscalaDia !== "undefined" ? EscalaDia.regras.resumo(tech, hoje) : {};
+                const setorChave = diaEscala.situacao === "instalador" || diaEscala.situacao === "manutencao"
+                    ? diaEscala.situacao
+                    : (ixcNorm(tech.setor).startsWith("manut") ? "manutencao" : "instalador");
+                porTecnico.set(chave, { tecnico: info.nome, terceira: info.terceira, setor: tech.setor, setorChave, cidade: diaEscala.cidade || tech.cidade || "Sem cidade", oss: [] });
+            }
+            const st = ixcNorm(o.status);
+            porTecnico.get(chave).oss.push({
+                id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto,
+                status: o.status, statusNorm: st, reagendamentos: o.reagendamentos || 0,
+                alerta: false, diaMsg: null, finalizada: st === "finalizada", ...extra(o)
+            });
+        }
+        const lista2 = [...porTecnico.values()].map(g => ({
+            ...g,
+            oss: g.oss.sort((a, b) => (a.agendadoPara || 0) - (b.agendadoPara || 0) || (a.cliente || "").localeCompare(b.cliente || "", "pt-BR")),
+            total: g.oss.length,
+            feitas: g.oss.filter(x => x.finalizada).length,
+            alertas: 0
+        }));
+        lista2.fora = fora;
+        return lista2;
+    }
+
+    const porTec = new Map();
     for (const o of doDia) {
         // técnico = o do agendamento, ou (se já foi a campo) o último que visitou
         const tecnicoNome = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
@@ -190,7 +231,7 @@ function montarAgendaIxc(linhasBrutas, techsEscala) {
         .sort((a, b) => b.total - a.total);
 
     const total = grupos.reduce((s, g) => s + g.total, 0);
-    return { grupos, total, alertas, omitidas, capturadoEm, resumo };
+    return { grupos, total, alertas, omitidas, capturadoEm, resumo, gruposFuturos };
 }
 
 // Visual no padrão da "Escala de hoje" (js/ui/escalahoje.js): três cartões no
@@ -202,9 +243,9 @@ const agendaIxcTecnicosAbertos = new Set();  // técnicos com "Ver mais" aberto 
 
 // Cartões do topo: o que cada um conta e mostra no pop-up.
 const AGENDA_IXC_CARTOES = [
-    { id: "agendadas", rotulo: "Agendadas", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', titulo: "OS marcadas pra hoje no IXC", filtro: () => true },
-    { id: "alertas", rotulo: "Alertas", icone: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', titulo: "OS já reagendadas (voltaram pra agenda)", filtro: o => o.reagendamentos > 0 },
-    { id: "outroDia", rotulo: "Para outro dia", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M10 14l4 4M14 14l-4 4"/>', titulo: "Cliente marcado hoje que pediu outro dia na mensagem", filtro: o => o.alerta }
+    { id: "agendadas", rotulo: "Agendadas", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', titulo: "OS marcadas pra hoje no IXC", grupos: m => m.grupos },
+    { id: "alertas", rotulo: "Alertas", icone: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', titulo: "Primeiro quem pediu outro dia na mensagem, depois as OS já reagendadas", grupos: m => gruposComFiltro(m.grupos, o => o.alerta || o.reagendamentos > 0, true) },
+    { id: "outroDia", rotulo: "Para outro dia", icone: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M10 14l4 4M14 14l-4 4"/>', titulo: "OS que não estão marcadas pra hoje — já agendadas para os próximos dias", grupos: m => m.gruposFuturos || [] }
 ];
 
 function badgeStatus(statusNorm, rotuloOriginal) {
@@ -219,6 +260,9 @@ function ixcAssuntoCurto(assunto) {
 }
 
 function htmlOsIxc(o) {
+    const marcada = o.agendadoPara
+        ? `<span class="escala-tag ixc-data" title="Agendada no IXC para">📅 ${o.agendadoPara.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}</span>`
+        : "";
     const reag = o.reagendamentos > 0 ? `<span class="escala-tag" title="Reagendamentos">↻ ${o.reagendamentos}</span>` : "";
     const aviso = o.alerta
         ? `<div class="ixc-alerta">⚠ Cliente pediu outro dia: <b>${o.diaMsg.toLocaleDateString("pt-BR")}</b> — confira a mensagem no IXC</div>`
@@ -229,7 +273,7 @@ function htmlOsIxc(o) {
           <span class="ixc-os-cliente" title="OS ${escaparHtml(String(o.id))}">${escaparHtml(o.cliente || "—")}</span>
           ${badgeStatus(o.statusNorm, o.status)}
         </div>
-        <div class="ixc-os-sub">${escaparHtml(o.bairro || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))} ${reag}</div>
+        <div class="ixc-os-sub">${escaparHtml(o.bairro || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))} ${reag} ${marcada}</div>
         ${aviso}
       </li>`;
 }
@@ -282,11 +326,33 @@ function htmlCidadesIxc(grupos, limitar) {
     }).join("")}</div>`;
 }
 
-/** Só as OS que passam no filtro do cartão, mantendo o técnico e a cidade. */
-function gruposDoCartao(model, cartao) {
-    return model.grupos
-        .map(g => ({ ...g, oss: g.oss.filter(cartao.filtro) }))
+/** Só as OS que passam no filtro, mantendo técnico e cidade; alertaPrimeiro põe "pediu outro dia" no topo. */
+function gruposComFiltro(grupos, filtro, alertaPrimeiro) {
+    const lista = grupos
+        .map(g => ({ ...g, oss: g.oss.filter(filtro) }))
         .filter(g => g.oss.length);
+    if (alertaPrimeiro) {
+        lista.forEach(g => g.oss.sort((a, b) => Number(b.alerta) - Number(a.alerta) || b.reagendamentos - a.reagendamentos));
+        lista.sort((a, b) => Number(b.oss.some(o => o.alerta)) - Number(a.oss.some(o => o.alerta)));
+    }
+    return lista;
+}
+
+function gruposDoCartao(model, cartao) {
+    return cartao.grupos(model);
+}
+
+/** No "Alertas", quem pediu outro dia vem num bloco à parte, logo no início. */
+function corpoPopupIxc(model, cartao, grupos) {
+    if (cartao.id !== "alertas") return htmlCidadesIxc(grupos, false);
+    const pediram = gruposComFiltro(model.grupos, o => o.alerta, false);
+    const reagendadas = gruposComFiltro(model.grupos, o => !o.alerta && o.reagendamentos > 0, false);
+    const conta = l => l.reduce((s, g) => s + g.oss.length, 0);
+    return `
+      <h3 class="ixc-popup-secao">⚠ Pediram outro dia <span class="escala-pilula">${conta(pediram)}</span></h3>
+      ${conta(pediram) ? htmlCidadesIxc(pediram, false) : '<p class="alerta-vazio">Nenhum cliente marcado hoje pediu outro dia.</p>'}
+      <h3 class="ixc-popup-secao">↻ Reagendadas <span class="escala-pilula">${conta(reagendadas)}</span></h3>
+      ${htmlCidadesIxc(reagendadas, false)}`;
 }
 
 function abrirPopupIxc(model, cartao) {
@@ -304,7 +370,7 @@ function abrirPopupIxc(model, cartao) {
           </div>
           <button type="button" class="ixc-popup-fechar" aria-label="Fechar">✕</button>
         </div>
-        <div class="ixc-popup-corpo">${htmlCidadesIxc(grupos, false)}</div>
+        <div class="ixc-popup-corpo">${corpoPopupIxc(model, cartao, grupos)}</div>
       </div>`;
     // Dentro da seção da agenda, pra herdar as cores da escala (tokens --escala-* ficam nela).
     (document.getElementById("secao-agenda-hoje") || document.body).appendChild(fundo);
@@ -331,7 +397,7 @@ function renderizarAgendaIxc(model) {
         return;
     }
 
-    const contar = cartao => model.grupos.reduce((s, g) => s + g.oss.filter(cartao.filtro).length, 0);
+    const contar = cartao => cartao.grupos(model).reduce((s, g) => s + g.oss.length, 0);
     const feitas = model.grupos.reduce((s, g) => s + g.feitas, 0);
     const quando = model.capturadoEm ? new Date(model.capturadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
     const icone = caminhos => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${caminhos}</svg>`;

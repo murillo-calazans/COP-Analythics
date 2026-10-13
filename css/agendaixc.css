@@ -234,6 +234,15 @@ html[data-tema="dark"] .ixc-alerta{ color: #FCA5A5; }
     cursor: pointer;
 }
 .ixc-popup-fechar:hover{ background: var(--cor-fundo-elevado); color: var(--cor-texto); }
+.ixc-popup-secao{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 12px;
+    font-size: 17px;
+}
+.ixc-popup-secao ~ .ixc-popup-secao{ margin-top: 26px; }
+.ixc-data{ background: var(--ixc-manut-fundo); color: var(--ixc-manut-cor); }
 .ixc-popup-corpo{
     overflow: auto;
     padding: 18px 22px 22px;
