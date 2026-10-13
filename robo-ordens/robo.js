@@ -3,7 +3,7 @@
  * Robô de Ordens (COP-Analytics) — IXC Query Builder -> Supabase
  * ==========================================================
  * Mantém um navegador ABERTO e logado (perfil C:\cop-robo\perfil). Você
- * loga 1x por dia; o robô, de hora em hora, abre uma aba escondida na
+ * loga 1x por dia; o robô, às 7h e 16h, abre uma aba escondida na
  * MESMA sessão (sem segunda sessão, sem te derrubar do IXC), puxa as
  * linhas recentes da visão do Query Builder pelo endpoint que a própria
  * tela usa (get-query-data) e grava em ordens/movimentacoes do Supabase,
@@ -17,7 +17,7 @@
  *   node --env-file=.env robo.js --simular    -> puxa do IXC e MOSTRA o que
  *        achou (status, datas, amostra), SEM gravar. Não precisa da chave.
  *   node --env-file=.env robo.js --uma-vez     -> uma passada completa (grava).
- *   node --env-file=.env robo.js               -> fica rodando de hora em hora.
+ *   node --env-file=.env robo.js               -> fica rodando (rodadas às 7h e 16h).
  */
 
 const { chromium } = require("playwright");
@@ -43,7 +43,10 @@ const TAM_PAGINA = 2000;      // linhas por pedido ao IXC
 const MAX_PAGINAS = 80;       // trava de segurança (~160 mil linhas)
 const TAM_LOTE_SUPA = 500;
 const COL_DATA = 14;          // índice da coluna su_oss_chamado_mensagem_data (ordenação)
-const INTERVALO_MS = 60 * 60 * 1000;
+// Rodadas automáticas só nesses horários (hora do PC). Cada rodada prende a
+// sessão do IXC por alguns minutos (a puxada do pré-agendamento é pesada) e
+// trava a tela de quem usa a janela; puxada extra = botão "Atualizar banco".
+const HORARIOS_RODADA = [7, 16];
 const PULSO_MS = 5 * 60 * 1000;   // mantém a sessão viva a cada 5 min (auto-refresh interno)
 
 // Só a visão de ORDENS entra no Supabase (ordens/movimentacoes) por ora.
@@ -611,9 +614,9 @@ async function principal() {
 
     await garantirNavegador();
 
-    let emExecucao = false;  // trava: não deixa a rodada de hora em hora e um comando rodarem juntos
+    let emExecucao = false;  // trava: não deixa a rodada agendada e um comando rodarem juntos
     const rodar = async () => {
-        if (emExecucao) return;
+        if (emExecucao) return false;
         emExecucao = true;
         try { await garantirNavegador(); await umaPassada(pagina, moldes, simular); await publicarAgendaSeNaHora(); }
         catch (e) {
@@ -621,6 +624,7 @@ async function principal() {
             else if (fechouNavegador(e)) log("Navegador/aba fechou durante a rodada — reabro na próxima.");
             else log("ERRO: " + e.message);
         } finally { emExecucao = false; }
+        return true;
     };
 
     await rodar();
@@ -679,9 +683,22 @@ async function principal() {
         finally { emExecucao = false; }
     };
 
-    log(`Pronto. Rodando de hora em hora (e mantendo a sessão viva). Pode minimizar a janela (não feche).`);
+    // agenda: confere a cada minuto se chegou um dos HORARIOS_RODADA e ainda
+    // não rodou nele hoje. Se estiver ocupado (comando/pulso), tenta no minuto seguinte.
+    const chaveRodada = d => `${ymd(d)} ${d.getHours()}h`;
+    // a rodada da abertura já vale pelo horário, se o robô abriu dentro de um (ex.: 7h20)
+    const rodadasFeitas = new Set([chaveRodada(new Date())]);
+    const agenda = async () => {
+        const agora = new Date();
+        if (!HORARIOS_RODADA.includes(agora.getHours())) return;
+        const chave = chaveRodada(agora);
+        if (rodadasFeitas.has(chave)) return;
+        if (await rodar()) rodadasFeitas.add(chave);
+    };
+
+    log(`Pronto. Rodadas automáticas às ${HORARIOS_RODADA.map(h => h + "h").join(" e ")} (extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
     setInterval(pulso, PULSO_MS);
-    setInterval(rodar, INTERVALO_MS);
+    setInterval(agenda, 60 * 1000);
     setInterval(verificarComandos, 30 * 1000);
 }
 

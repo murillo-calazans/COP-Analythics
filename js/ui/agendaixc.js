@@ -575,11 +575,27 @@ function ixcHaQuanto(ms) {
     return `há ${d} ${d === 1 ? "dia" : "dias"}`;
 }
 
+/** Horários das rodadas automáticas do robô (igual a HORARIOS_RODADA no robo.js). */
+const IXC_HORARIOS_RODADA = [7, 16];
+
+/** Horário da rodada agendada que veio `n` rodadas antes de agora (n=0: a última). */
+function ixcRodadaAnterior(n) {
+    const slots = [];
+    const hoje = new Date();
+    for (let dia = 0; dia <= 2; dia++) {
+        for (const h of [...IXC_HORARIOS_RODADA].sort((a, b) => b - a)) {
+            const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - dia, h);
+            if (d <= hoje) slots.push(d);
+        }
+    }
+    return slots[n];
+}
+
 /**
- * Banner de atualização. O verde ("em dia") só aparece quando o dado é
- * REALMENTE recente — o robô roda de hora em hora, então acima de ~90 min já
- * avisa que pode estar atrasado, e acima de 3 h/dia anterior marca em vermelho
- * (robô provavelmente parado). Assim o horário nunca passa por "fresco" à toa.
+ * Banner de atualização. O robô roda às 7h e 16h (e sob demanda pelo botão
+ * "Atualizar banco"). Verde se o dado é da última rodada agendada (com 30 min
+ * de folga pra ela terminar); amarelo se perdeu uma rodada; vermelho se perdeu
+ * mais (robô provavelmente parado). Assim o horário nunca passa por "fresco" à toa.
  */
 function bannerAtualizacaoIxc(capturadoEm) {
     if (!capturadoEm) {
@@ -591,13 +607,16 @@ function bannerAtualizacaoIxc(capturadoEm) {
     const d = new Date(capturadoEm);
     const idade = Date.now() - d.getTime();
     const completo = d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", " às");
-    const min = idade / 60000;
+    // rodada em andamento: nos 30 min após o horário ainda vale a rodada anterior
+    const ultima = ixcRodadaAnterior(0);
+    const folga = Date.now() - ultima.getTime() < 30 * 60000 ? 1 : 0;
+    const esperada = ixcRodadaAnterior(folga), anterior = ixcRodadaAnterior(folga + 1);
 
     let classe, texto;
-    if (min <= 90) {
+    if (d >= esperada) {
         classe = "ixc-atu-ok";
         texto = `Atualizado <b>${ixcHaQuanto(idade)}</b> (${completo})`;
-    } else if (min <= 180) {
+    } else if (d >= anterior) {
         classe = "ixc-atu-atraso";
         texto = `⚠ Última atualização <b>${ixcHaQuanto(idade)}</b> (${completo}) — o robô pode estar atrasado`;
     } else {
@@ -607,7 +626,7 @@ function bannerAtualizacaoIxc(capturadoEm) {
     return `<div class="ixc-atualizado ${classe}">
         <span class="ixc-atualizado-ponto"></span>
         ${texto}
-        <span class="ixc-atualizado-obs">o robô atualiza de hora em hora</span>
+        <span class="ixc-atualizado-obs">o robô atualiza às 7h e 16h · extra pelo botão Atualizar banco</span>
     </div>`;
 }
 
