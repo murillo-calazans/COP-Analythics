@@ -115,6 +115,17 @@ const statusDesconhecidos = new Set();
 
 const log = m => console.log(`[${new Date().toLocaleString("pt-BR")}] ${m}`);
 
+// O robô roda oculto (rodar-oculto.vbs), então console.log some. Erros vão
+// pra erros.txt (com passo + stack) pra dar pra ver o que quebrou sem ficar
+// olhando o console. Ver uso em sincronizarPendentes.
+const ARQ_ERRO = path.join(__dirname, "erros.txt");
+function logErro(contexto, e) {
+    const msg = (e && e.message) || String(e);
+    const stack = e && e.stack ? `\n${e.stack}` : "";
+    try { fs.appendFileSync(ARQ_ERRO, `[${new Date().toLocaleString("pt-BR")}] ${contexto}: ${msg}${stack}\n\n`, "utf8"); } catch {}
+    log(`ERRO em ${contexto}: ${msg}`);
+}
+
 // ---------- conversões (espelham DataEngine/paraData do site) ----------
 
 const vazio = v => v === "" || v === undefined || v === null;
@@ -583,38 +594,51 @@ async function sincronizarPendentes(pagina, moldes, simular, { finalizadas, esta
 
     if (simular) { log(`  (simulação) ${dados.length} movimentação(ões) em ${idsMexidas.length} OS em aberto; ${idsFinalizadas.length} OS finalizadas sairiam — não gravou.`); return; }
 
-    // 1) finalizadas no período saem da lista de abertas
-    for (const lote of emLotes(idsFinalizadas, 150))
-        await supabase("DELETE", `os_pendentes?${FILTRO_ID_OS}=in.${listaIn(lote)}`, undefined, "return=minimal");
+    // Instrumentado (14/10): a gravação incremental estava falhando em silêncio
+    // (robô oculto). `passo` marca onde está; qualquer erro vai pra erros.txt
+    // com o passo e o stack, e é relançado (estado não é salvo, repete a janela).
+    let passo = "início";
+    try {
+        // 1) finalizadas no período saem da lista de abertas
+        passo = `DELETE finalizadas (${idsFinalizadas.length} OS)`;
+        for (const lote of emLotes(idsFinalizadas, 150))
+            await supabase("DELETE", `os_pendentes?${FILTRO_ID_OS}=in.${listaIn(lote)}`, undefined, "return=minimal");
 
-    // 2) linhas que já existem das OS mexidas: pra não duplicar e pra atualizar os campos da OS
-    const existentes = [];
-    for (const lote of emLotes(idsMexidas, 150))
-        existentes.push(...await buscarTodas("os_pendentes", "id,dados", "id", `&${FILTRO_ID_OS}=in.${listaIn(lote)}`));
-    const vistas = new Set(existentes.map(l => chavePendente(l.dados)));
-    const novas = dados.filter(d => { const k = chavePendente(d); if (vistas.has(k)) return false; vistas.add(k); return true; });
+        // 2) linhas que já existem das OS mexidas: pra não duplicar e pra atualizar os campos da OS
+        passo = `buscar existentes (${idsMexidas.length} OS)`;
+        const existentes = [];
+        for (const lote of emLotes(idsMexidas, 150))
+            existentes.push(...await buscarTodas("os_pendentes", "id,dados", "id", `&${FILTRO_ID_OS}=in.${listaIn(lote)}`));
+        const vistas = new Set(existentes.map(l => chavePendente(l.dados)));
+        const novas = dados.filter(d => { const k = chavePendente(d); if (vistas.has(k)) return false; vistas.add(k); return true; });
 
-    // campos da OS mais recentes (a última movimentação puxada de cada OS)
-    const camposOs = new Map();
-    for (const d of dados) {
-        const atual = camposOs.get(String(d[ID_OS]));
-        if (!atual || (paraData(d.DATA) || 0) >= (paraData(atual.DATA) || 0)) camposOs.set(String(d[ID_OS]), d);
+        // campos da OS mais recentes (a última movimentação puxada de cada OS)
+        const camposOs = new Map();
+        for (const d of dados) {
+            const atual = camposOs.get(String(d[ID_OS]));
+            if (!atual || (paraData(d.DATA) || 0) >= (paraData(atual.DATA) || 0)) camposOs.set(String(d[ID_OS]), d);
+        }
+        const atualizadas = [];
+        for (const l of existentes) {
+            const fonte = camposOs.get(String(l.dados[ID_OS]));
+            if (!fonte || CAMPOS_DA_OS.every(c => l.dados[c] === fonte[c])) continue;
+            const dadosNovos = { ...l.dados };
+            for (const c of CAMPOS_DA_OS) dadosNovos[c] = fonte[c];
+            atualizadas.push({ id: l.id, dados: dadosNovos });
+        }
+
+        passo = `POST atualizadas (${atualizadas.length})`;
+        for (const lote of emLotes(atualizadas, TAM_LOTE_SUPA))
+            await supabase("POST", "os_pendentes?on_conflict=id", lote, "resolution=merge-duplicates,return=minimal");
+        passo = `POST novas (${novas.length})`;
+        for (const lote of emLotes(novas.map(d => ({ dados: d })), TAM_LOTE_SUPA))
+            await supabase("POST", "os_pendentes", lote, "return=minimal");
+        log(`  os_pendentes: ${novas.length} movimentação(ões) nova(s) em ${idsMexidas.length} OS, ${atualizadas.length} linha(s) atualizada(s), ${idsFinalizadas.length} OS finalizada(s) saíram.`);
+        estado.pendentesDesde = inicio.toISOString();
+    } catch (e) {
+        logErro(`gravar os_pendentes [passo: ${passo}]`, e);
+        throw e;
     }
-    const atualizadas = [];
-    for (const l of existentes) {
-        const fonte = camposOs.get(String(l.dados[ID_OS]));
-        if (!fonte || CAMPOS_DA_OS.every(c => l.dados[c] === fonte[c])) continue;
-        const dadosNovos = { ...l.dados };
-        for (const c of CAMPOS_DA_OS) dadosNovos[c] = fonte[c];
-        atualizadas.push({ id: l.id, dados: dadosNovos });
-    }
-
-    for (const lote of emLotes(atualizadas, TAM_LOTE_SUPA))
-        await supabase("POST", "os_pendentes?on_conflict=id", lote, "resolution=merge-duplicates,return=minimal");
-    for (const lote of emLotes(novas.map(d => ({ dados: d })), TAM_LOTE_SUPA))
-        await supabase("POST", "os_pendentes", lote, "return=minimal");
-    log(`  os_pendentes: ${novas.length} movimentação(ões) nova(s) em ${idsMexidas.length} OS, ${atualizadas.length} linha(s) atualizada(s), ${idsFinalizadas.length} OS finalizada(s) saíram.`);
-    estado.pendentesDesde = inicio.toISOString();
 }
 
 /** Baixa os módulos do agendador do site e carrega num objeto (IIFEs: this=ctx). */
