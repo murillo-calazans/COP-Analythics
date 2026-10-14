@@ -109,8 +109,7 @@ function conteudoGrupoNotif(grupo, oss) {
 async function renderizarNotificacoes() {
     const botao = document.getElementById("btnNotificacoes");
     if (!botao) return;
-    if (typeof podeEditarOperacao === "function" && !podeEditarOperacao()) { botao.hidden = true; return; }
-    botao.hidden = false;
+    botao.hidden = false;   // visível a todos os usuários logados (inclusive leitor)
 
     try {
         notifCache = await calcularNotificacoes();
@@ -175,7 +174,6 @@ function avisarNovos(cache) {
 let notifUltimoCap = null;
 async function notifChecarNovidade() {
     if (typeof supabaseClient === "undefined") return;
-    if (typeof podeEditarOperacao === "function" && !podeEditarOperacao()) return;
     try {
         const { data } = await supabaseClient.from("os_pendentes").select("capturado_em").order("capturado_em", { ascending: false }).limit(1);
         const cap = data && data[0] && data[0].capturado_em;

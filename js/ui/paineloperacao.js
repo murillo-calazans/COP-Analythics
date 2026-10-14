@@ -86,8 +86,7 @@ const PAINEL_OP_TETO = 300;   // teto de OS listadas por card
 async function renderizarPainelOperacao() {
     const alvo = document.getElementById("inicioPainelOperacao");
     if (!alvo) return;
-    // Dado operacional: só admin/editor.
-    if (typeof podeEditarOperacao === "function" && !podeEditarOperacao()) { alvo.innerHTML = ""; return; }
+    // Visível a todos os usuários logados (inclusive leitor).
 
     try {
         painelOpCache = await calcularPainelOperacao();
