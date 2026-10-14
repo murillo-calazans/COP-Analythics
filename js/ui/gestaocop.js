@@ -39,7 +39,9 @@ function copHaDias(data) {
 /** os_pendentes (linhas por evento) -> OS do COP únicas, agrupadas por assunto. */
 function montarCopAbertas(linhas) {
     const rows = linhas.map(l => l.dados);
-    const capturadoEm = linhas.length ? linhas[0].capturado_em : null;
+    // a rodada mais recente do robô: o max de capturado_em (NÃO a 1ª linha — as
+    // auditorias do COP quase nunca mudam e ficam com um carimbo velho).
+    const capturadoEm = linhas.reduce((max, l) => (l.capturado_em && (!max || l.capturado_em > max) ? l.capturado_em : max), null);
     const parseData = typeof ixcDataBR === "function" ? ixcDataBR : (() => null);
 
     const osMap = new Map();      // id -> OS representativa
