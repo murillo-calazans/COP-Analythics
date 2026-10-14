@@ -49,3 +49,11 @@
 }
 
 html[data-tema="dark"] .cop-assunto-card{ background: var(--cor-superficie, #0f172a); }
+
+/* Painel de operação (tela inicial) — faixa de cor por tipo de card */
+.painel-op-tile{ border-left: 3px solid var(--acc, #94a3b8); text-align: left; }
+.painel-op-tile[data-painel-cartao="agendadas"]{ --acc: #2563eb; }
+.painel-op-tile[data-painel-cartao="reagendadas"]{ --acc: #d97706; }
+.painel-op-tile[data-painel-cartao="fechamentos"]{ --acc: #16a34a; }
+.painel-op-tile[data-painel-cartao="assumidas"]{ --acc: #7c3aed; }
+.painel-op-tile[data-painel-cartao="cop"]{ --acc: #0891b2; }

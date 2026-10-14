@@ -36,6 +36,8 @@ function renderizarInicio() {
             <p>Tenha um ótimo dia de trabalho. Hoje é ${formatarDataLonga(agora).toLowerCase()}.</p>
         </div>
 
+        <div id="inicioPainelOperacao"></div>
+
         <div class="indicadores-secao-titulo">Seu mês de ${mes}</div>
         <div id="inicioMeuMes">${conteudoMeuMes()}</div>
 
@@ -54,6 +56,7 @@ function renderizarInicio() {
 
     preencherHojeNoCop();
     preencherAtrasadas();
+    if (typeof renderizarPainelOperacao === "function") renderizarPainelOperacao();
 }
 
 /**

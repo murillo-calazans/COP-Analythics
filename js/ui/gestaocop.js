@@ -160,7 +160,7 @@ async function renderizarCopAbertas(forcar = false) {
     copAbertasCarregando = true;
     alvo.innerHTML = `<div class="ixc-vazio"><p>Carregando as OS do COP em aberto…</p></div>`;
     try {
-        const linhas = typeof buscarOsPendentes === "function" ? await buscarOsPendentes() : [];
+        const linhas = typeof buscarOsPendentesCacheado === "function" ? await buscarOsPendentesCacheado() : [];
         copAbertasCache = montarCopAbertas(linhas);
         desenharCopAbertas(copAbertasCache);
     } catch (erro) {

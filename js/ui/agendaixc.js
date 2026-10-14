@@ -102,6 +102,19 @@ async function buscarOsPendentes() {
     return linhas;
 }
 
+// A os_pendentes é grande (dezenas de milhares de linhas). Na tela inicial o
+// painel de operação E o card de atrasadas pedem a mesma coisa; na Gestão do
+// COP idem. Esse cache compartilha UMA busca por ~2 min (e dedupa chamadas
+// simultâneas guardando a promessa), pra não baixar tudo várias vezes.
+let _osPendentesPromise = null, _osPendentesEm = 0;
+async function buscarOsPendentesCacheado(maxIdadeMs = 120000) {
+    if (_osPendentesPromise && (Date.now() - _osPendentesEm) < maxIdadeMs) return _osPendentesPromise;
+    _osPendentesEm = Date.now();
+    _osPendentesPromise = buscarOsPendentes().catch(e => { _osPendentesPromise = null; throw e; });
+    return _osPendentesPromise;
+}
+function invalidarCacheOsPendentes() { _osPendentesPromise = null; _osPendentesEm = 0; }
+
 /**
  * Monta o modelo da Agenda IXC: OS marcadas pra hoje, SÓ dos técnicos que
  * estão na escala (casados pelo nome via Motor.nomeBate), agrupadas por
@@ -690,10 +703,11 @@ async function carregarAgendaIxc(forcar = false) {
     if (agendaIxcCache && !forcar) { renderizarAgendaIxc(agendaIxcCache); return; }
 
     agendaIxcCarregando = true;
+    if (forcar) invalidarCacheOsPendentes();   // "Atualizar banco" / troca de dia pede dado fresco
     alvo.innerHTML = `<div class="ixc-vazio"><p>Carregando a agenda do IXC…</p></div>`;
     try {
         const [linhas, techs] = await Promise.all([
-            buscarOsPendentes(),
+            buscarOsPendentesCacheado(),
             typeof carregarEscalaTecnicos === "function" ? carregarEscalaTecnicos().catch(() => []) : []
         ]);
         agendaIxcCache = montarAgendaIxc(linhas, techs);
@@ -733,7 +747,7 @@ const ATRASADAS_DIAS = 7;
 async function calcularAtrasadas() {
     if (typeof Motor === "undefined") return { grupos: [], total: 0 };
     const [linhas, techs] = await Promise.all([
-        buscarOsPendentes(),
+        buscarOsPendentesCacheado(),
         typeof carregarEscalaTecnicos === "function" ? carregarEscalaTecnicos().catch(() => []) : []
     ]);
     const rows = linhas.map(l => l.dados);

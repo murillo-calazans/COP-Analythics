@@ -92,6 +92,7 @@ function mostrarAppAutenticado() {
 
     aplicarGateDePapel();
     if (typeof atualizarMenuLateralAdmin === "function") atualizarMenuLateralAdmin();
+    if (typeof renderizarNotificacoes === "function") renderizarNotificacoes();
 
     // Saudação já aparece; os números do mês entram quando os dados chegarem.
     if (secaoAtiva() === "inicio") renderizarInicio();
