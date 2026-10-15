@@ -46,7 +46,7 @@ function montarBacklog(linhas) {
                 id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto, status: o.status,
                 agendada: !assumida && !!agDate[id], agendamento: assumida ? null : (agDate[id] || null), abertura,
                 antiga: abertura ? abertura.getTime() < limiteAntiga : false,
-                reagendamentos: assumida ? 0 : (o.reagendamentos || 0)
+                reagendamentos: assumida ? 0 : (o.reagendamentos || 0), assumida
             };
         });
 
@@ -85,7 +85,8 @@ function recorteBacklog(model) {
         total: itens.length,
         agendadas: itens.filter(i => i.agendada).length,
         antigas: itens.filter(i => i.antiga).length,
-        reagendadas: itens.filter(i => i.reagendamentos > 0).length
+        reagendadas: itens.filter(i => i.reagendamentos > 0).length,
+        assumidas: itens.filter(i => i.assumida).length
     };
 }
 
@@ -153,6 +154,7 @@ const BACKLOG_CARTOES = [
     { id: "total", rotulo: "Total em aberto", filtro: () => true, cor: "#2563eb" },
     { id: "agendadas", rotulo: "Agendadas", filtro: i => i.agendada, cor: "#16a34a" },
     { id: "reagendadas", rotulo: "Reagendadas", filtro: i => i.reagendamentos > 0, cor: "#d97706" },
+    { id: "assumidas", rotulo: "Assumidas", filtro: i => i.assumida, cor: "#7c3aed" },
     { id: "antigas", rotulo: `+${BACKLOG_DIAS_ANTIGA} dias em aberto`, filtro: i => i.antiga, cor: "#dc2626" }
 ];
 
@@ -181,7 +183,7 @@ function desenharBacklog(model) {
             ${backlogCidade ? `<button type="button" class="backlog-limpar" id="backlogLimpar" title="Limpar filtro">✕</button>` : ""}
         </div>`;
 
-    const valor = { total: rec.total, agendadas: rec.agendadas, reagendadas: rec.reagendadas, antigas: rec.antigas };
+    const valor = { total: rec.total, agendadas: rec.agendadas, reagendadas: rec.reagendadas, assumidas: rec.assumidas, antigas: rec.antigas };
     const kpis = BACKLOG_CARTOES.map(c => `
         <button type="button" class="stat-tile stat-tile-link backlog-tile" data-backlog-cartao="${c.id}" style="border-left:3px solid ${c.cor}">
             <div class="stat-label">${c.rotulo}</div>
