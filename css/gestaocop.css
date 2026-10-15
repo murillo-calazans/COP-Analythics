@@ -72,3 +72,13 @@ html[data-tema="dark"] .cop-assunto-card{ background: var(--cor-superficie, #0f1
 }
 .backlog-limpar:hover{ background: var(--cor-fundo-suave, rgba(0,0,0,.04)); color: var(--cor-texto); }
 html[data-tema="dark"] .backlog-cidade-sel{ background: var(--cor-superficie, #0f172a); }
+
+/* Gráfico de linha das cidades em aberto */
+.graf-wrap{ width: 100%; overflow-x: auto; margin-top: 4px; }
+.graf-svg{ width: 100%; min-width: 560px; height: auto; display: block; }
+.graf-grid{ stroke: var(--cor-borda); stroke-width: 1; opacity: .55; }
+.graf-ytick, .graf-xtick{ fill: var(--cor-texto-suave); font-size: 11px; }
+.graf-linha{ stroke: #3b82f6; stroke-width: 2; }
+.graf-ponto{ fill: #3b82f6; stroke: var(--cor-superficie, #fff); stroke-width: 1.5; cursor: pointer; }
+.graf-ponto:hover{ r: 6; }
+html[data-tema="dark"] .graf-ponto{ stroke: #0f172a; }

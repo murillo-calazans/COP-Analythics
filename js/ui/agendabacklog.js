@@ -42,7 +42,8 @@ function montarBacklog(linhas) {
             return {
                 id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto, status: o.status,
                 agendada: !!agDate[id], agendamento: agDate[id] || null, abertura,
-                antiga: abertura ? abertura.getTime() < limiteAntiga : false
+                antiga: abertura ? abertura.getTime() < limiteAntiga : false,
+                reagendamentos: o.reagendamentos || 0
             };
         });
 
@@ -80,7 +81,8 @@ function recorteBacklog(model) {
         itens, grupos,
         total: itens.length,
         agendadas: itens.filter(i => i.agendada).length,
-        antigas: itens.filter(i => i.antiga).length
+        antigas: itens.filter(i => i.antiga).length,
+        reagendadas: itens.filter(i => i.reagendamentos > 0).length
     };
 }
 
@@ -96,9 +98,53 @@ function backlogAssuntoCurto(a) {
     return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+function backlogCidadeCurta(c) {
+    const s = String(c || "—").trim();
+    return s.length > 16 ? s.slice(0, 15) + "…" : s;
+}
+
+/** Gráfico de linha (série única) das cidades com mais OS em aberto — curva de concentração. */
+function graficoCidadesLinha(cidades) {
+    const dados = (cidades || []).slice(0, 15);
+    if (dados.length < 2) return "";   // linha precisa de 2+ pontos
+
+    const W = 820, H = 300, mL = 46, mR = 16, mT = 14, mB = 96;
+    const pw = W - mL - mR, ph = H - mT - mB;
+    const max = Math.max(...dados.map(d => d.n)) || 1;
+    const x = i => mL + (i * pw / (dados.length - 1));
+    const y = v => mT + ph - (v / max) * ph;
+
+    const ticks = 4;
+    const grid = Array.from({ length: ticks + 1 }, (_, k) => {
+        const v = Math.round(max * k / ticks);
+        const gy = y(v);
+        return `<line x1="${mL}" y1="${gy.toFixed(1)}" x2="${W - mR}" y2="${gy.toFixed(1)}" class="graf-grid"/>` +
+            `<text x="${mL - 7}" y="${(gy + 3.5).toFixed(1)}" class="graf-ytick" text-anchor="end">${v}</text>`;
+    }).join("");
+
+    const pts = dados.map((d, i) => ({ ...d, cx: x(i), cy: y(d.n) }));
+    const path = pts.map((p, i) => `${i ? "L" : "M"}${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join(" ");
+    const marcadores = pts.map(p =>
+        `<circle cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}" r="4" class="graf-ponto"><title>${escaparHtml(p.cidade)}: ${p.n} em aberto</title></circle>`).join("");
+    const xlabels = pts.map(p =>
+        `<text x="${p.cx.toFixed(1)}" y="${H - mB + 16}" class="graf-xtick" text-anchor="end" transform="rotate(-35 ${p.cx.toFixed(1)} ${H - mB + 16})">${escaparHtml(backlogCidadeCurta(p.cidade))}</text>`).join("");
+
+    return `
+        <div class="indicadores-secao-titulo">Cidades com OS em aberto</div>
+        <div class="graf-wrap">
+          <svg viewBox="0 0 ${W} ${H}" class="graf-svg" role="img" aria-label="OS de campo em aberto por cidade (top ${dados.length})">
+            ${grid}
+            <path d="${path}" class="graf-linha" fill="none"/>
+            ${marcadores}
+            ${xlabels}
+          </svg>
+        </div>`;
+}
+
 const BACKLOG_CARTOES = [
     { id: "total", rotulo: "Total em aberto", filtro: () => true, cor: "#2563eb" },
     { id: "agendadas", rotulo: "Agendadas", filtro: i => i.agendada, cor: "#16a34a" },
+    { id: "reagendadas", rotulo: "Reagendadas", filtro: i => i.reagendamentos > 0, cor: "#d97706" },
     { id: "antigas", rotulo: `+${BACKLOG_DIAS_ANTIGA} dias em aberto`, filtro: i => i.antiga, cor: "#dc2626" }
 ];
 
@@ -127,7 +173,7 @@ function desenharBacklog(model) {
             ${backlogCidade ? `<button type="button" class="backlog-limpar" id="backlogLimpar" title="Limpar filtro">✕</button>` : ""}
         </div>`;
 
-    const valor = { total: rec.total, agendadas: rec.agendadas, antigas: rec.antigas };
+    const valor = { total: rec.total, agendadas: rec.agendadas, reagendadas: rec.reagendadas, antigas: rec.antigas };
     const kpis = BACKLOG_CARTOES.map(c => `
         <button type="button" class="stat-tile stat-tile-link backlog-tile" data-backlog-cartao="${c.id}" style="border-left:3px solid ${c.cor}">
             <div class="stat-label">${c.rotulo}</div>
@@ -146,7 +192,8 @@ function desenharBacklog(model) {
         ${filtroCidade}
         <div class="kpi-row">${kpis}</div>
         <div class="indicadores-secao-titulo">Em aberto por assunto${sufixo}</div>
-        <div class="cop-assuntos">${cards}</div>`;
+        <div class="cop-assuntos">${cards}</div>
+        ${graficoCidadesLinha(model.cidades)}`;
 
     const sel = alvo.querySelector("#backlogCidadeSel");
     if (sel) sel.addEventListener("change", () => { backlogCidade = sel.value; desenharBacklog(model); });
