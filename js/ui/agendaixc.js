@@ -721,23 +721,27 @@ async function carregarAgendaIxc(forcar = false) {
 }
 
 /** Troca entre as abas "Agenda IA" e "Agenda IXC" dentro do módulo. */
+/** Ativa uma aba do Agendador (aberto | ixc | ia): botões, conteúdo e render. */
+function ativarAbaAgenda(aba) {
+    const botoes = document.querySelectorAll("[data-aba-agenda]");
+    if (!botoes.length) return;
+    botoes.forEach(b => b.classList.toggle("ativo", b.dataset.abaAgenda === aba));
+    const ia = document.getElementById("agendaHojeConteudo");
+    const ixc = document.getElementById("agendaIxcConteudo");
+    const aberto = document.getElementById("agendaAbertoConteudo");
+    const navDia = document.getElementById("agendaNavDia");
+    if (ia) ia.hidden = aba !== "ia";
+    if (ixc) ixc.hidden = aba !== "ixc";
+    if (aberto) aberto.hidden = aba !== "aberto";
+    if (navDia) navDia.style.visibility = aba === "ia" ? "" : "hidden"; // nav de dia só faz sentido na Agenda IA
+    if (aba === "ixc") carregarAgendaIxc();
+    if (aba === "aberto" && typeof renderizarAgendaBacklog === "function") renderizarAgendaBacklog();
+}
+
 function registrarAbasAgenda() {
     const botoes = document.querySelectorAll("[data-aba-agenda]");
     if (!botoes.length) return;
-    botoes.forEach(botao => botao.addEventListener("click", () => {
-        const aba = botao.dataset.abaAgenda;
-        botoes.forEach(b => b.classList.toggle("ativo", b === botao));
-        const ia = document.getElementById("agendaHojeConteudo");
-        const ixc = document.getElementById("agendaIxcConteudo");
-        const aberto = document.getElementById("agendaAbertoConteudo");
-        const navDia = document.getElementById("agendaNavDia");
-        if (ia) ia.hidden = aba !== "ia";
-        if (ixc) ixc.hidden = aba !== "ixc";
-        if (aberto) aberto.hidden = aba !== "aberto";
-        if (navDia) navDia.style.visibility = aba === "ia" ? "" : "hidden"; // nav de dia só faz sentido na Agenda IA
-        if (aba === "ixc") carregarAgendaIxc();
-        if (aba === "aberto" && typeof renderizarAgendaBacklog === "function") renderizarAgendaBacklog();
-    }));
+    botoes.forEach(botao => botao.addEventListener("click", () => ativarAbaAgenda(botao.dataset.abaAgenda)));
 }
 
 /**

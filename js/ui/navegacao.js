@@ -155,7 +155,10 @@ function mostrarSecao(nome) {
     if (nome === "ctos-lacres") renderizarCtosLacres();
     if (nome === "clientes-cto") renderizarClientesCto();
     if (nome === "escala-hoje") renderizarEscalaHoje();
-    if (nome === "agenda-hoje") renderizarAgendaHoje();
+    if (nome === "agenda-hoje") {
+        renderizarAgendaHoje();   // deixa a Agenda IA pronta (aba hoje escondida por padrão)
+        if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("aberto");   // abre já em "Em aberto"
+    }
     if (nome === "usuarios") renderizarAdminUsuarios();
     if (nome === "terceiras") renderizarTerceirasPainel();
     if (nome === "terceiras-fechamento") renderizarTerceirasFechamento();
