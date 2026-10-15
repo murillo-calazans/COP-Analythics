@@ -10,6 +10,7 @@
 
 let agendaBacklogCache = null;
 let agendaBacklogCarregando = false;
+let backlogCidade = "";   // filtro de cidade atual ("" = todas)
 
 const BACKLOG_DIAS_ANTIGA = 3;
 const BACKLOG_TETO = 300;   // teto de OS listadas por popup
@@ -45,6 +46,24 @@ function montarBacklog(linhas) {
             };
         });
 
+    // cidades (todas as OS em aberto) pro filtro, ordenadas por quantidade
+    const contaCidade = new Map();
+    for (const i of itens) { const c = i.cidade || "—"; contaCidade.set(c, (contaCidade.get(c) || 0) + 1); }
+    const cidades = [...contaCidade.entries()]
+        .map(([cidade, n]) => ({ cidade, n }))
+        .sort((a, b) => b.n - a.n || a.cidade.localeCompare(b.cidade, "pt-BR"));
+
+    return {
+        total: itens.length,
+        agendadas: itens.filter(i => i.agendada).length,
+        antigas: itens.filter(i => i.antiga).length,
+        itens, cidades, capturadoEm, eventosPorOs, osInfo
+    };
+}
+
+/** Recorta o backlog pela cidade escolhida (vazio = todas) e refaz KPIs + assuntos. */
+function recorteBacklog(model) {
+    const itens = backlogCidade ? model.itens.filter(i => (i.cidade || "—") === backlogCidade) : model.itens;
     const porAssunto = new Map();
     for (const i of itens) {
         const k = i.assunto || "—";
@@ -57,12 +76,11 @@ function montarBacklog(linhas) {
         maisAntiga: g.oss.reduce((m, o) => (o.abertura && (!m || o.abertura < m)) ? o.abertura : m, null),
         oss: g.oss.sort((a, b) => (a.abertura || 0) - (b.abertura || 0))
     })).sort((a, b) => b.total - a.total);
-
     return {
+        itens, grupos,
         total: itens.length,
         agendadas: itens.filter(i => i.agendada).length,
-        antigas: itens.filter(i => i.antiga).length,
-        itens, grupos, capturadoEm, eventosPorOs, osInfo
+        antigas: itens.filter(i => i.antiga).length
     };
 }
 
@@ -93,15 +111,30 @@ function desenharBacklog(model) {
         return;
     }
 
+    // cidade escolhida sumiu numa recarga? volta pra "todas"
+    if (backlogCidade && !model.cidades.some(c => c.cidade === backlogCidade)) backlogCidade = "";
+
     const banner = typeof bannerAtualizacaoIxc === "function" ? bannerAtualizacaoIxc(model.capturadoEm) : "";
-    const valor = { total: model.total, agendadas: model.agendadas, antigas: model.antigas };
+    const rec = recorteBacklog(model);
+    const sufixo = backlogCidade ? ` · ${escaparHtml(backlogCidade)}` : "";
+
+    const opcoes = `<option value="">Todas as cidades (${model.total.toLocaleString("pt-BR")})</option>` +
+        model.cidades.map(c => `<option value="${escaparHtml(c.cidade)}"${c.cidade === backlogCidade ? " selected" : ""}>${escaparHtml(c.cidade)} (${c.n.toLocaleString("pt-BR")})</option>`).join("");
+    const filtroCidade = `
+        <div class="backlog-filtro">
+            <label for="backlogCidadeSel">Cidade:</label>
+            <select id="backlogCidadeSel" class="backlog-cidade-sel">${opcoes}</select>
+            ${backlogCidade ? `<button type="button" class="backlog-limpar" id="backlogLimpar" title="Limpar filtro">✕</button>` : ""}
+        </div>`;
+
+    const valor = { total: rec.total, agendadas: rec.agendadas, antigas: rec.antigas };
     const kpis = BACKLOG_CARTOES.map(c => `
         <button type="button" class="stat-tile stat-tile-link backlog-tile" data-backlog-cartao="${c.id}" style="border-left:3px solid ${c.cor}">
             <div class="stat-label">${c.rotulo}</div>
             <div class="stat-valor">${valor[c.id].toLocaleString("pt-BR")}</div>
         </button>`).join("");
 
-    const cards = model.grupos.map((g, i) => `
+    const cards = rec.grupos.map((g, i) => `
         <button type="button" class="cop-assunto-card" data-backlog-assunto="${i}">
             <span class="cop-assunto-nome">${escaparHtml(backlogAssuntoCurto(g.assunto))}</span>
             <span class="cop-assunto-num">${g.total.toLocaleString("pt-BR")}</span>
@@ -110,19 +143,24 @@ function desenharBacklog(model) {
 
     alvo.innerHTML = `
         ${banner}
+        ${filtroCidade}
         <div class="kpi-row">${kpis}</div>
-        <div class="indicadores-secao-titulo">Em aberto por assunto</div>
+        <div class="indicadores-secao-titulo">Em aberto por assunto${sufixo}</div>
         <div class="cop-assuntos">${cards}</div>`;
+
+    const sel = alvo.querySelector("#backlogCidadeSel");
+    if (sel) sel.addEventListener("change", () => { backlogCidade = sel.value; desenharBacklog(model); });
+    alvo.querySelector("#backlogLimpar")?.addEventListener("click", () => { backlogCidade = ""; desenharBacklog(model); });
 
     alvo.querySelectorAll("[data-backlog-cartao]").forEach(botao =>
         botao.addEventListener("click", () => {
             const c = BACKLOG_CARTOES.find(x => x.id === botao.dataset.backlogCartao);
-            abrirPopupBacklog(c.rotulo, model.itens.filter(c.filtro));
+            abrirPopupBacklog(c.rotulo + sufixo, rec.itens.filter(c.filtro));
         }));
     alvo.querySelectorAll("[data-backlog-assunto]").forEach(botao =>
         botao.addEventListener("click", () => {
-            const g = model.grupos[+botao.dataset.backlogAssunto];
-            abrirPopupBacklog(backlogAssuntoCurto(g.assunto), g.oss);
+            const g = rec.grupos[+botao.dataset.backlogAssunto];
+            abrirPopupBacklog(backlogAssuntoCurto(g.assunto) + sufixo, g.oss);
         }));
 }
 
