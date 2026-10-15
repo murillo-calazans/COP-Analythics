@@ -94,6 +94,11 @@
                 <span id="badgeAlertas" class="badge-alertas" hidden>0</span>
             </button>
 
+            <button data-secao="ctos-lacres">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                CTOs e Lacres
+            </button>
+
             <button data-secao="auditoria">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>
                 Auditoria
@@ -552,6 +557,56 @@
             <div id="painelAlertasCancelados" class="painel-aba" hidden>
                 <div id="listaAlertasCancelados"></div>
             </div>
+        </div>
+    </section>
+
+    <section id="secao-ctos-lacres" class="secao">
+        <div class="placeholder-card auditoria-card">
+            <div class="dashboard-cabecalho">
+                <div>
+                    <h2>🔒 CTOs e Lacres</h2>
+                    <p>
+                        OS de instalação, transferência e mudança de tecnologia com lacre informado no fechamento.
+                        Login, CTO, porta e lacre vêm do texto do técnico; clique no status quando cadastrar.
+                        Filtro próprio desta aba, independente do Filtro Global.
+                    </p>
+                </div>
+                <button type="button" id="btnExportarCtos" class="botao-secundario">
+                    <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Exportar (Excel)
+                </button>
+            </div>
+
+            <div class="ordens-filtros">
+                <input type="text" id="buscaCtos" class="seletor-multiplo-input" placeholder="Buscar OS, cliente, login, CTO, porta ou lacre...">
+                <select id="filtroStatusCtos" class="ctos-select" aria-label="Status">
+                    <option value="">Todos os status</option>
+                    <option value="pendente">Só pendentes</option>
+                    <option value="cadastrado">Só cadastrados</option>
+                </select>
+                <select id="filtroTipoCtos" class="ctos-select" aria-label="Tipo">
+                    <option value="">Todos os tipos</option>
+                    <option>Instalação</option>
+                    <option>Transferência de endereço</option>
+                    <option>Mudança de tecnologia</option>
+                </select>
+                <select id="filtroDiagnosticoCtos" class="ctos-select" aria-label="Diagnóstico">
+                    <option value="">Todos os diagnósticos</option>
+                </select>
+            </div>
+
+            <div class="alertas-periodo">
+                <label>Fechamento de
+                    <input type="date" id="ctosDataInicio">
+                </label>
+                <label>até
+                    <input type="date" id="ctosDataFim">
+                </label>
+                <button type="button" id="btnLimparPeriodoCtos" class="alertas-periodo-limpar">Limpar período</button>
+            </div>
+
+            <div id="resumoCtosLacres" class="resumo-filtro ctos-contadores"></div>
+            <div id="listaCtosLacres"></div>
         </div>
     </section>
 
@@ -1169,6 +1224,7 @@
 <script src="js/ui/dashboard.js"></script>
 <script src="js/ui/indicadores.js"></script>
 <script src="js/ui/alertas.js"></script>
+<script src="js/ui/ctoslacres.js"></script>
 <script src="js/agendador/escala-dia.js"></script>
 <script src="js/ui/escalahoje.js"></script>
 <script src="js/ui/agendahoje.js"></script>

@@ -20,9 +20,10 @@ const MODULO_DA_SECAO = {
     "indicadores": "ordens",
     "cop-abertas": "cop",
     "gestao-cop": "cop",
-    "alertas": "ordens",
     "ordens": "ordens",
     "tecnicos": "ordens",
+    "alertas": "clientes",
+    "ctos-lacres": "clientes",
     "terceiras": "terceiras",
     "terceiras-fechamento": "terceiras",
     "terceiras-lpu": "terceiras",
@@ -127,6 +128,7 @@ function mostrarSecao(nome) {
     if (nome === "tecnicos") renderizarSecaoTecnicos();
     if (SECOES_INDICADORES.includes(nome)) renderizarSecaoIndicadores();
     if (nome === "alertas") renderizarAlertas();
+    if (nome === "ctos-lacres") renderizarCtosLacres();
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "agenda-hoje") renderizarAgendaHoje();
     if (nome === "usuarios") renderizarAdminUsuarios();

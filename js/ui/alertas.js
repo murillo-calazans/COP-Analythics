@@ -290,7 +290,7 @@ function atualizarBadgeAlertas() {
     badge.textContent = total;
     badge.hidden = total === 0;
 
-    if (typeof definirBadgeMenuLateral === "function") definirBadgeMenuLateral("alertas", total);
+    if (typeof definirBadgeMenuLateral === "function") definirBadgeMenuLateral("clientes", total);
 }
 
 function abrirModalCliente(login) {

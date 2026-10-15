@@ -211,3 +211,137 @@
     color: var(--cor-primaria);
 
 }
+
+/* CTOs e Lacres (js/ui/ctoslacres.js) — Login/CTO/Porta/Lacre editáveis na
+   própria linha; status vira pílula Pendente (vermelha) / Cadastrado (verde). */
+#listaCtosLacres .tabela-alertas {
+
+    min-width: 1100px;
+    font-size: 13px;
+
+}
+
+#listaCtosLacres .tabela-alertas td {
+
+    padding: 6px 8px;
+    vertical-align: middle;
+
+}
+
+.ctos-texto {
+
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+}
+
+.ctos-campo {
+
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+}
+
+.ctos-input {
+
+    width: 100%;
+    min-width: 90px;
+    padding: 6px 8px;
+
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+
+    color: var(--cor-texto);
+    font: inherit;
+
+}
+
+.ctos-input:hover { border-color: var(--cor-borda); }
+
+.ctos-input:focus {
+
+    outline: none;
+    border-color: var(--cor-primaria);
+    background: var(--cor-fundo-card);
+
+}
+
+.ctos-input.corrigido { border-left: 3px solid var(--cor-primaria); }
+
+.ctos-input:disabled { opacity: .6; }
+
+.ctos-mapa {
+
+    text-decoration: none;
+    font-size: 14px;
+
+}
+
+.ctos-os {
+
+    padding: 0;
+    background: none;
+    border: none;
+
+    color: var(--cor-primaria);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+
+}
+
+.ctos-os:hover { text-decoration: underline; }
+
+.ctos-col-status { text-align: center; }
+
+.ctos-status {
+
+    display: inline-block;
+    padding: 5px 12px;
+
+    border: none;
+    border-radius: 999px;
+
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+
+}
+
+button.ctos-status { cursor: pointer; }
+
+.ctos-status.pendente { background: rgba(220, 38, 38, .12); color: #DC2626; }
+.ctos-status.cadastrado { background: rgba(22, 163, 74, .14); color: #16A34A; }
+
+html[data-tema="dark"] .ctos-status.pendente { color: #F87171; }
+html[data-tema="dark"] .ctos-status.cadastrado { color: #4ADE80; }
+
+.ctos-contadores {
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+
+}
+
+.ctos-ok { color: #16A34A; }
+.ctos-pendente { color: #DC2626; }
+.ctos-aviso { color: var(--cor-texto-suave); }
+
+.ctos-select {
+
+    padding: 10px 12px;
+
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+
+    color: var(--cor-texto);
+    font: inherit;
+
+}

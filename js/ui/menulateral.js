@@ -27,7 +27,7 @@
         auditoria: '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>',
         agendador: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/>',
         escala: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h3M13 14h3M8 18h3"/>',
-        alertas: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+        clientes: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>',
         admin: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'
     };
 
@@ -41,7 +41,7 @@
         { id: "auditoria", titulo: "Auditoria",               href: "index.html#auditoria",     secao: "auditoria" },
         { id: "agendador", titulo: "Agendador IA",            href: "index.html#agenda-hoje",   secao: "agenda-hoje" },
         { id: "escala",    titulo: "Escala",                  href: "index.html#escala-hoje",   secao: "escala-hoje" },
-        { id: "alertas",   titulo: "Alertas",                 href: "index.html#alertas",       secao: "alertas" },
+        { id: "clientes",  titulo: "Gestão de Clientes",      href: "index.html#alertas",       secao: "alertas" },
         { id: "admin",     titulo: "Painel de Administrador", href: "index.html#usuarios",      secao: "usuarios" }
     ];
 
