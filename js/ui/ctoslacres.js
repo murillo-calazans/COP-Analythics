@@ -208,6 +208,20 @@ async function renderizarCtosLacres() {
         _ctosErroBanco = erro;
     }
 
+    // cruzamento com as CTOs do IXC (patch-29 + base de clientes); sem isso a aba segue normal
+    try {
+        await carregarPosicoesCtos();
+        await carregarCtoIxcDosLogins(_ctosLinhasCache.map(l => valorCto(l, "login")));
+        _ctosCruzamentoAviso = _ctosPosicoes.total ? "" : "O cadastro de CTOs do IXC ainda está vazio — o robô preenche na próxima puxada da base.";
+    } catch (erro) {
+        console.warn("CTOs e Lacres — cruzamento:", erro);
+        _ctosPosicoes = null;
+        _ctosCruzamentoAviso = /ctos/.test(erro?.message ?? "") || ["42P01", "PGRST205"].includes(erro?.code)
+            ? "Cruzamento com as CTOs do IXC indisponível — falta rodar o database/patch-29-ctos.sql no Supabase."
+            : "";
+    }
+    if (token !== _ctosRenderToken) return;
+
     aplicarFiltroCtos();
 }
 
@@ -218,7 +232,7 @@ function registrarFiltrosCtos() {
     _ctosFiltrosRegistrados = true;
 
     document.getElementById("buscaCtos")?.addEventListener("input", aplicarFiltroCtos);
-    ["filtroStatusCtos", "filtroDiagnosticoCtos", "filtroTipoCtos", "ctosDataInicio", "ctosDataFim"]
+    ["filtroStatusCtos", "filtroDiagnosticoCtos", "filtroTipoCtos", "filtroConferenciaCtos", "ctosDataInicio", "ctosDataFim"]
         .forEach(id => document.getElementById(id)?.addEventListener("change", aplicarFiltroCtos));
 
     document.getElementById("btnLimparPeriodoCtos")?.addEventListener("click", () => {
@@ -245,6 +259,7 @@ function linhasCtosSemStatus() {
     const termo = normalizarTexto(document.getElementById("buscaCtos")?.value ?? "");
     const diagnostico = document.getElementById("filtroDiagnosticoCtos")?.value ?? "";
     const tipo = document.getElementById("filtroTipoCtos")?.value ?? "";
+    const conferencia = document.getElementById("filtroConferenciaCtos")?.value ?? "";
     const inicioBruto = document.getElementById("ctosDataInicio")?.value;
     const fimBruto = document.getElementById("ctosDataFim")?.value;
     const dataInicio = inicioBruto ? new Date(`${inicioBruto}T00:00:00`) : null;
@@ -253,6 +268,7 @@ function linhasCtosSemStatus() {
     return _ctosLinhasCache.filter(linha => {
         if (diagnostico && linha.diagnostico !== diagnostico) return false;
         if (tipo && linha.tipo !== tipo) return false;
+        if (conferencia && cruzamentoCto(linha)?.situacao !== conferencia) return false;
         if (dataInicio || dataFim) {
             if (!linha.dataFinal) return false;
             if (dataInicio && linha.dataFinal < dataInicio) return false;
@@ -294,7 +310,8 @@ function renderizarResumoCtos(base, filtradas) {
         <span>Exibindo: <b>${fmt(filtradas.length)}</b></span>
         <span>Cadastrados: <b class="ctos-ok">${fmt(cadastrados)}</b></span>
         <span>Pendentes: <b class="ctos-pendente">${fmt(base.length - cadastrados)}</b></span>
-        <span class="ctos-aviso">${aviso}</span>`;
+        ${_ctosPosicoes ? `<span>CTO diferente do IXC: <b class="ctos-pendente">${fmt(base.filter(l => cruzamentoCto(l)?.situacao === "diverge").length)}</b></span>` : ""}
+        <span class="ctos-aviso">${aviso}${_ctosCruzamentoAviso ? ` · ${escaparHtml(_ctosCruzamentoAviso)}` : ""}</span>`;
 }
 
 /** Link pro mapa quando a CTO veio como coordenada ou link. */
@@ -327,8 +344,9 @@ function renderizarTabelaCtos(linhas) {
         const mapa = campo === "cto" ? linkMapaCto(valor) : null;
         const linkMapa = mapa ? `<a class="ctos-mapa" href="${escaparHtml(mapa)}" target="_blank" rel="noopener" title="Abrir no mapa">📍</a>` : "";
         const corrigido = _ctosCadastro.get(linha.id)?.[campo] != null ? " corrigido" : "";
-        if (!editavel) return `<td class="ctos-texto">${escaparHtml(valor || "-")}${linkMapa}</td>`;
-        return `<td><div class="ctos-campo"><textarea rows="1" class="ctos-input${corrigido}" data-campo="${campo}" placeholder="${placeholder}" title="${escaparHtml(valor)}${corrigido ? " (corrigido manualmente)" : ""}">${escaparHtml(valor)}</textarea>${linkMapa}</div></td>`;
+        const cruzamento = campo === "cto" ? htmlCruzamentoCto(linha) : "";
+        if (!editavel) return `<td class="ctos-texto">${escaparHtml(valor || "-")}${linkMapa}${cruzamento}</td>`;
+        return `<td><div class="ctos-campo"><textarea rows="1" class="ctos-input${corrigido}" data-campo="${campo}" placeholder="${placeholder}" title="${escaparHtml(valor)}${corrigido ? " (corrigido manualmente)" : ""}">${escaparHtml(valor)}</textarea>${linkMapa}</div>${cruzamento}</td>`;
     };
 
     container.innerHTML = avisoBanco + `
@@ -450,11 +468,144 @@ function exportarCtosLacres() {
         "Lacre": valorCto(l, "lacre") ?? "",
         "Técnico": l.tecnico,
         "Fechamento": l.dataFinal ? l.dataFinal.toLocaleDateString("pt-BR") : "",
-        "Status": cadastradoCto(l) ? "Cadastrado" : "Pendente"
+        "Status": cadastradoCto(l) ? "Cadastrado" : "Pendente",
+        ...(() => {
+            const c = cruzamentoCto(l);
+            return {
+                "CTO mais próxima (IXC)": c?.proxima?.descricao ?? "",
+                "Distância (m)": c?.proxima ? Math.round(c.proxima.distancia) : "",
+                "CTO do login no IXC": c?.ixc ?? "",
+                "Conferência": c ? SITUACOES_CTO[c.situacao] : ""
+            };
+        })()
     }));
     const planilha = XLSX.utils.json_to_sheet(dados);
-    planilha["!cols"] = [10, 30, 30, 24, 20, 26, 8, 14, 24, 12, 12].map(wch => ({ wch }));
+    planilha["!cols"] = [10, 30, 30, 24, 20, 26, 8, 14, 24, 12, 12, 22, 12, 22, 22].map(wch => ({ wch }));
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "CTOs e Lacres");
     XLSX.writeFile(livro, `ctos-lacres-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// ---------- Cruzamento com as CTOs do IXC ----------
+// A coordenada que o técnico escreve em "LOCALIZAÇÃO DA CTO" é comparada com
+// a posição das CTOs cadastradas no IXC (tabela ctos, patch-29, montada pelo
+// robô a partir da visão "CTOs de Clientes"): CTO mais próxima + distância,
+// e se ela confere com a CTO que o login tem no IXC (clientes_cto).
+
+const RAIO_CTO_PERTO_M = 300;   // mais longe que isso = "nenhuma CTO perto"
+const CELULA_GRADE_CTO = 0.02;  // ~2 km; busca na célula e nas 8 vizinhas
+
+let _ctosPosicoes = null;           // { grade: Map("i|j" -> [cto]), total }
+let _ctosIxcPorLogin = new Map();   // login (minúsculo) -> CTO no IXC (ou null)
+let _ctosCruzamentoAviso = "";
+
+const SITUACOES_CTO = {
+    confere: "CTO confere com o IXC",
+    diverge: "CTO diferente do IXC",
+    "sem-ixc": "Login sem CTO no IXC",
+    longe: "Nenhuma CTO perto",
+    "sem-coordenada": "Sem coordenada da CTO"
+};
+
+const chaveGradeCto = (lat, lng) => `${Math.floor(lat / CELULA_GRADE_CTO)}|${Math.floor(lng / CELULA_GRADE_CTO)}`;
+
+async function carregarPosicoesCtos() {
+    if (_ctosPosicoes) return _ctosPosicoes;
+    const grade = new Map();
+    let total = 0;
+    for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await supabaseClient.from("ctos")
+            .select("descricao, lat, lng").not("lat", "is", null).not("lng", "is", null)
+            .order("descricao").range(inicio, inicio + 999);
+        if (error) throw error;
+        for (const c of data ?? []) {
+            const chave = chaveGradeCto(c.lat, c.lng);
+            if (!grade.has(chave)) grade.set(chave, []);
+            grade.get(chave).push(c);
+            total++;
+        }
+        if (!data || data.length < 1000) break;
+    }
+    return (_ctosPosicoes = { grade, total });
+}
+
+/** CTO do IXC de cada login da lista (só busca os que ainda não tem). */
+async function carregarCtoIxcDosLogins(logins) {
+    const faltam = [...new Set(logins.filter(Boolean).map(l => l.toLowerCase()))].filter(l => !_ctosIxcPorLogin.has(l));
+    const lotes = [];
+    for (let i = 0; i < faltam.length; i += 150) lotes.push(faltam.slice(i, i + 150));
+    for (let i = 0; i < lotes.length; i += 4) {
+        await Promise.all(lotes.slice(i, i + 4).map(async lote => {
+            // login no IXC pode ter maiúsculas: busca sem diferenciar (ilike em OR fica pesado; in() + lower no retorno)
+            const variantes = [...new Set(lote.flatMap(l => [l, l.toUpperCase()]))];
+            const { data, error } = await supabaseClient.from("clientes_cto").select("login, cto").in("login", variantes);
+            if (error) throw error;
+            lote.forEach(l => _ctosIxcPorLogin.set(l, null));
+            (data ?? []).forEach(r => { if (r.login) _ctosIxcPorLogin.set(r.login.toLowerCase(), r.cto ?? null); });
+        }));
+    }
+}
+
+/** "-22.858880,-41.997955" / "(-22.72, -42.66)" / "-22,4652539, -42,6535331" -> {lat, lng}. */
+function coordenadaDoTextoCto(texto) {
+    const s = String(texto ?? "");
+    const m = s.match(/(-?\d{1,3}\.\d+)\s*[,;]\s*(-?\d{1,3}\.\d+)/) ?? s.match(/(-?\d{1,3},\d+)\s*[,;]?\s+(-?\d{1,3},\d+)/);
+    if (!m) return null;
+    const lat = Number(m[1].replace(",", ".")), lng = Number(m[2].replace(",", "."));
+    return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && lat !== 0 && lng !== 0 ? { lat, lng } : null;
+}
+
+function distanciaMetrosCto(a, b) {
+    const rad = Math.PI / 180, R = 6371000;
+    const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function ctoMaisProxima(ponto) {
+    if (!_ctosPosicoes) return null;
+    const i0 = Math.floor(ponto.lat / CELULA_GRADE_CTO), j0 = Math.floor(ponto.lng / CELULA_GRADE_CTO);
+    let melhor = null;
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+        for (const c of _ctosPosicoes.grade.get(`${i0 + di}|${j0 + dj}`) ?? []) {
+            const d = distanciaMetrosCto(ponto, c);
+            if (!melhor || d < melhor.distancia) melhor = { descricao: c.descricao, distancia: d };
+        }
+    }
+    return melhor;
+}
+
+const normalizarCto = t => String(t ?? "").trim().toUpperCase();
+
+/** Situação da linha: confere | diverge | sem-ixc | longe | sem-coordenada (null = cruzamento indisponível). */
+function cruzamentoCto(linha) {
+    if (!_ctosPosicoes) return null;
+    const login = String(valorCto(linha, "login") ?? "").toLowerCase();
+    const ixc = login ? (_ctosIxcPorLogin.get(login) ?? null) : null;
+    const ponto = coordenadaDoTextoCto(valorCto(linha, "cto"));
+    if (!ponto) return { situacao: "sem-coordenada", ixc };
+    const proxima = ctoMaisProxima(ponto);
+    if (!proxima || proxima.distancia > RAIO_CTO_PERTO_M) return { situacao: "longe", proxima, ixc };
+    if (!ixc) return { situacao: "sem-ixc", proxima, ixc };
+    return { situacao: normalizarCto(ixc) === normalizarCto(proxima.descricao) ? "confere" : "diverge", proxima, ixc };
+}
+
+function formatarDistanciaCto(m) {
+    return m >= 1000 ? `${(m / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km` : `${Math.round(m)} m`;
+}
+
+function htmlCruzamentoCto(linha) {
+    const c = cruzamentoCto(linha);
+    if (!c) return "";
+    const nome = p => `<b>${escaparHtml(p.descricao)}</b> · ${formatarDistanciaCto(p.distancia)}`;
+    const ixc = c.ixc ? `IXC: <b>${escaparHtml(c.ixc)}</b>` : "sem CTO no IXC";
+    const textos = {
+        confere: () => `✓ ${nome(c.proxima)} — confere com o IXC`,
+        diverge: () => `⚠ Mais próxima: ${nome(c.proxima)} — ${ixc}`,
+        "sem-ixc": () => `📡 Mais próxima: ${nome(c.proxima)} — sem CTO no IXC`,
+        longe: () => `⚠ Nenhuma CTO a menos de ${RAIO_CTO_PERTO_M} m${c.proxima ? ` (mais próxima: ${nome(c.proxima)})` : ""} — ${ixc}`,
+        "sem-coordenada": () => c.ixc ? `${ixc}` : ""
+    };
+    const texto = textos[c.situacao]();
+    return texto ? `<div class="ctos-cruzamento s-${c.situacao}">${texto}</div>` : "";
 }

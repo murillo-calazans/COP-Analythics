@@ -676,6 +676,49 @@ async function sincronizarPendentes(pagina, moldes, simular, { finalizadas, esta
     }
 }
 
+/** "-22.858880", "-22,858880" -> número; fora de faixa/0 -> null. */
+function coordenadaCto(v, limite) {
+    const n = Number(String(v ?? "").trim().replace(",", "."));
+    return Number.isFinite(n) && n !== 0 && Math.abs(n) <= limite ? n : null;
+}
+
+/**
+ * Uma linha por CTO (descrição) a partir das linhas da visão de clientes:
+ * lat/long/endereço/projeto/splitter da caixa + logins ativos nela.
+ * Sem a tabela ctos (patch-29) só avisa.
+ */
+async function sincronizarCadastroCtos(linhas, mapa, sincronizadoEm, encolheuDemais) {
+    const chaves = Object.keys(linhas[0]);
+    const col = re => chaves.find(c => re.test(c));
+    const cLat = col(/caixa_ftth_latitude$/i), cLng = col(/caixa_ftth_longitude$/i);
+    if (!mapa.cto || !cLat || !cLng) { log("  cadastro de CTOs: a visão não tem latitude/longitude da CTO — pulei."); return; }
+    const cEnd = col(/caixa_ftth_endereco$/i), cProj = col(/projeto_nome$/i), cSplit = col(/caixa_ftth_capacidade$/i);
+
+    try { await supabase("GET", "ctos?select=descricao&limit=1"); }
+    catch { log("  cadastro de CTOs: tabela ctos ainda não existe (falta o patch-29) — pulei."); return; }
+
+    const porCto = new Map();
+    for (const r of linhas) {
+        const descricao = valorCadastroCto(r[mapa.cto]);
+        if (!descricao) continue;
+        let c = porCto.get(descricao);
+        if (!c) porCto.set(descricao, c = { descricao, lat: null, lng: null, endereco: null, projeto: null, splitter: null, logins_ativos: 0, sincronizado_em: sincronizadoEm });
+        c.lat ??= coordenadaCto(r[cLat], 90);
+        c.lng ??= coordenadaCto(r[cLng], 180);
+        c.endereco ??= cEnd ? valorCadastroCto(r[cEnd]) : null;
+        c.projeto ??= cProj ? valorCadastroCto(r[cProj]) : null;
+        c.splitter ??= cSplit ? valorCadastroCto(r[cSplit]) : null;
+        const ativo = !(mapa.ativo && /^(N|NAO|NÃO)$/i.test(String(r[mapa.ativo] ?? "").trim()));
+        if (ativo) c.logins_ativos++;
+    }
+    const ctos = [...porCto.values()];
+    for (const lote of emLotes(ctos, TAM_LOTE_SUPA))
+        await supabase("POST", "ctos?on_conflict=descricao", lote, "resolution=merge-duplicates,return=minimal");
+    if (!encolheuDemais)
+        await supabase("DELETE", `ctos?sincronizado_em=lt.${encodeURIComponent(sincronizadoEm)}`, undefined, "return=minimal");
+    log(`  ctos atualizada: ${ctos.length} CTOs (${ctos.filter(c => c.lat != null && c.lng != null).length} com posição).`);
+}
+
 /** Total de linhas de uma tabela (cabeçalho Content-Range do PostgREST). */
 async function contarLinhasSupabase(tabela) {
     const r = await fetch(`${SUPA_URL}/rest/v1/${tabela}?select=*&limit=1`, {
@@ -788,6 +831,12 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
         if (!gravaInativos) delete linha.ativo;
         return linha;
     });
+    // amostra dos campos de lacre (diagnóstico da regra de leitura), toda puxada
+    try {
+        const amostra = linhas.filter(r => valorCadastroCto(mapa.lacreSinal && r[mapa.lacreSinal]) || /lacre/i.test(String(r[mapa.lacre] ?? ""))).slice(0, 60)
+            .map(r => `${r[mapa.login]} | complemento: ${JSON.stringify(r[mapa.lacre] ?? null)} | sinal: ${JSON.stringify(mapa.lacreSinal ? r[mapa.lacreSinal] : null)} -> lacre ${porChave.get(valorCadastroCto(r[mapa.login]))?.lacre ?? "(nenhum)"}`);
+        fs.writeFileSync(path.join(__dirname, "amostra-lacre.txt"), `${new Date().toLocaleString("pt-BR")}\n` + amostra.join("\n") + "\n", "utf8");
+    } catch {}
     const ativos = dados.filter(r => r.ativo !== false);
     const completos = ativos.filter(r => r.cto && r.porta).length;
     const inativosCadastrados = dados.filter(r => r.ativo === false && r.cto && r.porta).length;
@@ -830,6 +879,12 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
         throw e;
     }
     log(`  clientes_cto atualizada: ${resumo}.`);
+
+    // Cadastro de CTOs (patch-29): posição de cada caixa, pra aba CTOs e
+    // Lacres achar a CTO mais próxima da coordenada que o técnico escreveu.
+    // Falha aqui não derruba a base de clientes (já gravada acima).
+    try { await sincronizarCadastroCtos(linhas, mapa, sincronizadoEm, encolheuDemais); }
+    catch (e) { logErro("gravar ctos", e); log("  cadastro de CTOs falhou: " + e.message); }
     estado.clientesCtoDia = hoje;
     estado.clientesCtoMolde = assinatura;
 }

@@ -455,3 +455,21 @@ html[data-tema="dark"] .clientes-cto-card.cto-alerta .stat-valor { color: #F8717
     .ctos-mapa { font-size: 12px; }
 
 }
+
+/* CTOs e Lacres: cruzamento da coordenada do técnico com as CTOs do IXC */
+.ctos-cruzamento {
+
+    margin-top: 4px;
+    font-size: 11.5px;
+    line-height: 1.3;
+    color: var(--cor-texto-suave);
+
+}
+
+.ctos-cruzamento b { color: var(--cor-texto); font-weight: 600; }
+.ctos-cruzamento.s-confere { color: #16A34A; }
+.ctos-cruzamento.s-diverge,
+.ctos-cruzamento.s-longe { color: #D97706; }
+html[data-tema="dark"] .ctos-cruzamento.s-confere { color: #4ADE80; }
+html[data-tema="dark"] .ctos-cruzamento.s-diverge,
+html[data-tema="dark"] .ctos-cruzamento.s-longe { color: #FBBF24; }
