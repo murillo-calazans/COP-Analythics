@@ -729,11 +729,14 @@ function registrarAbasAgenda() {
         botoes.forEach(b => b.classList.toggle("ativo", b === botao));
         const ia = document.getElementById("agendaHojeConteudo");
         const ixc = document.getElementById("agendaIxcConteudo");
+        const aberto = document.getElementById("agendaAbertoConteudo");
         const navDia = document.getElementById("agendaNavDia");
         if (ia) ia.hidden = aba !== "ia";
         if (ixc) ixc.hidden = aba !== "ixc";
+        if (aberto) aberto.hidden = aba !== "aberto";
         if (navDia) navDia.style.visibility = aba === "ia" ? "" : "hidden"; // nav de dia só faz sentido na Agenda IA
         if (aba === "ixc") carregarAgendaIxc();
+        if (aba === "aberto" && typeof renderizarAgendaBacklog === "function") renderizarAgendaBacklog();
     }));
 }
 
