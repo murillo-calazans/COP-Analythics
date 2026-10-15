@@ -74,6 +74,25 @@ let ultimaAgendaPublicada = null;
 // que o Agendador lê. "" desliga. Puxa TODAS as abertas (sem janela de data).
 const VISAO_PENDENTES = "529";
 
+// Base de clientes x CTO (site: Gestão de Clientes > Cadastro na CTO) -> tabela
+// clientes_cto. Retrato completo 1x por dia (1ª rodada). "" desliga: preencha
+// o id ou o nome da visão no .env (VISAO_CLIENTES_CTO=CTOs de Clientes).
+const VISAO_CLIENTES_CTO = process.env.VISAO_CLIENTES_CTO || "";
+// Coluna da visão -> campo, pelo nome do alias (a 1ª regra que casa, sem
+// repetir coluna). Se errar, o log da rodada mostra o que escolheu.
+// Visão "CTOs de Clientes" (539): radusuarios_ativo, radusuarios_login,
+// radusuarios_rad_caixa_ftth_descricao, radusuarios_ftth_porta, + lat/long,
+// splitter, projeto (rad_caixa_ftth_df_projeto_nome — NÃO é o cliente),
+// endereço, ONU MAC, interface. Sem nome do cliente nem lacre por enquanto.
+const COLUNAS_CLIENTES_CTO = [
+    ["ativo", [/^radusuarios_ativo$/i, /(^|_)ativo$/i]],
+    ["login", [/^radusuarios_login$/i, /login/i]],
+    ["lacre", [/lacre/i]],
+    ["porta", [/ftth_porta$/i, /porta(?!.*(fibra|interface))/i]],
+    ["cto", [/caixa_ftth_descricao$/i, /(^|_)cto(_|$)/i]],
+    ["cliente", [/razao/i, /fantasia/i, /cliente.*nome|nome.*cliente/i]]
+];
+
 // alias da coluna (vinda do IXC) -> cabeçalho do .xlsx que o Agendador espera
 // (ver resolverColunas em js/agendador/motor.js). Assim a tabela os_pendentes
 // fica no MESMO formato do upload manual, sem conversão do lado do Agendador.
@@ -284,14 +303,20 @@ async function puxarRecentes(pagina, molde, janela) {
 
     for (let i = 0; i < MAX_PAGINAS; i++) {
         const body = montarPayload(molde, i * TAM_PAGINA, TAM_PAGINA, i + 1, janela);
-        const txt = await pagina.evaluate(async ({ url, body }) => {
-            const r = await fetch(url, {
-                method: "POST", credentials: "include",
-                headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-Requested-With": "XMLHttpRequest" },
-                body
-            });
-            return { status: r.status, texto: await r.text() };
-        }, { url: URL_DADOS, body });
+        const txt = await pagina.evaluate(async ({ url, body, timeoutMs }) => {
+            // timeout: sem isso, um fetch que a rede deixa "meio aberto" (VPN oscilou)
+            // fica esperando pra sempre e TRAVA o robô. AbortController derruba em timeoutMs.
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), timeoutMs);
+            try {
+                const r = await fetch(url, {
+                    method: "POST", credentials: "include",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-Requested-With": "XMLHttpRequest" },
+                    body, signal: ctrl.signal
+                });
+                return { status: r.status, texto: await r.text() };
+            } finally { clearTimeout(t); }
+        }, { url: URL_DADOS, body, timeoutMs: 90000 });
 
         if (txt.status === 401 || /\/login/.test(txt.texto)) throw new Error("SESSAO_CAIU");
         let j; try { j = JSON.parse(txt.texto); } catch { throw new Error("resposta não-JSON do IXC (sessão caiu?)"); }
@@ -641,6 +666,91 @@ async function sincronizarPendentes(pagina, moldes, simular, { finalizadas, esta
     }
 }
 
+function mapearColunasClientesCto(chaves) {
+    const usadas = new Set(), mapa = {};
+    for (const [campo, regras] of COLUNAS_CLIENTES_CTO) {
+        for (const regra of regras) {
+            const chave = chaves.find(c => !usadas.has(c) && regra.test(c));
+            if (chave) { mapa[campo] = chave; usadas.add(chave); break; }
+        }
+    }
+    return mapa;
+}
+
+/** "", "0", "-", "null" = não cadastrado (vira null no banco). */
+function valorCadastroCto(v) {
+    const s = v === null || v === undefined ? "" : String(v).trim();
+    return /^(|0|-+|null|n\/a)$/i.test(s) ? null : s;
+}
+
+/**
+ * Base de clientes x CTO (visão VISAO_CLIENTES_CTO) -> tabela clientes_cto.
+ * Retrato completo 1x por dia: upsert de tudo e, no fim, apaga quem não veio
+ * nesta rodada (cliente que saiu da base). Visão vazia não mexe na tabela.
+ */
+async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio }) {
+    if (!VISAO_CLIENTES_CTO) return;
+    const hoje = ymd(inicio);
+    if (!simular && estado.clientesCtoDia === hoje) return;
+    const alvo = VISAO_CLIENTES_CTO.trim().toUpperCase(); // id OU nome da visão ("CTOs de Clientes")
+    const molde = moldes.find(m => m.viewId === VISAO_CLIENTES_CTO || String(m.viewName ?? "").trim().toUpperCase() === alvo);
+    if (!molde) { log(`molde da visão ${VISAO_CLIENTES_CTO} (clientes x CTO) não encontrado em templates.json — rode o capturar-dados.js`); return; }
+
+    log(`Clientes x CTO: visão ${VISAO_CLIENTES_CTO} "${molde.viewName}" — retrato completo da base...`);
+    const linhas = await puxarRecentes(pagina, molde, null);
+    if (linhas.length === 0) { log("  a visão voltou vazia — tabela clientes_cto mantida como estava."); return; }
+
+    const mapa = mapearColunasClientesCto(Object.keys(linhas[0]));
+    log(`  colunas: ${["ativo", "cliente", "login", "cto", "porta", "lacre"].map(c => `${c}=${mapa[c] ?? "(não achei)"}`).join(" | ")}`);
+    if (!mapa.cto || !mapa.porta || (!mapa.login && !mapa.cliente)) {
+        log("  ⚠ faltou coluna de CTO, porta ou login/cliente na visão — não gravou. Ajuste COLUNAS_CLIENTES_CTO.");
+        return;
+    }
+
+    // um registro por login; login repetido (mais de um contrato) fica com o mais completo
+    const pontos = r => (r.cto ? 1 : 0) + (r.porta ? 1 : 0) + (r.lacre ? 1 : 0);
+    const porChave = new Map();
+    let inativos = 0;
+    for (const r of linhas) {
+        // só a base ATIVA: login inativo (Ativo = N/Não) não entra na conta de cadastro
+        if (mapa.ativo && /^(N|NAO|NÃO)$/i.test(String(r[mapa.ativo] ?? "").trim())) { inativos++; continue; }
+        const reg = {
+            cliente: valorCadastroCto(mapa.cliente && r[mapa.cliente]),
+            login: valorCadastroCto(mapa.login && r[mapa.login]),
+            cto: valorCadastroCto(r[mapa.cto]),
+            porta: valorCadastroCto(r[mapa.porta]),
+            lacre: valorCadastroCto(mapa.lacre && r[mapa.lacre])
+        };
+        reg.chave = reg.login || reg.cliente;
+        if (!reg.chave) continue;
+        const atual = porChave.get(reg.chave);
+        if (!atual || pontos(reg) > pontos(atual)) porChave.set(reg.chave, reg);
+    }
+    const sincronizadoEm = inicio.toISOString();
+    const dados = [...porChave.values()].map(r => ({ ...r, sincronizado_em: sincronizadoEm }));
+    const completos = dados.filter(r => r.cto && r.porta).length;
+
+    if (simular) {
+        log(`  (simulação) ${linhas.length} linhas (${inativos} logins inativos fora), ${dados.length} logins ativos:${completos} com CTO e porta, ${dados.length - completos} sem — não gravou.`);
+        dados.slice(0, 5).forEach(r => log(`    ${JSON.stringify(r)}`));
+        return;
+    }
+
+    let passo = "início";
+    try {
+        passo = `upsert (${dados.length})`;
+        for (const lote of emLotes(dados, TAM_LOTE_SUPA))
+            await supabase("POST", "clientes_cto?on_conflict=chave", lote, "resolution=merge-duplicates,return=minimal");
+        passo = "apagar quem saiu da base";
+        await supabase("DELETE", `clientes_cto?sincronizado_em=lt.${encodeURIComponent(sincronizadoEm)}`, undefined, "return=minimal");
+    } catch (e) {
+        logErro(`gravar clientes_cto [passo: ${passo}]`, e);
+        throw e;
+    }
+    log(`  clientes_cto atualizada: ${dados.length} logins, ${completos} com CTO e porta, ${dados.length - completos} sem.`);
+    estado.clientesCtoDia = hoje;
+}
+
 /** Baixa os módulos do agendador do site e carrega num objeto (IIFEs: this=ctx). */
 async function carregarModulosAgenda() {
     const ctx = {};
@@ -696,6 +806,12 @@ async function umaPassada(pagina, moldes, simular) {
         if (!simular) log(`  gravado: ${r.ordens} OS, ${r.inseridas} movimentação(ões) nova(s), ${r.ignoradas} já existiam.`);
     }
     await sincronizarPendentes(pagina, moldes, simular, { finalizadas: [...finalizadas], estado, inicio });
+    // à parte: se a base de clientes falhar, não derruba a rodada das ordens (tenta de novo na próxima)
+    try { await sincronizarClientesCto(pagina, moldes, simular, { estado, inicio }); }
+    catch (e) {
+        if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
+        log("Clientes x CTO falhou: " + e.message);
+    }
     // só grava o estado com a rodada inteira OK: se o pré-agendamento falhar, a
     // próxima repete a janela das ordens (o repetido é ignorado) e não perde finalizadas
     if (!simular) { estado.ordensDesde = inicio.toISOString(); salvarEstado(estado); }
@@ -756,7 +872,7 @@ async function principal() {
     const fechouNavegador = e => /has been closed|Target closed|browser has disconnected/i.test(e && e.message || "");
     // Falha de REDE na puxada (fetch dentro da página não completou): VPN caiu,
     // sessão morta, ou a aba foi parar numa página inválida. Recuperável relogando.
-    const ehFalhaDeRede = e => /Failed to fetch|NetworkError|net::|ERR_|ERR_NETWORK|ECONN|fetch failed|load failed/i.test(e && e.message || "");
+    const ehFalhaDeRede = e => /Failed to fetch|NetworkError|net::|ERR_|ERR_NETWORK|ECONN|fetch failed|load failed|aborted|AbortError|timed? ?out/i.test(e && e.message || "");
 
     // Recuperação forte: fecha o navegador inteiro e reabre do zero (garantirNavegador
     // relança + preparaPagina = re-login + volta pro IXC_HOME). Usado quando uma puxada
@@ -839,8 +955,13 @@ async function principal() {
         try {
             await garantirNavegador();   // se fecharam a aba/janela, reabre aqui mesmo
             const r = await pagina.evaluate(async url => {
-                const resp = await fetch(url, { credentials: "include" });
-                return { status: resp.status, url: resp.url };
+                // timeout: sem isso, um fetch "meio aberto" trava o pulso (e o robô) pra sempre.
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 30000);
+                try {
+                    const resp = await fetch(url, { credentials: "include", signal: ctrl.signal });
+                    return { status: resp.status, url: resp.url };
+                } finally { clearTimeout(t); }
             }, IXC_HOME);
             if (r.status === 401 || /\/login/.test(r.url)) {
                 log("Sessão do IXC caiu — faça login na janela.");

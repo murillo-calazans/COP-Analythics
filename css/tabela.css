@@ -345,3 +345,45 @@ html[data-tema="dark"] .ctos-status.cadastrado { color: #4ADE80; }
     font: inherit;
 
 }
+
+/* Cadastro na CTO (js/ui/clientescto.js) — cards que filtram a lista. */
+.clientes-cto-cards {
+
+    margin: 16px 0 4px;
+
+}
+
+.clientes-cto-card {
+
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+
+}
+
+.clientes-cto-card.cto-ok .stat-valor { color: #16A34A; }
+.clientes-cto-card.cto-falta .stat-valor { color: #DC2626; }
+.clientes-cto-card.cto-lacre .stat-valor { color: #D97706; }
+
+html[data-tema="dark"] .clientes-cto-card.cto-ok .stat-valor { color: #4ADE80; }
+html[data-tema="dark"] .clientes-cto-card.cto-falta .stat-valor { color: #F87171; }
+html[data-tema="dark"] .clientes-cto-card.cto-lacre .stat-valor { color: #FBBF24; }
+
+.clientes-cto-card.ativo {
+
+    border-color: var(--cor-primaria);
+    box-shadow: 0 0 0 2px var(--cor-primaria);
+
+}
+
+.clientes-cto-detalhe {
+
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--cor-texto-suave);
+
+}
+
+.clientes-cto-vazio { color: var(--cor-texto-suave); }
+
+#listaClientesCto .tabela-alertas td { white-space: nowrap; }
