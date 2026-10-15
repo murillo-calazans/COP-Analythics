@@ -89,6 +89,9 @@ const COLUNAS_CLIENTES_CTO = [
     ["login", [/^radusuarios_login$/i, /login/i]],
     // o COP anota o lacre no campo Complemento do login (não há campo próprio)
     ["lacre", [/lacre/i, /complemento/i]],
+    // clientes do provedor adquirido: o lacre foi parar no campo "Sinal do
+    // último atendimento" — vale quando o Complemento não tem lacre
+    ["lacreSinal", [/sinal.*atendimento/i, /ultimo.*atendimento/i, /sinal/i]],
     ["porta", [/ftth_porta$/i, /porta(?!.*(fibra|interface))/i]],
     ["cto", [/caixa_ftth_descricao$/i, /(^|_)cto(_|$)/i]],
     ["cliente", [/razao/i, /fantasia/i, /cliente.*nome|nome.*cliente/i]]
@@ -691,6 +694,20 @@ function lacreDoComplemento(v) {
     return m ? m[1] : null;
 }
 
+/**
+ * Lacre do campo "Sinal do último atendimento" (base do provedor adquirido).
+ * Aceita "LACRE 123456" ou um número inteiro de 4+ dígitos ("0050954");
+ * sinal óptico de verdade ("-21.5", "-18,30 dBm") não é lacre.
+ */
+function lacreDoSinal(v) {
+    const s = valorCadastroCto(v);
+    if (!s) return null;
+    const rotulado = lacreDoComplemento(s);
+    if (rotulado) return rotulado;
+    const m = s.match(/^\s*(?:n[º°o]?\.?\s*)?(\d{4,})\s*$/i);
+    return m ? m[1] : null;
+}
+
 function valorCadastroCto(v) {
     const s = v === null || v === undefined ? "" : String(v).trim();
     return /^(|0|-+|null|n\/a)$/i.test(s) ? null : s;
@@ -716,7 +733,7 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
     if (linhas.length === 0) { log("  a visão voltou vazia — tabela clientes_cto mantida como estava."); return; }
 
     const mapa = mapearColunasClientesCto(Object.keys(linhas[0]));
-    log(`  colunas: ${["ativo", "cliente", "login", "cto", "porta", "lacre"].map(c => `${c}=${mapa[c] ?? "(não achei)"}`).join(" | ")}`);
+    log(`  colunas: ${["ativo", "cliente", "login", "cto", "porta", "lacre", "lacreSinal"].map(c => `${c}=${mapa[c] ?? "(não achei)"}`).join(" | ")}`);
     if (!mapa.cto || !mapa.porta || (!mapa.login && !mapa.cliente)) {
         log("  ⚠ faltou coluna de CTO, porta ou login/cliente na visão — não gravou. Ajuste COLUNAS_CLIENTES_CTO.");
         return;
@@ -742,7 +759,7 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
             login: valorCadastroCto(mapa.login && r[mapa.login]),
             cto: valorCadastroCto(r[mapa.cto]),
             porta: valorCadastroCto(r[mapa.porta]),
-            lacre: lacreDoComplemento(mapa.lacre && r[mapa.lacre]),
+            lacre: lacreDoComplemento(mapa.lacre && r[mapa.lacre]) ?? lacreDoSinal(mapa.lacreSinal && r[mapa.lacreSinal]),
             ativo
         };
         reg.chave = reg.login || reg.cliente;
@@ -767,6 +784,10 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
         dados.slice(0, 5).forEach(r => log(`    ${JSON.stringify(r)}`));
         if (mapa.lacre) {
             log(`  com lacre: ${ativos.filter(r => r.lacre).length} logins ativos (${ativos.filter(r => r.lacre && r.cto && r.porta).length} deles com CTO e porta)`);
+            if (mapa.lacreSinal) {
+                const sinais = linhas.map(r => r[mapa.lacreSinal]).filter(v => valorCadastroCto(v)).slice(0, 20);
+                log(`  ${mapa.lacreSinal} -> lacre (amostra): ${sinais.map(v => `"${v}" -> ${lacreDoSinal(v) ?? "(não é lacre)"}`).join(" | ")}`);
+            }
             const amostra = linhas.map(r => r[mapa.lacre]).filter(v => /lacre/i.test(v ?? "")).slice(0, 15);
             log(`  ${mapa.lacre} -> lacre (amostra): ${amostra.map(v => `"${v}" -> ${lacreDoComplemento(v) ?? "(sem lacre)"}`).join(" | ")}`);
         }
