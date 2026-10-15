@@ -284,6 +284,12 @@ function montarPayload(molde, start, length, draw, janela) {
     p = p.replace(/(^|&)start=\d+/, `$1start=${start}`);
     p = p.replace(/(^|&)length=\d+/, `$1length=${length}`);
     p = p.replace(/(^|&)draw=\d+/, `$1draw=${draw}`);
+    // A caixa de busca da tabela do Query Builder vai junto no molde se tinha
+    // algo digitado na captura (15/10: "BJR" -> o robô puxou só 7 mil de 105
+    // mil logins). O robô quer sempre a visão inteira: zera a busca geral e a
+    // de cada coluna.
+    p = p.replace(/(^|&)(search%5Bvalue%5D|search\[value\])=[^&]*/g, "$1$2=");
+    p = p.replace(/(^|&)(columns%5B\d+%5D%5Bsearch%5D%5Bvalue%5D|columns\[\d+\]\[search\]\[value\])=[^&]*/g, "$1$2=");
     if (janela) {
         if (janela.porMovimentacao) {
             const antes = p;
@@ -670,6 +676,15 @@ async function sincronizarPendentes(pagina, moldes, simular, { finalizadas, esta
     }
 }
 
+/** Total de linhas de uma tabela (cabeçalho Content-Range do PostgREST). */
+async function contarLinhasSupabase(tabela) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${tabela}?select=*&limit=1`, {
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, Prefer: "count=exact" }
+    });
+    if (!r.ok) throw new Error(`contar ${tabela}: ${r.status} ${await r.text()}`);
+    return Number((r.headers.get("content-range") || "").split("/")[1]) || 0;
+}
+
 function mapearColunasClientesCto(chaves) {
     const usadas = new Set(), mapa = {};
     for (const [campo, regras] of COLUNAS_CLIENTES_CTO) {
@@ -794,13 +809,22 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
         return;
     }
 
+    // Trava: retrato muito menor que a base atual (visão filtrada, IXC
+    // devolvendo pela metade…) NÃO apaga ninguém — só atualiza quem veio.
+    const atuais = await contarLinhasSupabase("clientes_cto");
+    const encolheuDemais = atuais > 1000 && dados.length < atuais * 0.7;
+    if (encolheuDemais)
+        log(`  ⚠ a visão trouxe ${dados.length} logins e a base tem ${atuais} — parece filtrada; NÃO vou apagar quem não veio. Confira a visão / recapture sem filtro.`);
+
     let passo = "início";
     try {
         passo = `upsert (${dados.length})`;
         for (const lote of emLotes(dados, TAM_LOTE_SUPA))
             await supabase("POST", "clientes_cto?on_conflict=chave", lote, "resolution=merge-duplicates,return=minimal");
-        passo = "apagar quem saiu da base";
-        await supabase("DELETE", `clientes_cto?sincronizado_em=lt.${encodeURIComponent(sincronizadoEm)}`, undefined, "return=minimal");
+        if (!encolheuDemais) {
+            passo = "apagar quem saiu da base";
+            await supabase("DELETE", `clientes_cto?sincronizado_em=lt.${encodeURIComponent(sincronizadoEm)}`, undefined, "return=minimal");
+        }
     } catch (e) {
         logErro(`gravar clientes_cto [passo: ${passo}]`, e);
         throw e;
