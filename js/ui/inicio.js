@@ -61,12 +61,11 @@ function renderizarInicio() {
 
 /**
  * Card do painel: técnicos que começaram o dia com OS de dias anteriores
- * ainda em aberto (ninguém reagendou). Só admin/editor vê (é dado operacional).
+ * ainda em aberto (ninguém reagendou). Visível a todos os logados (inclusive leitor).
  */
 async function preencherAtrasadas() {
     const alvo = document.getElementById("inicioAtrasadas");
     if (!alvo || typeof calcularAtrasadas !== "function") return;
-    if (typeof podeEditarOperacao === "function" && !podeEditarOperacao()) return;
     try {
         const { total, itens } = await calcularAtrasadas();
         if (!total) { alvo.innerHTML = ""; return; }
