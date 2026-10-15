@@ -39,11 +39,14 @@ function montarBacklog(linhas) {
         .map(o => {
             const id = String(o.id);
             const abertura = aberturaDate[id] || null;
+            // o ÚLTIMO status manda: se a OS foi assumida, o agendamento/reagendamento
+            // anteriores não valem mais (não é mais "agendada" nem "reagendada").
+            const assumida = ixcNorm(o.status) === "assumida";
             return {
                 id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto, status: o.status,
-                agendada: !!agDate[id], agendamento: agDate[id] || null, abertura,
+                agendada: !assumida && !!agDate[id], agendamento: assumida ? null : (agDate[id] || null), abertura,
                 antiga: abertura ? abertura.getTime() < limiteAntiga : false,
-                reagendamentos: o.reagendamentos || 0
+                reagendamentos: assumida ? 0 : (o.reagendamentos || 0)
             };
         });
 
