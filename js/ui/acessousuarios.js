@@ -13,12 +13,12 @@
  */
 
 const NOMES_MODULO_ACESSO = {
-    ordens: "Gestão de Ordens",
+    ordens: "Gestão de Relatórios",
     cop: "Gestão do COP",
     clientes: "Gestão de Clientes",
     terceiras: "Gestão de Terceiras (só admin/editor)",
     auditoria: "Auditoria",
-    agendador: "Agendador IA",
+    agendador: "Gestão de Ordens",
     escala: "Escala"
 };
 

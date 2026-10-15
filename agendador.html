@@ -305,7 +305,7 @@ details.params summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(-
       <button id="btnHTML" title="Arquivo para enviar ao responsável pelo agendamento">Baixar HTML</button>
       <button id="btnPDF" title="Abre a impressão; escolha “Salvar como PDF”">Gerar PDF</button>
       <button class="sec" id="btnCSV">CSV</button>
-      <button id="btnPublicar" title="Grava este plano como a agenda do dia, que aparece no COP Analytics (Agendador IA)">Publicar agenda</button>
+      <button id="btnPublicar" title="Grava este plano como a agenda do dia, que aparece no COP Analytics (Gestão de Ordens)">Publicar agenda</button>
     </div>
   </div>
 
@@ -991,7 +991,7 @@ $('#btnPublicar').addEventListener('click', async () => {
       atualizado_em: new Date().toISOString()
     });
     if (error) throw error;
-    alert('Agenda de ' + dataBr + ' publicada. Ela já aparece no COP Analytics em Agendador IA.');
+    alert('Agenda de ' + dataBr + ' publicada. Ela já aparece no COP Analytics em Gestão de Ordens.');
   } catch (e) {
     alert('Não deu pra publicar: ' + (e.message || e));
   } finally {

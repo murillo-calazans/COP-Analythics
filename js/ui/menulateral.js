@@ -35,11 +35,11 @@
     // abrem a visão do dia; editar/pré-agendar é numa guia nova, de lá.
     const MODULOS = [
         { id: "inicio",    titulo: "Início",                  href: "index.html",               secao: "inicio" },
-        { id: "ordens",    titulo: "Gestão de Ordens",        href: "index.html#dashboard",     secao: "dashboard" },
+        { id: "ordens",    titulo: "Gestão de Relatórios",    href: "index.html#dashboard",     secao: "dashboard" },
         { id: "cop",       titulo: "Gestão do COP",           href: "index.html#cop-abertas",   secao: "cop-abertas" },
         { id: "terceiras", titulo: "Gestão de Terceiras",     href: "index.html#terceiras",     secao: "terceiras" },
         { id: "auditoria", titulo: "Auditoria",               href: "index.html#auditoria",     secao: "auditoria" },
-        { id: "agendador", titulo: "Agendador IA",            href: "index.html#agenda-hoje",   secao: "agenda-hoje" },
+        { id: "agendador", titulo: "Gestão de Ordens",        href: "index.html#agenda-hoje",   secao: "agenda-hoje" },
         { id: "escala",    titulo: "Escala",                  href: "index.html#escala-hoje",   secao: "escala-hoje" },
         { id: "clientes",  titulo: "Gestão de Clientes",      href: "index.html#clientes-cto",  secao: "clientes-cto" },
         { id: "admin",     titulo: "Painel de Administrador", href: "index.html#usuarios",      secao: "usuarios" }
