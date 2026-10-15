@@ -54,6 +54,7 @@ async function iniciarSistema() {
     registrarModal("modalAtrasadas");
     registrarModal("modalImportar");
     registrarModal("modalOS");
+    registrarModal("modalOsIxc");
     registrarModal("modalFiltro");
     registrarModal("modalAssuntosIncluidosCancelamento");
     registrarModal("modalDiagnosticosExcluidos");
@@ -67,6 +68,8 @@ async function iniciarSistema() {
     registrarModal("modalSeletorFiltro");
     registrarModal("modalFunilAssuntos");
     registrarModal("modalLogs");
+    registrarModal("modalSetoresCop");
+    registrarModal("modalTmrCopDetalhe");
 
     // Sem login, nada mais roda — a tela de login (ver js/ui/login.js)
     // é a única coisa visível até autenticar (css/layout.css,
