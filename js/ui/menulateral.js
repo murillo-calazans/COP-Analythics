@@ -41,7 +41,7 @@
         { id: "auditoria", titulo: "Auditoria",               href: "index.html#auditoria",     secao: "auditoria" },
         { id: "agendador", titulo: "Agendador IA",            href: "index.html#agenda-hoje",   secao: "agenda-hoje" },
         { id: "escala",    titulo: "Escala",                  href: "index.html#escala-hoje",   secao: "escala-hoje" },
-        { id: "clientes",  titulo: "Gestão de Clientes",      href: "index.html#alertas",       secao: "alertas" },
+        { id: "clientes",  titulo: "Gestão de Clientes",      href: "index.html#clientes-cto",  secao: "clientes-cto" },
         { id: "admin",     titulo: "Painel de Administrador", href: "index.html#usuarios",      secao: "usuarios" }
     ];
 

@@ -387,3 +387,6 @@ html[data-tema="dark"] .clientes-cto-card.cto-lacre .stat-valor { color: #FBBF24
 .clientes-cto-vazio { color: var(--cor-texto-suave); }
 
 #listaClientesCto .tabela-alertas td { white-space: nowrap; }
+
+.clientes-cto-card.cto-alerta .stat-valor { color: #DC2626; }
+html[data-tema="dark"] .clientes-cto-card.cto-alerta .stat-valor { color: #F87171; }

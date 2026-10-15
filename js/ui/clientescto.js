@@ -16,20 +16,28 @@
 
 const LIMITE_LINHAS_CLIENTES_CTO = 200;
 
-let _clientesCtoFiltro = "todos"; // todos | completo | incompleto | semLacre
+let _clientesCtoFiltro = "todos"; // todos | completo | incompleto | semLacre | inativoCadastrado
 let _clientesCtoToken = 0;
 let _clientesCtoBuscaTimer = null;
-// A visão do IXC pode vir sem nome do cliente e/ou sem lacre (a "CTOs de
-// Clientes" hoje não tem nenhum dos dois): coluna/card sem nenhum valor some.
+// A visão do IXC pode vir sem nome do cliente e/ou sem lacre: coluna/card
+// sem nenhum valor some.
 let _clientesCtoTemCliente = true;
 let _clientesCtoTemLacre = true;
+// Coluna ativo (patch-26). Sem ela a tabela só tem ativos e não há alerta.
+let _clientesCtoTemAtivo = true;
 
 function erroFaltaPatch25(erro) {
     return /clientes_cto/.test(erro?.message ?? "") || erro?.code === "42P01" || erro?.code === "PGRST205";
 }
 
-/** Aplica o filtro do card escolhido numa consulta do Supabase. */
+/**
+ * Aplica o filtro do card escolhido numa consulta do Supabase. Todos os
+ * cards contam só login ATIVO; o alerta é o contrário: login inativo que
+ * ainda tem CTO e porta (porta ocupada que devia ter sido liberada).
+ */
 function aplicarFiltroCardClientesCto(consulta, filtro) {
+    if (filtro === "inativoCadastrado") return consulta.eq("ativo", false).eq("completo", true);
+    if (_clientesCtoTemAtivo) consulta = consulta.eq("ativo", true);
     if (filtro === "completo") return consulta.eq("completo", true);
     if (filtro === "incompleto") return consulta.eq("completo", false);
     if (filtro === "semLacre") return consulta.is("lacre", null);
@@ -57,11 +65,17 @@ async function renderizarClientesCto() {
     if (!cards || !lista) return;
 
     try {
-        const [total, completos, semLacre, semCliente, ultima] = await Promise.all([
+        // patch-26 ainda não rodado: segue sem a coluna ativo (e sem o alerta)
+        const teste = await supabaseClient.from("clientes_cto").select("ativo").limit(1);
+        _clientesCtoTemAtivo = !teste.error;
+        if (!_clientesCtoTemAtivo && _clientesCtoFiltro === "inativoCadastrado") _clientesCtoFiltro = "todos";
+
+        const [total, completos, semLacre, semCliente, inativosCadastrados, ultima] = await Promise.all([
             contarClientesCto("todos"),
             contarClientesCto("completo"),
             contarClientesCto("semLacre"),
             contarClientesCto("semCliente"),
+            _clientesCtoTemAtivo ? contarClientesCto("inativoCadastrado") : Promise.resolve(0),
             supabaseClient.from("clientes_cto").select("sincronizado_em").order("sincronizado_em", { ascending: false }).limit(1)
         ]);
         if (token !== _clientesCtoToken) return;
@@ -77,7 +91,7 @@ async function renderizarClientesCto() {
         _clientesCtoTemLacre = semLacre < total;
         _clientesCtoTemCliente = semCliente < total;
         if (!_clientesCtoTemLacre && _clientesCtoFiltro === "semLacre") _clientesCtoFiltro = "todos";
-        renderizarCardsClientesCto({ total, completos, semLacre });
+        renderizarCardsClientesCto({ total, completos, semLacre, inativosCadastrados });
         const quando = ultima.data?.[0]?.sincronizado_em;
         document.getElementById("atualizacaoClientesCto").textContent =
             quando ? `Base do IXC atualizada em ${new Date(quando).toLocaleString("pt-BR")}.` : "";
@@ -94,7 +108,7 @@ async function renderizarClientesCto() {
     await buscarListaClientesCto(token);
 }
 
-function renderizarCardsClientesCto({ total, completos, semLacre }) {
+function renderizarCardsClientesCto({ total, completos, semLacre, inativosCadastrados }) {
     const fmt = n => n.toLocaleString("pt-BR");
     const pct = n => total ? `${Math.round((n / total) * 100)}%` : "0%";
     const card = (id, rotulo, valor, detalhe, classe) => `
@@ -105,7 +119,12 @@ function renderizarCardsClientesCto({ total, completos, semLacre }) {
         </button>`;
 
     const cards = document.getElementById("cardsClientesCto");
+    // Alerta primeiro: só aparece quando há login inativo ocupando CTO/porta.
     cards.innerHTML =
+        (inativosCadastrados > 0
+            ? card("inativoCadastrado", "⚠ Inativos ainda cadastrados na CTO", inativosCadastrados,
+                "login inativo ocupando porta — liberar no IXC", "stat-tile-destaque cto-alerta")
+            : "") +
         card("completo", "Com CTO e porta cadastrados", completos, `${pct(completos)} da base`, "cto-ok") +
         card("incompleto", "Sem cadastro de CTO/porta", total - completos, `${pct(total - completos)} da base`, "cto-falta") +
         (_clientesCtoTemLacre ? card("semLacre", "Sem lacre cadastrado", semLacre, `${pct(semLacre)} da base`, "cto-lacre") : "") +
@@ -155,16 +174,26 @@ async function buscarListaClientesCto(token) {
     }
 
     const comCliente = _clientesCtoTemCliente, comLacre = _clientesCtoTemLacre;
+    const alerta = _clientesCtoFiltro === "inativoCadastrado";
     const celula = valor => valor ? escaparHtml(valor) : '<span class="clientes-cto-vazio">—</span>';
     lista.innerHTML = `
         <div class="tabela-scroll">
             <table class="tabela-alertas">
                 <thead>
-                    <tr>${comCliente ? "<th>Cliente</th>" : ""}<th>Login</th><th>CTO</th><th>Porta</th>${comLacre ? "<th>Lacre</th>" : ""}<th>Falta cadastrar</th></tr>
+                    <tr>${comCliente ? "<th>Cliente</th>" : ""}<th>Login</th><th>CTO</th><th>Porta</th>${comLacre ? "<th>Lacre</th>" : ""}<th>${alerta ? "Situação" : "Falta cadastrar"}</th></tr>
                 </thead>
                 <tbody>
                     ${data.map(c => {
-                        const falta = [!c.cto && "CTO", !c.porta && "Porta", comLacre && !c.lacre && "Lacre"].filter(Boolean);
+                        const falta = alerta ? [] : [!c.cto && "CTO", !c.porta && "Porta", comLacre && !c.lacre && "Lacre"].filter(Boolean);
+                        if (alerta) return `
+                        <tr>
+                            ${comCliente ? `<td class="ctos-texto" title="${escaparHtml(c.cliente ?? "")}">${celula(c.cliente)}</td>` : ""}
+                            <td>${celula(c.login)}</td>
+                            <td>${celula(c.cto)}</td>
+                            <td>${celula(c.porta)}</td>
+                            ${comLacre ? `<td>${celula(c.lacre)}</td>` : ""}
+                            <td><span class="ctos-status pendente">Inativo · liberar porta</span></td>
+                        </tr>`;
                         return `
                         <tr>
                             ${comCliente ? `<td class="ctos-texto" title="${escaparHtml(c.cliente ?? "")}">${celula(c.cliente)}</td>` : ""}

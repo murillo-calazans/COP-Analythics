@@ -87,7 +87,8 @@ const VISAO_CLIENTES_CTO = process.env.VISAO_CLIENTES_CTO || "";
 const COLUNAS_CLIENTES_CTO = [
     ["ativo", [/^radusuarios_ativo$/i, /(^|_)ativo$/i]],
     ["login", [/^radusuarios_login$/i, /login/i]],
-    ["lacre", [/lacre/i]],
+    // o COP anota o lacre no campo Complemento do login (não há campo próprio)
+    ["lacre", [/lacre/i, /complemento/i]],
     ["porta", [/ftth_porta$/i, /porta(?!.*(fibra|interface))/i]],
     ["cto", [/caixa_ftth_descricao$/i, /(^|_)cto(_|$)/i]],
     ["cliente", [/razao/i, /fantasia/i, /cliente.*nome|nome.*cliente/i]]
@@ -678,6 +679,18 @@ function mapearColunasClientesCto(chaves) {
 }
 
 /** "", "0", "-", "null" = não cadastrado (vira null no banco). */
+/**
+ * Lacre a partir do Complemento do cliente. O campo é o complemento do
+ * ENDEREÇO ("LOTE 18 A", "CASA 68", "KM 10"…) e o COP anota o lacre nele
+ * com a palavra: "LACRE 0828646", "LACRE: 041029". Só conta o número que
+ * vem depois de "LACRE" — número solto é endereço, não lacre.
+ */
+function lacreDoComplemento(v) {
+    const s = valorCadastroCto(v);
+    const m = s && s.match(/lacre\D{0,6}(\d[\d.\-/]*)/i);
+    return m ? m[1] : null;
+}
+
 function valorCadastroCto(v) {
     const s = v === null || v === undefined ? "" : String(v).trim();
     return /^(|0|-+|null|n\/a)$/i.test(s) ? null : s;
@@ -691,10 +704,12 @@ function valorCadastroCto(v) {
 async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio }) {
     if (!VISAO_CLIENTES_CTO) return;
     const hoje = ymd(inicio);
-    if (!simular && estado.clientesCtoDia === hoje) return;
     const alvo = VISAO_CLIENTES_CTO.trim().toUpperCase(); // id OU nome da visão ("CTOs de Clientes")
     const molde = moldes.find(m => m.viewId === VISAO_CLIENTES_CTO || String(m.viewName ?? "").trim().toUpperCase() === alvo);
     if (!molde) { log(`molde da visão ${VISAO_CLIENTES_CTO} (clientes x CTO) não encontrado em templates.json — rode o capturar-dados.js`); return; }
+    // 1x por dia — mas visão recapturada (molde mudou, ex.: coluna nova) puxa de novo na hora
+    const assinatura = require("crypto").createHash("md5").update(molde.payload).digest("hex");
+    if (!simular && estado.clientesCtoDia === hoje && estado.clientesCtoMolde === assinatura) return;
 
     log(`Clientes x CTO: visão ${VISAO_CLIENTES_CTO} "${molde.viewName}" — retrato completo da base...`);
     const linhas = await puxarRecentes(pagina, molde, null);
@@ -707,19 +722,28 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
         return;
     }
 
-    // um registro por login; login repetido (mais de um contrato) fica com o mais completo
-    const pontos = r => (r.cto ? 1 : 0) + (r.porta ? 1 : 0) + (r.lacre ? 1 : 0);
+    // Inativos (Ativo = N/Não) entram marcados ativo=false, pro site alertar
+    // quem ainda ocupa CTO/porta. Só com a coluna ativo no banco (patch-26);
+    // sem ela, ficam de fora como antes.
+    let gravaInativos = true;
+    try { await supabase("GET", "clientes_cto?select=ativo&limit=1"); }
+    catch { gravaInativos = false; log("  coluna ativo ainda não existe (falta o patch-26) — grava só os ativos."); }
+
+    // um registro por login; login repetido (mais de um contrato) fica com o
+    // ativo, e entre iguais com o mais completo
+    const pontos = r => (r.ativo ? 10 : 0) + (r.cto ? 1 : 0) + (r.porta ? 1 : 0) + (r.lacre ? 1 : 0);
     const porChave = new Map();
-    let inativos = 0;
+    let inativosFora = 0;
     for (const r of linhas) {
-        // só a base ATIVA: login inativo (Ativo = N/Não) não entra na conta de cadastro
-        if (mapa.ativo && /^(N|NAO|NÃO)$/i.test(String(r[mapa.ativo] ?? "").trim())) { inativos++; continue; }
+        const ativo = !(mapa.ativo && /^(N|NAO|NÃO)$/i.test(String(r[mapa.ativo] ?? "").trim()));
+        if (!ativo && !gravaInativos) { inativosFora++; continue; }
         const reg = {
             cliente: valorCadastroCto(mapa.cliente && r[mapa.cliente]),
             login: valorCadastroCto(mapa.login && r[mapa.login]),
             cto: valorCadastroCto(r[mapa.cto]),
             porta: valorCadastroCto(r[mapa.porta]),
-            lacre: valorCadastroCto(mapa.lacre && r[mapa.lacre])
+            lacre: lacreDoComplemento(mapa.lacre && r[mapa.lacre]),
+            ativo
         };
         reg.chave = reg.login || reg.cliente;
         if (!reg.chave) continue;
@@ -727,12 +751,25 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
         if (!atual || pontos(reg) > pontos(atual)) porChave.set(reg.chave, reg);
     }
     const sincronizadoEm = inicio.toISOString();
-    const dados = [...porChave.values()].map(r => ({ ...r, sincronizado_em: sincronizadoEm }));
-    const completos = dados.filter(r => r.cto && r.porta).length;
+    const dados = [...porChave.values()].map(r => {
+        const linha = { ...r, sincronizado_em: sincronizadoEm };
+        if (!gravaInativos) delete linha.ativo;
+        return linha;
+    });
+    const ativos = dados.filter(r => r.ativo !== false);
+    const completos = ativos.filter(r => r.cto && r.porta).length;
+    const inativosCadastrados = dados.filter(r => r.ativo === false && r.cto && r.porta).length;
+    const resumo = `${ativos.length} logins ativos (${completos} com CTO e porta, ${ativos.length - completos} sem)` +
+        (gravaInativos ? `, ${dados.length - ativos.length} inativos (${inativosCadastrados} ainda com CTO e porta)` : `, ${inativosFora} inativos fora`);
 
     if (simular) {
-        log(`  (simulação) ${linhas.length} linhas (${inativos} logins inativos fora), ${dados.length} logins ativos:${completos} com CTO e porta, ${dados.length - completos} sem — não gravou.`);
+        log(`  (simulação) ${linhas.length} linhas: ${resumo} — não gravou.`);
         dados.slice(0, 5).forEach(r => log(`    ${JSON.stringify(r)}`));
+        if (mapa.lacre) {
+            log(`  com lacre: ${ativos.filter(r => r.lacre).length} logins ativos (${ativos.filter(r => r.lacre && r.cto && r.porta).length} deles com CTO e porta)`);
+            const amostra = linhas.map(r => r[mapa.lacre]).filter(v => /lacre/i.test(v ?? "")).slice(0, 15);
+            log(`  ${mapa.lacre} -> lacre (amostra): ${amostra.map(v => `"${v}" -> ${lacreDoComplemento(v) ?? "(sem lacre)"}`).join(" | ")}`);
+        }
         return;
     }
 
@@ -747,8 +784,9 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
         logErro(`gravar clientes_cto [passo: ${passo}]`, e);
         throw e;
     }
-    log(`  clientes_cto atualizada: ${dados.length} logins, ${completos} com CTO e porta, ${dados.length - completos} sem.`);
+    log(`  clientes_cto atualizada: ${resumo}.`);
     estado.clientesCtoDia = hoje;
+    estado.clientesCtoMolde = assinatura;
 }
 
 /** Baixa os módulos do agendador do site e carrega num objeto (IIFEs: this=ctx). */
