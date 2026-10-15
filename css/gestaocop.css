@@ -78,7 +78,6 @@ html[data-tema="dark"] .backlog-cidade-sel{ background: var(--cor-superficie, #0
 .graf-svg{ width: 100%; min-width: 560px; height: auto; display: block; }
 .graf-grid{ stroke: var(--cor-borda); stroke-width: 1; opacity: .55; }
 .graf-ytick, .graf-xtick{ fill: var(--cor-texto-suave); font-size: 11px; }
-.graf-linha{ stroke: #3b82f6; stroke-width: 2; }
-.graf-ponto{ fill: #3b82f6; stroke: var(--cor-superficie, #fff); stroke-width: 1.5; cursor: pointer; }
-.graf-ponto:hover{ r: 6; }
-html[data-tema="dark"] .graf-ponto{ stroke: #0f172a; }
+.graf-valor{ fill: var(--cor-texto-suave); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.graf-barra{ fill: #3b82f6; cursor: pointer; transition: fill .12s; }
+.graf-barra:hover{ fill: #2563eb; }

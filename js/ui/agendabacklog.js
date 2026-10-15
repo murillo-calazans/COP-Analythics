@@ -103,15 +103,17 @@ function backlogCidadeCurta(c) {
     return s.length > 16 ? s.slice(0, 15) + "…" : s;
 }
 
-/** Gráfico de linha (série única) das cidades com mais OS em aberto — curva de concentração. */
-function graficoCidadesLinha(cidades) {
+/** Gráfico de colunas (série única) das cidades com mais OS em aberto. */
+function graficoCidades(cidades) {
     const dados = (cidades || []).slice(0, 15);
-    if (dados.length < 2) return "";   // linha precisa de 2+ pontos
+    if (!dados.length) return "";
 
-    const W = 820, H = 300, mL = 46, mR = 16, mT = 14, mB = 96;
+    const W = 820, H = 300, mL = 46, mR = 12, mT = 20, mB = 96;
     const pw = W - mL - mR, ph = H - mT - mB;
     const max = Math.max(...dados.map(d => d.n)) || 1;
-    const x = i => mL + (i * pw / (dados.length - 1));
+    const passo = pw / dados.length;                     // slot de cada coluna
+    const larg = Math.max(10, Math.min(46, passo - 10)); // largura da barra, com respiro
+    const base = mT + ph;
     const y = v => mT + ph - (v / max) * ph;
 
     const ticks = 4;
@@ -122,21 +124,24 @@ function graficoCidadesLinha(cidades) {
             `<text x="${mL - 7}" y="${(gy + 3.5).toFixed(1)}" class="graf-ytick" text-anchor="end">${v}</text>`;
     }).join("");
 
-    const pts = dados.map((d, i) => ({ ...d, cx: x(i), cy: y(d.n) }));
-    const path = pts.map((p, i) => `${i ? "L" : "M"}${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join(" ");
-    const marcadores = pts.map(p =>
-        `<circle cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}" r="4" class="graf-ponto"><title>${escaparHtml(p.cidade)}: ${p.n} em aberto</title></circle>`).join("");
-    const xlabels = pts.map(p =>
-        `<text x="${p.cx.toFixed(1)}" y="${H - mB + 16}" class="graf-xtick" text-anchor="end" transform="rotate(-35 ${p.cx.toFixed(1)} ${H - mB + 16})">${escaparHtml(backlogCidadeCurta(p.cidade))}</text>`).join("");
+    const colunas = dados.map((d, i) => {
+        const cx = mL + passo * i + passo / 2;
+        const topo = y(d.n);
+        const alt = Math.max(0, base - topo);
+        return `
+          <g class="graf-col">
+            <rect x="${(cx - larg / 2).toFixed(1)}" y="${topo.toFixed(1)}" width="${larg.toFixed(1)}" height="${alt.toFixed(1)}" rx="4" class="graf-barra"><title>${escaparHtml(d.cidade)}: ${d.n} em aberto</title></rect>
+            <text x="${cx.toFixed(1)}" y="${(topo - 5).toFixed(1)}" class="graf-valor" text-anchor="middle">${d.n}</text>
+            <text x="${cx.toFixed(1)}" y="${H - mB + 16}" class="graf-xtick" text-anchor="end" transform="rotate(-35 ${cx.toFixed(1)} ${H - mB + 16})">${escaparHtml(backlogCidadeCurta(d.cidade))}</text>
+          </g>`;
+    }).join("");
 
     return `
         <div class="indicadores-secao-titulo">Cidades com OS em aberto</div>
         <div class="graf-wrap">
           <svg viewBox="0 0 ${W} ${H}" class="graf-svg" role="img" aria-label="OS de campo em aberto por cidade (top ${dados.length})">
             ${grid}
-            <path d="${path}" class="graf-linha" fill="none"/>
-            ${marcadores}
-            ${xlabels}
+            ${colunas}
           </svg>
         </div>`;
 }
@@ -193,7 +198,7 @@ function desenharBacklog(model) {
         <div class="kpi-row">${kpis}</div>
         <div class="indicadores-secao-titulo">Em aberto por assunto${sufixo}</div>
         <div class="cop-assuntos">${cards}</div>
-        ${graficoCidadesLinha(model.cidades)}`;
+        ${graficoCidades(model.cidades)}`;
 
     const sel = alvo.querySelector("#backlogCidadeSel");
     if (sel) sel.addEventListener("change", () => { backlogCidade = sel.value; desenharBacklog(model); });
