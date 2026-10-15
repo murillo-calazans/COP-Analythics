@@ -214,26 +214,65 @@
 
 /* CTOs e Lacres (js/ui/ctoslacres.js) — Login/CTO/Porta/Lacre editáveis na
    própria linha; status vira pílula Pendente (vermelha) / Cadastrado (verde). */
-#listaCtosLacres .tabela-alertas {
+/* Sem rolagem lateral (pedido do COP): a tabela cabe na largura do card,
+   colunas com largura fixa em % e o texto QUEBRA LINHA em vez de cortar —
+   só a página rola, pra baixo. Vale pras duas tabelas de Gestão de Clientes. */
+#listaCtosLacres .tabela-scroll,
+#listaClientesCto .tabela-scroll {
 
-    min-width: 1100px;
+    overflow-x: visible;
+
+}
+
+#listaCtosLacres .tabela-alertas,
+#listaClientesCto .tabela-alertas {
+
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
     font-size: 13px;
 
 }
 
-#listaCtosLacres .tabela-alertas td {
+#listaCtosLacres .tabela-alertas th,
+#listaCtosLacres .tabela-alertas td,
+#listaClientesCto .tabela-alertas th,
+#listaClientesCto .tabela-alertas td {
 
     padding: 6px 8px;
     vertical-align: middle;
+    white-space: normal;
+    overflow-wrap: break-word;   /* quebra entre palavras; só parte palavra maior que a coluna */
 
 }
 
+/* CTOs e Lacres: OS · Cliente · Diagnóstico · Login · CTO · Porta · Lacre · Data · Status */
+#listaCtosLacres .cl-os      { width: 8%; }
+#listaCtosLacres .cl-cliente { width: 15%; }
+#listaCtosLacres .cl-diag    { width: 12%; }
+#listaCtosLacres .cl-login   { width: 13%; }
+#listaCtosLacres .cl-cto     { width: 16%; }
+#listaCtosLacres .cl-porta   { width: 6%; }
+#listaCtosLacres .cl-lacre   { width: 10%; }
+#listaCtosLacres .cl-data    { width: 10%; }
+#listaCtosLacres .cl-status  { width: 10%; }
+
+/* data e pílula de status nunca partem no meio */
+#listaCtosLacres .ctos-data { white-space: nowrap; }
+
+/* Cadastro na CTO: Cliente · Login · CTO · Porta · Lacre · Falta (Cliente/Lacre
+   podem sumir — aí as outras dividem a sobra, layout fixo continua valendo) */
+#listaClientesCto .cc-cliente { width: 28%; }
+#listaClientesCto .cc-login   { width: 18%; }
+#listaClientesCto .cc-cto     { width: 20%; }
+#listaClientesCto .cc-porta   { width: 7%; }
+#listaClientesCto .cc-lacre   { width: 10%; }
+#listaClientesCto .cc-falta   { width: 17%; }
+
 .ctos-texto {
 
-    max-width: 200px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: break-word;
 
 }
 
@@ -248,8 +287,8 @@
 .ctos-input {
 
     width: 100%;
-    min-width: 90px;
-    padding: 6px 8px;
+    min-width: 0;   /* encolhe junto com a coluna (sem rolagem lateral) */
+    padding: 6px 6px;
 
     background: transparent;
     border: 1px solid transparent;
@@ -257,6 +296,13 @@
 
     color: var(--cor-texto);
     font: inherit;
+    line-height: 1.35;
+
+    resize: none;
+    overflow: hidden;
+    field-sizing: content;   /* cresce com o texto (Chrome/Edge); fallback em ajustarAlturaCto */
+    min-height: calc(1.35em + 14px);
+    overflow-wrap: break-word;
 
 }
 
@@ -386,7 +432,26 @@ html[data-tema="dark"] .clientes-cto-card.cto-lacre .stat-valor { color: #FBBF24
 
 .clientes-cto-vazio { color: var(--cor-texto-suave); }
 
-#listaClientesCto .tabela-alertas td { white-space: nowrap; }
 
 .clientes-cto-card.cto-alerta .stat-valor { color: #DC2626; }
 html[data-tema="dark"] .clientes-cto-card.cto-alerta .stat-valor { color: #F87171; }
+
+
+/* Tela estreita: menos respiro e pílulas menores, pra caber sem rolar pro lado. */
+@media (max-width: 900px) {
+
+    #listaCtosLacres .tabela-alertas th,
+    #listaCtosLacres .tabela-alertas td,
+    #listaClientesCto .tabela-alertas th,
+    #listaClientesCto .tabela-alertas td { padding: 4px 3px; font-size: 12px; }
+
+    #listaCtosLacres .ctos-status,
+    #listaClientesCto .ctos-status { padding: 3px 6px; font-size: 11px; white-space: normal; }
+
+    #listaCtosLacres .tabela-alertas th,
+    #listaClientesCto .tabela-alertas th { font-size: 10px; letter-spacing: 0; }
+
+    .ctos-input { padding: 4px 3px; }
+    .ctos-mapa { font-size: 12px; }
+
+}

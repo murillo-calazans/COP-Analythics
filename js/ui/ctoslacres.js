@@ -328,7 +328,7 @@ function renderizarTabelaCtos(linhas) {
         const linkMapa = mapa ? `<a class="ctos-mapa" href="${escaparHtml(mapa)}" target="_blank" rel="noopener" title="Abrir no mapa">📍</a>` : "";
         const corrigido = _ctosCadastro.get(linha.id)?.[campo] != null ? " corrigido" : "";
         if (!editavel) return `<td class="ctos-texto">${escaparHtml(valor || "-")}${linkMapa}</td>`;
-        return `<td><div class="ctos-campo"><input type="text" class="ctos-input${corrigido}" data-campo="${campo}" value="${escaparHtml(valor)}" placeholder="${placeholder}"${corrigido ? ' title="Corrigido manualmente"' : ""}>${linkMapa}</div></td>`;
+        return `<td><div class="ctos-campo"><textarea rows="1" class="ctos-input${corrigido}" data-campo="${campo}" placeholder="${placeholder}" title="${escaparHtml(valor)}${corrigido ? " (corrigido manualmente)" : ""}">${escaparHtml(valor)}</textarea>${linkMapa}</div></td>`;
     };
 
     container.innerHTML = avisoBanco + `
@@ -336,15 +336,15 @@ function renderizarTabelaCtos(linhas) {
             <table class="tabela-alertas tabela-ctos">
                 <thead>
                     <tr>
-                        <th>OS</th>
-                        <th>Cliente</th>
-                        <th>Diagnóstico</th>
-                        <th>Login</th>
-                        <th>CTO (localização)</th>
-                        <th>Porta</th>
-                        <th>Lacre</th>
-                        <th>Fechamento</th>
-                        <th class="ctos-col-status">Status</th>
+                        <th class="cl-os">OS</th>
+                        <th class="cl-cliente">Cliente</th>
+                        <th class="cl-diag">Diagnóstico</th>
+                        <th class="cl-login">Login</th>
+                        <th class="cl-cto">CTO (localização)</th>
+                        <th class="cl-porta">Porta</th>
+                        <th class="cl-lacre">Lacre</th>
+                        <th class="cl-data">Data</th>
+                        <th class="cl-status ctos-col-status">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -357,7 +357,7 @@ function renderizarTabelaCtos(linhas) {
                             ${celula(linha, "cto", "não encontrado")}
                             ${celula(linha, "porta", "-")}
                             ${celula(linha, "lacre", "-")}
-                            <td class="ctos-texto" title="${escaparHtml(linha.tecnico)}">${linha.dataFinal ? linha.dataFinal.toLocaleDateString("pt-BR") : "-"}</td>
+                            <td class="ctos-texto ctos-data" title="${escaparHtml(linha.tecnico)}">${linha.dataFinal ? linha.dataFinal.toLocaleDateString("pt-BR") : "-"}</td>
                             <td class="ctos-col-status">${htmlStatusCto(cadastradoCto(linha), editavel)}</td>
                         </tr>
                     `).join("")}
@@ -371,10 +371,20 @@ function renderizarTabelaCtos(linhas) {
         tr.querySelector(".ctos-os")?.addEventListener("click", () => abrirModalOS(linha.id));
         tr.querySelectorAll(".ctos-input").forEach(input => {
             input.addEventListener("change", () => salvarCampoCto(linha, input.dataset.campo, input.value, input));
-            input.addEventListener("keydown", e => { if (e.key === "Enter") input.blur(); });
+            // Enter salva (não quebra linha); a altura acompanha o texto
+            input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+            input.addEventListener("input", () => ajustarAlturaCto(input));
+            ajustarAlturaCto(input);
         });
         tr.querySelector(".ctos-status[data-alternar]")?.addEventListener("click", evento => alternarStatusCto(linha, evento.currentTarget));
     });
+}
+
+/** Célula editável cresce pra baixo com o texto (fallback de field-sizing). */
+function ajustarAlturaCto(campo) {
+    if (CSS.supports?.("field-sizing", "content")) return;
+    campo.style.height = "auto";
+    campo.style.height = `${campo.scrollHeight}px`;
 }
 
 function htmlStatusCto(cadastrado, editavel) {
@@ -413,7 +423,7 @@ async function salvarCampoCto(linha, campo, valor, input) {
     if (!ok) { input.value = valorCto(linha, campo) ?? ""; return; }
     const corrigido = _ctosCadastro.get(linha.id)?.[campo] != null;
     input.classList.toggle("corrigido", corrigido);
-    input.title = corrigido ? "Corrigido manualmente" : "";
+    input.title = input.value + (corrigido ? " (corrigido manualmente)" : "");
 }
 
 async function alternarStatusCto(linha, botao) {

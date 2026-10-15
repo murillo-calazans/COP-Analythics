@@ -180,7 +180,7 @@ async function buscarListaClientesCto(token) {
         <div class="tabela-scroll">
             <table class="tabela-alertas">
                 <thead>
-                    <tr>${comCliente ? "<th>Cliente</th>" : ""}<th>Login</th><th>CTO</th><th>Porta</th>${comLacre ? "<th>Lacre</th>" : ""}<th>${alerta ? "Situação" : "Falta cadastrar"}</th></tr>
+                    <tr>${comCliente ? "<th class=\"cc-cliente\">Cliente</th>" : ""}<th class="cc-login">Login</th><th class="cc-cto">CTO</th><th class="cc-porta">Porta</th>${comLacre ? "<th class=\"cc-lacre\">Lacre</th>" : ""}<th class="cc-falta">${alerta ? "Situação" : "Falta cadastrar"}</th></tr>
                 </thead>
                 <tbody>
                     ${data.map(c => {
