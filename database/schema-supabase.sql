@@ -155,6 +155,9 @@ create policy "leitura autenticada" on ref_colaboradores_responsaveis for select
 -- (se tiver algum) precisa bater com o setor da OS — null em
 -- perfis.setor = sem restrição, vê tudo (comportamento de sempre).
 -- Ver database/patch-06-terceiros-por-setor.sql pro motivo/detalhe.
+-- ATENÇÃO: o patch-27 (setores_visao_total) substitui estas duas
+-- policies — setor listado lá (ex.: CONTROLE DE OPERAÇÕES) vê todas as
+-- OS. Numa instalação nova, rode o patch-27 depois deste arquivo.
 create policy "leitura autenticada" on ordens for select to authenticated
     using (exists (
         select 1 from perfis p
