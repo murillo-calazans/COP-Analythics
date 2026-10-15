@@ -765,6 +765,7 @@ async function calcularAtrasadas() {
     const separar = typeof separarTerceira === "function" ? separarTerceira : (n => ({ nome: n, terceira: null }));
     const itens = [];
     for (const o of os) {
+        if (!o.campo) continue;   // só OS de campo (fora infra/CTO, COP, faturamento… via Motor.NAO_CAMPO)
         const dia = agIso[String(o.id)];
         if (!dia || dia >= hojeIso || dia < limiteIso) continue;   // só agendamento passado recente (últimos dias)
         const nome = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
