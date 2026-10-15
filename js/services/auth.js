@@ -64,6 +64,9 @@ async function carregarUsuarioAtual(sessao) {
         email: sessao.user.email,
         papel: data.papel,
         setor: data.setor,
+        // patch-28: null = todas (abas) / todos (setores, aplicado no banco)
+        abasVisiveis: Array.isArray(data.abas_visiveis) ? data.abas_visiveis : null,
+        setoresVisiveis: Array.isArray(data.setores_visiveis) ? data.setores_visiveis : null,
         nome: data.nome?.trim() || nomeDoEmail(sessao.user.email)
     };
 }

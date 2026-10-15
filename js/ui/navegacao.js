@@ -22,9 +22,9 @@ const MODULO_DA_SECAO = {
     "gestao-cop": "cop",
     "ordens": "ordens",
     "tecnicos": "ordens",
+    "clientes-cto": "clientes",
     "alertas": "clientes",
     "ctos-lacres": "clientes",
-    "clientes-cto": "clientes",
     "terceiras": "terceiras",
     "terceiras-fechamento": "terceiras",
     "terceiras-lpu": "terceiras",
@@ -36,6 +36,23 @@ const MODULO_DA_SECAO = {
     "usuarios": "admin",
     "configuracoes": "admin"
 };
+
+// Fora do controle de abas por usuário (Configurações > Acesso dos usuários):
+// Início é de todos; Usuários/Configurações já têm a trava própria.
+const SECOES_SEMPRE_LIBERADAS = ["inicio", "usuarios", "configuracoes"];
+
+/** Aba liberada pro usuário logado? (perfis.abas_visiveis, patch-28; null = todas; admin vê tudo) */
+function podeVerSecao(nome) {
+    if (SECOES_SEMPRE_LIBERADAS.includes(nome)) return true;
+    const abas = APP.usuario?.abasVisiveis;
+    if (!abas || (typeof ehAdmin === "function" && ehAdmin())) return true;
+    return abas.includes(nome);
+}
+
+/** 1ª aba liberada de um módulo (null se nenhuma). */
+function primeiraSecaoLiberada(modulo) {
+    return Object.keys(MODULO_DA_SECAO).find(s => MODULO_DA_SECAO[s] === modulo && podeVerSecao(s)) ?? null;
+}
 
 // Tempos, Indicadores e Gestão COP saem do mesmo cálculo (js/ui/indicadores.js).
 const SECOES_INDICADORES = ["tempos", "indicadores", "gestao-cop"];
@@ -83,7 +100,7 @@ function atualizarMenuDoModulo(nome) {
 
     // Abas do topo: só as do módulo atual; módulo de uma tela só não mostra aba.
     const abas = document.querySelectorAll("nav.menu [data-secao]");
-    const doModulo = [...abas].filter(b => MODULO_DA_SECAO[b.dataset.secao] === modulo);
+    const doModulo = [...abas].filter(b => MODULO_DA_SECAO[b.dataset.secao] === modulo && podeVerSecao(b.dataset.secao));
     abas.forEach(b => { b.hidden = doModulo.length < 2 || !doModulo.includes(b); });
 
     if (typeof marcarModuloAtivoMenuLateral === "function") marcarModuloAtivoMenuLateral(modulo);
@@ -94,6 +111,12 @@ function mostrarSecao(nome) {
     // (#terceiras, #terceiras-lpu…) de quem é leitor, mandando pro Início.
     if (MODULO_DA_SECAO[nome] === "terceiras" && typeof podeEditarOperacao === "function" && !podeEditarOperacao()) {
         return mostrarSecao("inicio");
+    }
+
+    // Aba bloqueada pro usuário (link, favorito, tile do Início…): vai pra
+    // 1ª aba liberada do mesmo módulo, senão pro Início.
+    if (!podeVerSecao(nome)) {
+        return mostrarSecao(primeiraSecaoLiberada(MODULO_DA_SECAO[nome]) ?? "inicio");
     }
 
     // Filtro Global isolado por aba: ao trocar de MÓDULO, o filtro volta pro
@@ -141,5 +164,6 @@ function mostrarSecao(nome) {
     if (nome === "configuracoes") {
         preencherFormularioConfig();
         renderizarResumoFiltroAssuntos();
+        if (typeof renderizarAcessoUsuarios === "function") renderizarAcessoUsuarios();
     }
 }

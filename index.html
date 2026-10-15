@@ -653,6 +653,17 @@
     </section>
 
     <section id="secao-configuracoes" class="secao">
+        <div class="placeholder-card" id="cardAcessoUsuarios" hidden>
+            <h2>🔐 Acesso dos usuários</h2>
+            <p>
+                Quais abas cada pessoa abre e de quais setores ela vê as ordens de serviço. Os setores
+                valem no banco (relatórios, Dashboard, Ordens… só trazem as OS liberadas). Admin sempre vê tudo.
+                Clique num usuário pra editar.
+            </p>
+            <input type="search" id="buscaAcessoUsuarios" class="seletor-multiplo-input" placeholder="Buscar usuário..." autocomplete="off">
+            <div id="listaAcessoUsuarios"></div>
+        </div>
+
         <div class="placeholder-card">
             <h2>⚙ Configuração de Colunas</h2>
             <p>Se o cabeçalho das planilhas mudar, ajuste aqui — sem precisar editar código.</p>
@@ -1266,6 +1277,7 @@
 <script src="js/ui/robocomando.js"></script>
 <script src="js/ui/inicio.js"></script>
 <script src="js/ui/adminusuarios.js"></script>
+<script src="js/ui/acessousuarios.js"></script>
 <script src="js/ui/terceiras.js"></script>
 <script src="js/ui/ordens.js"></script>
 <script src="js/ui/configuracoes.js"></script>

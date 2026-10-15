@@ -142,6 +142,18 @@ body.menu-lateral-aberto .menu-lateral-fundo{ opacity:1; pointer-events:auto; }
         // não existe, fica visível — o próprio index barra quem não pode).
         const terceiras = document.querySelector('.menu-lateral nav a[data-modulo="terceiras"]');
         if (terceiras) terceiras.hidden = typeof podeEditarOperacao === "function" && !podeEditarOperacao();
+
+        // Abas por usuário (Configurações > Acesso dos usuários): módulo sem
+        // nenhuma aba liberada some; o link abre a 1ª aba liberada dele.
+        if (typeof primeiraSecaoLiberada !== "function") return;
+        document.querySelectorAll(".menu-lateral nav a[data-secao-modulo]").forEach(a => {
+            if (a.dataset.modulo === "inicio" || a.dataset.modulo === "admin") return;
+            const padrao = (a.dataset.secaoPadrao ??= a.dataset.secaoModulo);
+            const alvo = podeVerSecao(padrao) ? padrao : primeiraSecaoLiberada(a.dataset.modulo);
+            if (!alvo) { a.hidden = true; return; }
+            a.dataset.secaoModulo = alvo;
+            a.href = `index.html#${alvo}`;
+        });
     }
 
     function marcarModuloAtivo(id) {

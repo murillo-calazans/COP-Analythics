@@ -10,7 +10,8 @@
  * - nome: aparece na saudação e acha o operador nas OS (produção do
  *   mês, ver ProducaoEngine.encontrarOperador) — use o nome como está
  *   no sistema de OS;
- * - setor: vazio = vê todas as OS; preenchido = só as daquele setor
+ * - setor: só identifica a pessoa. O que ela VÊ (setores das OS e abas)
+ *   fica em Configurações > Acesso dos usuários (js/ui/acessousuarios.js).
  *   (usuário de terceirizada, ver database/patch-06).
  *
  * Criar a conta (e-mail/senha) continua no Supabase; a conta nova
@@ -98,7 +99,7 @@ async function renderizarAdminUsuarios(forcar = false) {
                             <th>Usuário</th>
                             <th>Nome no sistema de OS</th>
                             <th>Papel</th>
-                            <th>Setor <span class="admin-dica" title="Vazio = vê todas as OS. Preenchido = só as daquele setor (terceirizada).">ⓘ</span></th>
+                            <th>Setor <span class="admin-dica" title="Só identifica a pessoa. Os setores de OS e as abas que ela vê ficam em Configurações > Acesso dos usuários.">ⓘ</span></th>
                             <th>Último acesso</th>
                             <th></th>
                         </tr>
@@ -143,7 +144,7 @@ function linhaUsuarioAdmin(u) {
                         `<option value="${valor}"${valor === papelAtual ? " selected" : ""} title="${escaparHtml(p.descricao)}">${p.rotulo}</option>`).join("")}
                 </select>
             </td>
-            <td><input type="text" data-campo="setor" list="listaSetoresAdmin" value="${escaparHtml(u.setor ?? "")}" placeholder="Todos"></td>
+            <td><input type="text" data-campo="setor" list="listaSetoresAdmin" value="${escaparHtml(u.setor ?? "")}" placeholder="—"></td>
             <td class="admin-ultimo-acesso">${dataCurta(u.ultimo_acesso)}</td>
             <td class="admin-acoes">
                 <button type="button" class="botao-primario admin-salvar" ${semAcesso ? "" : "disabled"}>${semAcesso ? "Dar acesso" : "Salvar"}</button>

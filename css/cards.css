@@ -507,3 +507,95 @@
     background: var(--cor-primaria-hover);
 
 }
+
+/* Configurações > Acesso dos usuários (js/ui/acessousuarios.js) */
+#listaAcessoUsuarios { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.acesso-usuario {
+
+    border: 1px solid var(--cor-borda);
+    border-radius: 10px;
+    background: var(--cor-fundo-elevado);
+
+}
+
+.acesso-usuario.aberto { border-color: var(--cor-primaria); }
+
+.acesso-cabecalho {
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    width: 100%;
+    padding: 10px 14px;
+
+    background: none;
+    border: none;
+    color: var(--cor-texto);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+}
+
+.acesso-nome { font-weight: 600; }
+.acesso-email { font-size: 13px; color: var(--cor-texto-suave); }
+
+.acesso-resumo {
+
+    margin-left: auto;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(22, 163, 74, .12);
+    color: #16A34A;
+    font-size: 12px;
+    font-weight: 600;
+
+}
+
+.acesso-resumo.restrito { background: rgba(217, 119, 6, .14); color: #D97706; }
+
+.acesso-editor {
+
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px 20px;
+    padding: 4px 14px 14px;
+
+}
+
+.acesso-editor fieldset {
+
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+    min-width: 0;
+
+}
+
+.acesso-editor legend { padding: 0 6px; font-weight: 600; font-size: 14px; }
+
+.acesso-opcao { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; cursor: pointer; }
+.acesso-opcao.forte { font-weight: 600; }
+
+.acesso-opcoes {
+
+    margin: 6px 0 0 22px;
+    max-height: 260px;
+    overflow-y: auto;
+
+}
+
+.acesso-opcoes.desligado { opacity: .4; pointer-events: none; }
+
+.acesso-abas { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 16px; max-height: none; }
+
+.acesso-grupo .acesso-modulo { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; padding: 3px 0; cursor: pointer; }
+.acesso-grupo .acesso-opcao { margin-left: 22px; }
+
+.acesso-acoes { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+
+html[data-tema="dark"] .acesso-resumo { color: #4ADE80; }
+html[data-tema="dark"] .acesso-resumo.restrito { color: #FBBF24; }
