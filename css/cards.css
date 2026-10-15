@@ -599,3 +599,8 @@
 
 html[data-tema="dark"] .acesso-resumo { color: #4ADE80; }
 html[data-tema="dark"] .acesso-resumo.restrito { color: #FBBF24; }
+
+/* Usuários: coluna "Pode ver" (resumo do acesso + Editar) */
+.admin-pode-ver { white-space: nowrap; }
+.admin-pode-ver .acesso-resumo { margin-left: 0; display: inline-block; }
+.admin-pode-ver .admin-editar-acesso { margin-left: 6px; padding: 4px 10px; font-size: 12px; }

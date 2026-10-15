@@ -27,6 +27,16 @@ const NOMES_SECAO_ACESSO = { "agenda-hoje": "Agenda do dia", "escala-hoje": "Esc
 
 let acessosUsuarios = null;
 let acessoAberto = null; // id do usuário com o editor aberto
+let rolarAteAcessoAberto = false;
+
+/** Vindo da tela de Usuários ("Editar" na coluna Pode ver): abre o editor daquele usuário. */
+function abrirAcessoDoUsuario(id) {
+    acessoAberto = id;
+    rolarAteAcessoAberto = true;
+    const busca = document.getElementById("buscaAcessoUsuarios");
+    if (busca) busca.value = "";
+    mostrarSecao("configuracoes");
+}
 
 function nomeSecaoAcesso(secao) {
     const botao = document.querySelector(`nav.menu [data-secao="${secao}"]`);
@@ -122,6 +132,8 @@ function desenharListaAcessos() {
 
     const aberto = lista.querySelector(".acesso-usuario.aberto");
     if (aberto) ligarEditorAcesso(aberto, acessosUsuarios.find(u => u.id === acessoAberto));
+    if (aberto && rolarAteAcessoAberto) aberto.scrollIntoView({ behavior: "smooth", block: "start" });
+    rolarAteAcessoAberto = false;
 }
 
 function htmlEditorAcesso(u) {
@@ -210,6 +222,7 @@ async function salvarAcessoUsuario(el, u) {
     }
     u.setores_visiveis = setores;
     u.abas_visiveis = abas;
+    if (typeof acessoPorUsuario !== "undefined") acessoPorUsuario.set(u.id, { ...u });
     status.textContent = "Salvo. Vale na próxima vez que a pessoa abrir ou recarregar o site.";
     el.querySelector(".acesso-resumo").textContent = resumoAcesso(u);
     el.querySelector(".acesso-resumo").classList.toggle("restrito", Boolean(setores || abas));

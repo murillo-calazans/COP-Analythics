@@ -25,12 +25,17 @@ const PAPEIS_USUARIO = {
 };
 
 let usuariosAdmin = null;     // lista vinda do banco
+// id -> acesso (setores/abas visíveis, patch-28) — resumo na coluna "Pode ver";
+// a edição é a mesma de Configurações > Acesso dos usuários.
+let acessoPorUsuario = new Map();
 let buscaUsuariosAdmin = "";
 
 async function carregarUsuariosAdmin() {
     const { data, error } = await supabaseClient.rpc("admin_listar_usuarios");
     if (error) throw error;
     usuariosAdmin = data ?? [];
+    const acessos = await supabaseClient.rpc("admin_listar_acessos");
+    acessoPorUsuario = new Map((acessos.error ? [] : acessos.data ?? []).map(a => [a.id, a]));
     return usuariosAdmin;
 }
 
@@ -100,12 +105,13 @@ async function renderizarAdminUsuarios(forcar = false) {
                             <th>Nome no sistema de OS</th>
                             <th>Papel</th>
                             <th>Setor <span class="admin-dica" title="Só identifica a pessoa. Os setores de OS e as abas que ela vê ficam em Configurações > Acesso dos usuários.">ⓘ</span></th>
+                            <th>Pode ver <span class="admin-dica" title="Setores das OS e abas que a pessoa vê. Editar abre Configurações > Acesso dos usuários.">ⓘ</span></th>
                             <th>Último acesso</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${lista.length ? lista.map(linhaUsuarioAdmin).join("") : '<tr><td colspan="6" class="alerta-vazio">Ninguém encontrado.</td></tr>'}
+                        ${lista.length ? lista.map(linhaUsuarioAdmin).join("") : '<tr><td colspan="7" class="alerta-vazio">Ninguém encontrado.</td></tr>'}
                     </tbody>
                 </table>
             </div>
@@ -145,6 +151,7 @@ function linhaUsuarioAdmin(u) {
                 </select>
             </td>
             <td><input type="text" data-campo="setor" list="listaSetoresAdmin" value="${escaparHtml(u.setor ?? "")}" placeholder="—"></td>
+            <td class="admin-pode-ver">${htmlPodeVerUsuario(u)}</td>
             <td class="admin-ultimo-acesso">${dataCurta(u.ultimo_acesso)}</td>
             <td class="admin-acoes">
                 <button type="button" class="botao-primario admin-salvar" ${semAcesso ? "" : "disabled"}>${semAcesso ? "Dar acesso" : "Salvar"}</button>
@@ -153,8 +160,18 @@ function linhaUsuarioAdmin(u) {
         </tr>`;
 }
 
+function htmlPodeVerUsuario(u) {
+    if (!u.papel) return '<span class="admin-dica">—</span>';
+    const acesso = acessoPorUsuario.get(u.id);
+    if (!acesso || typeof resumoAcesso !== "function") return '<span class="admin-dica">—</span>';
+    const restrito = acesso.papel !== "admin" && (acesso.setores_visiveis || acesso.abas_visiveis);
+    return `<span class="acesso-resumo${restrito ? " restrito" : ""}">${escaparHtml(resumoAcesso(acesso))}</span>` +
+        (acesso.papel === "admin" ? "" : ' <button type="button" class="botao-secundario admin-editar-acesso">Editar</button>');
+}
+
 function registrarLinhaUsuarioAdmin(tr) {
     const id = tr.dataset.usuario;
+    tr.querySelector(".admin-editar-acesso")?.addEventListener("click", () => abrirAcessoDoUsuario(id));
     const usuario = usuariosAdmin.find(u => u.id === id);
     const campos = () => ({
         nome: tr.querySelector('[data-campo="nome"]').value,
