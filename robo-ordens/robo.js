@@ -758,6 +758,17 @@ async function principal() {
     // sessão morta, ou a aba foi parar numa página inválida. Recuperável relogando.
     const ehFalhaDeRede = e => /Failed to fetch|NetworkError|net::|ERR_|ERR_NETWORK|ECONN|fetch failed|load failed/i.test(e && e.message || "");
 
+    // Recuperação forte: fecha o navegador inteiro e reabre do zero (garantirNavegador
+    // relança + preparaPagina = re-login + volta pro IXC_HOME). Usado quando uma puxada
+    // falha (sessão/rede), pra limpar qualquer estado ruim da aba. Fecha também as abas
+    // que o usuário tinha abertas nessa janela.
+    const reiniciarNavegador = async () => {
+        log("Fechando o navegador e reabrindo do zero (recuperação da puxada)...");
+        try { if (ctx) await ctx.close(); } catch {}
+        ctxFechado = true; pagina = null;
+        await garantirNavegador();
+    };
+
     await garantirNavegador();
 
     let emExecucao = false;  // trava: não deixa a rodada agendada e um comando rodarem juntos
@@ -766,15 +777,13 @@ async function principal() {
         emExecucao = true;
         try { await garantirNavegador(); await umaPassada(pagina, moldes, simular); await publicarAgendaSeNaHora(); }
         catch (e) {
-            if (e.message === "SESSAO_CAIU") { log("Sessão caiu — faça login na janela."); await garantirLogin(pagina).catch(() => {}); }
-            else if (fechouNavegador(e)) log("Navegador/aba fechou durante a rodada — reabro na próxima.");
-            else if (ehFalhaDeRede(e)) {
-                // "Failed to fetch"/rede: a puxada não completou (VPN caiu, sessão
-                // morta ou aba numa página inválida). Tenta reconectar/relogar pra
-                // a próxima rodada já pegar, em vez de ficar parado a manhã toda.
-                logErro("rodada (falha de rede/sessão na puxada)", e);
-                log("Falha de rede na puxada — tentando reconectar e relogar...");
-                try { await garantirNavegador(); await pagina.goto(IXC_HOME, { waitUntil: "domcontentloaded", timeout: 40000 }); await garantirLogin(pagina); } catch (x) { log("Reconexão não concluiu: " + x.message); }
+            if (fechouNavegador(e)) log("Navegador/aba fechou durante a rodada — reabro na próxima.");
+            else if (e.message === "SESSAO_CAIU" || ehFalhaDeRede(e)) {
+                // puxada não completou (sessão caiu / Failed to fetch): fecha o
+                // navegador e reabre do zero, pra limpar o estado e relogar.
+                logErro("rodada (puxada falhou: sessão/rede)", e);
+                log("Puxada falhou (sessão/rede) — fechando e reabrindo o navegador...");
+                await reiniciarNavegador().catch(x => log("Reinício do navegador não concluiu: " + x.message));
             }
             else { logErro("rodada", e); log("ERRO: " + e.message); }
         } finally { emExecucao = false; }
@@ -813,11 +822,10 @@ async function principal() {
             log("Comando concluído.");
         } catch (e) {
             await supabase("PATCH", `robo_comandos?id=eq.${cmd.id}`, { status: "erro", processado_em: new Date(), resultado: { erro: e.message } }, "return=minimal").catch(() => {});
-            if (e.message === "SESSAO_CAIU") { log("Sessão caiu durante o comando — faça login na janela."); await garantirLogin(pagina).catch(() => {}); }
-            else if (ehFalhaDeRede(e)) {
-                logErro("comando (falha de rede/sessão)", e);
-                log("Falha de rede no comando — tentando reconectar e relogar...");
-                try { await garantirNavegador(); await pagina.goto(IXC_HOME, { waitUntil: "domcontentloaded", timeout: 40000 }); await garantirLogin(pagina); } catch (x) { log("Reconexão não concluiu: " + x.message); }
+            if (e.message === "SESSAO_CAIU" || ehFalhaDeRede(e)) {
+                logErro("comando (puxada falhou: sessão/rede)", e);
+                log("Puxada do comando falhou (sessão/rede) — fechando e reabrindo o navegador...");
+                await reiniciarNavegador().catch(x => log("Reinício do navegador não concluiu: " + x.message));
             }
             else log("Erro no comando: " + e.message);
         } finally { emExecucao = false; }
