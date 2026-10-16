@@ -372,15 +372,21 @@ async function ordensTemCoordenadas() {
 
 /**
  * Preenche lat/lng das OS ANTIGAS (gravadas antes do patch-30), um mês da
- * visão 343 por rodada, de COORD_INICIO até hoje — assim não trava as
- * rodadas normais. Progresso em estado.coordenadasMes / coordenadasFeito.
+ * visão 343 por rodada, do mês da OS mais antiga do banco até hoje — assim
+ * não trava as rodadas normais (e não puxa mês que não tem OS gravada).
+ * Progresso em estado.coordenadasMes / coordenadasFeito.
  */
-const COORD_INICIO = "2026-01";
+async function mesMaisAntigoDasOrdens() {
+    const r = await supabase("GET", "ordens?select=data_fechamento&data_fechamento=not.is.null&order=data_fechamento.asc&limit=1");
+    const d = r?.[0]?.data_fechamento ? new Date(r[0].data_fechamento) : new Date();
+    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}`;
+}
 async function preencherCoordenadasAntigas(pagina, moldes, simular, estado) {
     if (simular || estado.coordenadasFeito || !(await ordensTemCoordenadas())) return;
     const molde = moldes.find(m => VISOES_PARA_SINCRONIZAR.includes(m.viewId));
     if (!molde) return;
-    const [ano, mes] = (estado.coordenadasMes || COORD_INICIO).split("-").map(Number);
+    if (!estado.coordenadasMes) estado.coordenadasMes = await mesMaisAntigoDasOrdens();
+    const [ano, mes] = estado.coordenadasMes.split("-").map(Number);
     const ini = new Date(ano, mes - 1, 1, 0, 0, 0);
     if (ini > new Date()) { estado.coordenadasFeito = true; log("Coordenadas das OS antigas: histórico completo."); return; }
     const fim = new Date(ano, mes, 0, 23, 59, 59);
