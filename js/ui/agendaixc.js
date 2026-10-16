@@ -773,14 +773,17 @@ async function calcularAtrasadas() {
     const itens = [];
     for (const o of os) {
         if (!o.campo) continue;   // só OS de campo (fora infra/CTO, COP, faturamento… via Motor.NAO_CAMPO)
-        if (ixcNorm(o.status) === "encaminhada") continue;   // encaminhada depois de agendada: o agendamento não conta mais
+        const statusAtual = ixcNorm(o.status);
+        // não é "esquecida" se: foi repassada (encaminhada) ou está sendo tratada
+        // AGORA (técnico a caminho/executando) — nesses casos alguém já está nela.
+        if (["encaminhada", "deslocamento", "execucao", "em execucao"].includes(statusAtual)) continue;
         const dia = agIso[String(o.id)];
         if (!dia || dia >= hojeIso || dia < limiteIso) continue;   // só agendamento passado recente (últimos dias)
         // técnico = quem REALMENTE foi (deslocamento/execução); o da agenda só
         // vale se a OS ainda está "Agendada" (senão é só quem agendou, ex.: COP
         // agendou uma instalação Veloz e ninguém de campo pegou -> não é dele).
         const nome = (o.visitantes && o.visitantes[0])
-            || (ixcNorm(o.status) === "agendada" && o.agendaIxc && o.agendaIxc.tecnico)
+            || (statusAtual === "agendada" && o.agendaIxc && o.agendaIxc.tecnico)
             || null;
         const tech = nome ? (techs || []).find(t => Motor.nomeBate(nome, t)) : null;
         if (!tech) continue;   // sem técnico de campo resolvido (só agendador/sem visita) -> fora
