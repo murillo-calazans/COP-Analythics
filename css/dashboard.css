@@ -545,3 +545,60 @@ span.filtro-clicavel:hover {
     border-bottom-color: var(--cor-primaria);
 
 }
+
+/* Mapa de calor das OS (js/ui/mapacalor.js) */
+.mapa-calor-resumo { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 12px; }
+.mapa-calor-refinando { color: var(--cor-primaria); }
+
+.mapa-calor-corpo {
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+
+}
+
+.mapa-calor-area {
+
+    height: 620px;
+    border: 1px solid var(--cor-borda);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--cor-fundo-elevado);
+
+}
+
+.mapa-calor-ranking { max-height: 620px; overflow-y: auto; }
+.mapa-calor-ranking h3 { margin: 4px 0 8px; font-size: 14px; }
+
+.mapa-calor-lista { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.mapa-calor-lista button {
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 10px;
+
+    background: var(--cor-fundo-elevado);
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+    color: var(--cor-texto);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+
+}
+
+.mapa-calor-lista button:hover { border-color: var(--cor-primaria); }
+.mapa-calor-pos { min-width: 18px; color: var(--cor-texto-suave); font-size: 12px; }
+.mapa-calor-nome { flex: 1; min-width: 0; overflow-wrap: break-word; }
+.mapa-calor-nome small { display: block; color: var(--cor-texto-suave); font-size: 11px; }
+
+@media (max-width: 900px) {
+    .mapa-calor-corpo { grid-template-columns: 1fr; }
+    .mapa-calor-area { height: 420px; }
+    .mapa-calor-ranking { max-height: none; }
+}
