@@ -816,19 +816,24 @@ function lacreDoComplemento(v) {
 
 /**
  * Lacre (anilha) do campo "Sinal do último atendimento" (base do provedor
- * adquirido). Aceita "LACRE 123456", um número puro de 4+ dígitos ("0050954"),
- * ou um prefixo de provedor em letras seguido de um número longo
- * ("BJR03885597721001" -> "03885597721001"). Sinal óptico de verdade
- * ("-21.5", "-18,30 dBm") não é lacre.
+ * adquirido, ex.: BJR — a anilha foi parar nesse campo). Aceita "LACRE 123456",
+ * a anilha como número POSITIVO inteiro ou decimal com 4+ dígitos ("0050954",
+ * "1.99741"), ou um prefixo de provedor + número longo. O sinal óptico de
+ * verdade (negativo, ou com "dBm": "-21,5", "-18,30 dBm") NÃO é lacre.
  */
 function lacreDoSinal(v) {
     const s = valorCadastroCto(v);
     if (!s) return null;
     const rotulado = lacreDoComplemento(s);
     if (rotulado) return rotulado;
-    const m = s.match(/^\s*(?:n[º°o]?\.?\s*)?(\d{4,})\s*$/i)   // só número (anilha)
-        || s.match(/^\s*[A-Za-z]{2,6}\s*(\d{6,})\s*$/);        // provedor (BJR…) + número longo
-    return m ? m[1] : null;
+    // sinal óptico de verdade (não é lacre): tem "db" ou é número negativo
+    if (/d\s*b/i.test(s) || /^[−-]/.test(s.replace(/\s/g, ""))) return null;
+    const prov = s.match(/^\s*[A-Za-z]{2,6}\s*(\d{6,})\s*$/);   // provedor (BJR…) + número longo
+    if (prov) return prov[1];
+    // anilha: número positivo (inteiro ou decimal) com 4+ dígitos
+    const num = s.match(/^\s*(?:n[º°o]?\.?\s*)?(\d[\d.,]*)\s*$/);
+    if (num && num[1].replace(/\D/g, "").length >= 4) return num[1];
+    return null;
 }
 
 function valorCadastroCto(v) {
