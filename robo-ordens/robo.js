@@ -809,7 +809,8 @@ function mapearColunasClientesCto(chaves) {
  */
 function lacreDoComplemento(v) {
     const s = valorCadastroCto(v);
-    const m = s && s.match(/lacre\D{0,6}(\d[\d.\-/]*)/i);
+    // separador só no meio ("0053-502"), nunca no fim ("0053502- LOTE04" -> 0053502)
+    const m = s && s.match(/lacre\D{0,6}(\d+(?:[.\-/]\d+)*)/i);
     return m ? m[1] : null;
 }
 
@@ -899,9 +900,16 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
     });
     // amostra dos campos de lacre (diagnóstico da regra de leitura), toda puxada
     try {
-        const amostra = linhas.filter(r => valorCadastroCto(mapa.lacreSinal && r[mapa.lacreSinal]) || /lacre/i.test(String(r[mapa.lacre] ?? ""))).slice(0, 60)
-            .map(r => `${r[mapa.login]} | complemento: ${JSON.stringify(r[mapa.lacre] ?? null)} | sinal: ${JSON.stringify(mapa.lacreSinal ? r[mapa.lacreSinal] : null)} -> lacre ${porChave.get(valorCadastroCto(r[mapa.login]))?.lacre ?? "(nenhum)"}`);
-        fs.writeFileSync(path.join(__dirname, "amostra-lacre.txt"), `${new Date().toLocaleString("pt-BR")}\n` + amostra.join("\n") + "\n", "utf8");
+        const linhaAmostra = r => `${r[mapa.login]} | complemento: ${JSON.stringify(r[mapa.lacre] ?? null)} | sinal: ${JSON.stringify(mapa.lacreSinal ? r[mapa.lacreSinal] : null)} -> lacre ${porChave.get(valorCadastroCto(r[mapa.login]))?.lacre ?? "(nenhum)"}`;
+        // separado: sinal preenchido (base do provedor adquirido, "BJR…") e lacre no complemento
+        const comSinal = linhas.filter(r => valorCadastroCto(mapa.lacreSinal && r[mapa.lacreSinal]));
+        const comComplemento = linhas.filter(r => /lacre/i.test(String(r[mapa.lacre] ?? "")));
+        fs.writeFileSync(path.join(__dirname, "amostra-lacre.txt"),
+            `${new Date().toLocaleString("pt-BR")}\n\n` +
+            `== SINAL DO ÚLTIMO ATENDIMENTO preenchido: ${comSinal.length} linhas (até 60) ==\n${comSinal.slice(0, 60).map(linhaAmostra).join("\n")}\n\n` +
+            `== BJR (provedor adquirido): ${linhas.filter(r => /^BJR/i.test(String(r[mapa.login] ?? ""))).length} linhas (até 30) ==\n` +
+            `${linhas.filter(r => /^BJR/i.test(String(r[mapa.login] ?? ""))).slice(0, 30).map(linhaAmostra).join("\n")}\n\n` +
+            `== LACRE no complemento: ${comComplemento.length} linhas (até 30) ==\n${comComplemento.slice(0, 30).map(linhaAmostra).join("\n")}\n`, "utf8");
     } catch {}
     const ativos = dados.filter(r => r.ativo !== false);
     const completos = ativos.filter(r => r.cto && r.porta).length;
