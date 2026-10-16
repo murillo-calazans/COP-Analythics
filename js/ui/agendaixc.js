@@ -91,6 +91,9 @@ function ixcDiaPedidoDaOs(msgs) {
 /** Lê todas as linhas (eventos) da os_pendentes. */
 async function buscarOsPendentes() {
     if (typeof supabaseClient === "undefined") return [];
+    // paralelo (bem mais rápido no cold load); fallback sequencial se não houver.
+    if (typeof buscarTodasLinhasParalelo === "function")
+        return buscarTodasLinhasParalelo("os_pendentes", "dados, capturado_em", "id");
     const linhas = [];
     for (let de = 0; ; de += 1000) {
         const { data, error } = await supabaseClient

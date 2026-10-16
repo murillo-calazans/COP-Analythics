@@ -73,6 +73,42 @@ async function buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir) {
     return linhas;
 }
 
+const CONCORRENCIA_LEITURA = 6;   // o navegador faz ~6 requisições simultâneas por host
+
+/**
+ * Igual à buscarTodasLinhas, mas puxa as páginas EM PARALELO (por offset),
+ * pra tabelas grandes (ordens/movimentações/os_pendentes) — o cold load de
+ * ~108 mil linhas sequencial era o maior gargalo. Pega a contagem primeiro e
+ * dispara as páginas em lotes de CONCORRENCIA_LEITURA. Se a contagem falhar,
+ * cai no método sequencial (keyset). Uma escrita concorrente pode deslocar o
+ * offset no limite de uma página, mas a reconstrução dedup por id e o "ao vivo"
+ * corrigem — e o cold load dura poucos segundos.
+ */
+async function buscarTodasLinhasParalelo(tabela, colunas, colunaOrdem, aoProgredir) {
+    const { count, error } = await supabaseClient.from(tabela).select(colunaOrdem, { count: "exact", head: true });
+    if (error || count == null) return buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir);
+
+    const TAM = 1000;   // o Supabase entrega no máximo 1000 por requisição (teto do projeto)
+    const totalPaginas = Math.ceil(count / TAM);
+    const linhas = [];
+
+    for (let i = 0; i < totalPaginas; i += CONCORRENCIA_LEITURA) {
+        const lote = [];
+        for (let p = i; p < Math.min(i + CONCORRENCIA_LEITURA, totalPaginas); p++) {
+            const de = p * TAM;
+            lote.push(
+                supabaseClient.from(tabela).select(colunas).order(colunaOrdem).range(de, de + TAM - 1)
+                    .then(({ data, error: e }) => { if (e) throw e; return data || []; })
+            );
+        }
+        const feitos = await Promise.all(lote);
+        for (const d of feitos) linhas.push(...d);
+        if (aoProgredir) aoProgredir(linhas.length);
+    }
+
+    return linhas;
+}
+
 /**
  * Executa "operacao" em pedaços de "linhas", chamando aoProgredir(feitas,
  * total) depois de cada lote — pra UI conseguir mostrar progresso em vez
@@ -148,8 +184,8 @@ function reconstruirReferencias({ operadores, eventos, diagnosticos, colaborador
 /** Busca as linhas brutas de ordens/movimentações do Supabase — sem reconstruir nada ainda (ver reconstruirOrdens). */
 async function buscarLinhasOrdens(aoProgredir) {
     const [linhasOrdens, linhasMovimentacoes] = await Promise.all([
-        buscarTodasLinhas("ordens", "*", "id", n => aoProgredir?.(`ordens: ${n}`)),
-        buscarTodasLinhas("movimentacoes", "*", "id", n => aoProgredir?.(`movimentações: ${n}`))
+        buscarTodasLinhasParalelo("ordens", "*", "id", n => aoProgredir?.(`ordens: ${n}`)),
+        buscarTodasLinhasParalelo("movimentacoes", "*", "id", n => aoProgredir?.(`movimentações: ${n}`))
     ]);
 
     return { linhasOrdens, linhasMovimentacoes };
