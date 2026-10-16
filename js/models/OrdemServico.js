@@ -21,6 +21,8 @@ class OrdemServico {
         this.tecnicoResponsavel = null; // operador da movimentação mais recente (não necessariamente a última importada)
         this.dataAbertura = dataAbertura;
         this.dataFechamento = null;
+        this.lat = null; // coordenada da OS no IXC (patch-30) — Mapa de calor
+        this.lng = null;
 
         this.movimentacoes = []; // Movimentacao[]
 

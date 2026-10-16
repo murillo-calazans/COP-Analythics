@@ -4,6 +4,8 @@
  * ==========================================================
  * Onde estão as ordens de serviço do recorte do Filtro Global (período,
  * assunto, cidade, setor…). Cada OS vai pro mapa por, nesta ordem:
+ *   0. a coordenada da própria OS no IXC (ordens.lat/lng, patch-30), se
+ *      fizer sentido (não zerada e a menos de 60 km da cidade dela);
  *   1. a CTO do login no IXC (clientes_cto + posição da caixa em ctos,
  *      patch-29) — o ponto mais preciso;
  *   2. o bairro, pelo mapa de regiões do Agendador (mesma busca tolerante
@@ -92,11 +94,20 @@ async function carregarRegioesMapaCalor() {
     return (mapaCalorRegioes = { idx, centro });
 }
 
+/** Coordenada da OS no IXC, se plausível: perto (60 km) da cidade/bairro dela. */
+function coordenadaPropriaOs(ordem, loc, centro) {
+    const lat = Number(ordem.lat), lng = Number(ordem.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !lat || !lng) return null;
+    const ref = (loc?.lat != null ? { lat: loc.lat, lng: loc.lng } : null) ?? centro.get(`c:${Motor.norm(ordem.cidade ?? "")}`);
+    if (ref && Motor.distKm(ref, { lat, lng }) > 60) return null;
+    return { lat, lng };
+}
+
 /** Ponto de cada OS + de onde veio. `posicaoPorLogin` (opcional) = login -> {lat,lng} da CTO. */
 function localizarOrdensMapaCalor(ordens, posicaoPorLogin) {
     const { idx, centro } = mapaCalorRegioes;
     const pontos = [];
-    const fonte = { cto: 0, bairro: 0, cidade: 0, sem: 0 };
+    const fonte = { os: 0, cto: 0, bairro: 0, cidade: 0, sem: 0 };
     const porRegiao = new Map(), porBairro = new Map();
     const memo = new Map(); // cidade|bairro -> resultado de localizarNoMapa (muitas OS repetem)
 
@@ -105,8 +116,9 @@ function localizarOrdensMapaCalor(ordens, posicaoPorLogin) {
         if (!memo.has(chave)) memo.set(chave, Motor.localizarNoMapa(idx, ordem.cidade, ordem.bairro, null, null));
         const loc = memo.get(chave);
 
-        let p = posicaoPorLogin?.get(String(ordem.login ?? "").toLowerCase()) ?? null;
-        if (p) fonte.cto++;
+        let p = coordenadaPropriaOs(ordem, loc, centro);
+        if (p) fonte.os++;
+        else if ((p = posicaoPorLogin?.get(String(ordem.login ?? "").toLowerCase()) ?? null)) fonte.cto++;
         else if (loc?.lat != null) { p = { lat: loc.lat, lng: loc.lng }; fonte.bairro++; }
         else if (loc?.regiao && centro.has(`r:${loc.regiao.id}`)) { p = centro.get(`r:${loc.regiao.id}`); fonte.bairro++; }
         else if (centro.has(`c:${Motor.norm(ordem.cidade ?? "")}`)) { p = centro.get(`c:${Motor.norm(ordem.cidade ?? "")}`); fonte.cidade++; }
@@ -213,7 +225,8 @@ function desenharMapaCalor(r, totalOrdens, refinado) {
 
     document.getElementById("mapaCalorResumo").innerHTML = `
         <span><b>${fmt(totalOrdens)}</b> OS no filtro</span>
-        <span>no mapa pela CTO: <b>${fmt(r.fonte.cto)}</b> (${pct(r.fonte.cto)})</span>
+        <span>pela coordenada da OS: <b>${fmt(r.fonte.os)}</b> (${pct(r.fonte.os)})</span>
+        <span>pela CTO: <b>${fmt(r.fonte.cto)}</b> (${pct(r.fonte.cto)})</span>
         <span>pelo bairro: <b>${fmt(r.fonte.bairro)}</b> (${pct(r.fonte.bairro)})</span>
         <span>só pela cidade: <b>${fmt(r.fonte.cidade)}</b></span>
         <span>sem local: <b>${fmt(r.fonte.sem)}</b></span>

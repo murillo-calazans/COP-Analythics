@@ -213,6 +213,8 @@ function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
         });
 
         ordem.dataFechamento = linha.data_fechamento ? new Date(linha.data_fechamento) : null;
+        ordem.lat = linha.lat ?? null;
+        ordem.lng = linha.lng ?? null;
         ordem.statusAtual = linha.status_atual;
         ordem.tecnicoResponsavel = linha.tecnico_responsavel;
         ordem.auditoriaIA = linha.auditoria_ia ?? null;

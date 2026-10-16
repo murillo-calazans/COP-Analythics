@@ -183,7 +183,10 @@ function converterLinha(r) {
             login: texto(r.su_oss_chamado_radusuarios_login),
             cidade: texto(r.su_oss_chamado_cidade_nome),
             bairro: texto(r.su_oss_chamado_mensagem_su_oss_chamado_bairro),
-            assunto: texto(r.su_oss_chamado_su_oss_assunto_assunto)
+            assunto: texto(r.su_oss_chamado_su_oss_assunto_assunto),
+            // coordenada da OS (endereço do atendimento) — Mapa de calor, patch-30
+            lat: coordenadaCto(r.su_oss_chamado_mensagem_su_oss_chamado_latitude, 90),
+            lng: coordenadaCto(r.su_oss_chamado_mensagem_su_oss_chamado_longitude, 180)
         },
         mov: {
             operador: texto(r.su_oss_chamado_mensagem_id_operador),
@@ -354,6 +357,50 @@ async function puxarRecentes(pagina, molde, janela) {
 
 // ---------- processar + gravar ----------
 
+// ordens.lat/lng existem? (patch-30) — sem elas o robô grava como antes.
+// Confere de novo enquanto não existir: o patch pode ser rodado com o robô ligado.
+let _ordensTemCoord = null;
+async function ordensTemCoordenadas() {
+    if (_ordensTemCoord) return true;
+    try { await supabase("GET", "ordens?select=lat&limit=1"); _ordensTemCoord = true; }
+    catch {
+        if (_ordensTemCoord === null) log("  ordens sem colunas lat/lng (falta o patch-30) — coordenada das OS não é gravada.");
+        _ordensTemCoord = false;
+    }
+    return _ordensTemCoord;
+}
+
+/**
+ * Preenche lat/lng das OS ANTIGAS (gravadas antes do patch-30), um mês da
+ * visão 343 por rodada, de COORD_INICIO até hoje — assim não trava as
+ * rodadas normais. Progresso em estado.coordenadasMes / coordenadasFeito.
+ */
+const COORD_INICIO = "2026-01";
+async function preencherCoordenadasAntigas(pagina, moldes, simular, estado) {
+    if (simular || estado.coordenadasFeito || !(await ordensTemCoordenadas())) return;
+    const molde = moldes.find(m => VISOES_PARA_SINCRONIZAR.includes(m.viewId));
+    if (!molde) return;
+    const [ano, mes] = (estado.coordenadasMes || COORD_INICIO).split("-").map(Number);
+    const ini = new Date(ano, mes - 1, 1, 0, 0, 0);
+    if (ini > new Date()) { estado.coordenadasFeito = true; log("Coordenadas das OS antigas: histórico completo."); return; }
+    const fim = new Date(ano, mes, 0, 23, 59, 59);
+
+    log(`Coordenadas das OS antigas: ${p2(mes)}/${ano}...`);
+    const linhas = await puxarRecentes(pagina, molde, { ini, fim });
+    const porId = new Map();
+    for (const r of linhas) {
+        const id = texto(r.su_oss_chamado_mensagem_su_oss_chamado_id);
+        const lat = coordenadaCto(r.su_oss_chamado_mensagem_su_oss_chamado_latitude, 90);
+        const lng = coordenadaCto(r.su_oss_chamado_mensagem_su_oss_chamado_longitude, 180);
+        if (id && lat != null && lng != null && !porId.has(id)) porId.set(id, { id, lat, lng });
+    }
+    let atualizadas = 0;
+    for (const lote of emLotes([...porId.values()], 1000))
+        atualizadas += Number(await supabase("POST", "rpc/preencher_coordenadas_ordens", { p_linhas: lote })) || 0;
+    log(`  ${porId.size} OS com coordenada no mês, ${atualizadas} atualizada(s) no banco.`);
+    estado.coordenadasMes = mes === 12 ? `${ano + 1}-01` : `${ano}-${p2(mes + 1)}`;
+}
+
 async function processarEGravar(linhasBrutas, { simular }) {
     const novas = new Map();
     let semId = 0;
@@ -361,7 +408,9 @@ async function processarEGravar(linhasBrutas, { simular }) {
         const { id, ordem, mov } = converterLinha(lb);
         if (id === null) { semId++; continue; }
         if (!novas.has(id)) novas.set(id, { ...ordem, movs: [] });
-        novas.get(id).movs.push(mov);
+        const atual = novas.get(id);
+        if (atual.lat == null && ordem.lat != null) { atual.lat = ordem.lat; atual.lng = ordem.lng; }
+        atual.movs.push(mov);
     }
     const ids = [...novas.keys()];
 
@@ -383,8 +432,10 @@ async function processarEGravar(linhasBrutas, { simular }) {
 
     // existentes no Supabase (pra não duplicar e pra mesclar o resumo da OS)
     const ordensExist = new Map(), movsExist = new Map();
+    const comCoord = await ordensTemCoordenadas();
+    const colunasOrdem = "id,cliente,login,cidade,bairro,assunto,data_abertura,data_fechamento,status_atual,tecnico_responsavel" + (comCoord ? ",lat,lng" : "");
     for (const lote of emLotes(ids, 150)) {
-        for (const o of await buscarTodas("ordens", "id,cliente,login,cidade,bairro,assunto,data_abertura,data_fechamento,status_atual,tecnico_responsavel", "id", `&id=in.${listaIn(lote)}`))
+        for (const o of await buscarTodas("ordens", colunasOrdem, "id", `&id=in.${listaIn(lote)}`))
             ordensExist.set(o.id, o);
         for (const m of await buscarTodas("movimentacoes", "id,ordem_id,operador,evento,status,diagnostico,resposta_padrao,data", "id", `&ordem_id=in.${listaIn(lote)}`)) {
             if (!movsExist.has(m.ordem_id)) movsExist.set(m.ordem_id, []);
@@ -416,7 +467,9 @@ async function processarEGravar(linhasBrutas, { simular }) {
             cidade: antiga.cidade ?? nova.cidade, bairro: antiga.bairro ?? nova.bairro, assunto: antiga.assunto ?? nova.assunto,
             data_abertura: dataAbertura, data_fechamento: resumo.dataFechamento,
             status_atual: resumo.statusAtual, tecnico_responsavel: resumo.tecnico,
-            setor: resolverSetor(operadores, resumo.tecnico), atualizado_em: new Date()
+            setor: resolverSetor(operadores, resumo.tecnico), atualizado_em: new Date(),
+            // a coordenada que veio agora vale; sem ela, mantém a salva (não apaga com null)
+            ...(comCoord ? { lat: nova.lat ?? antiga.lat ?? null, lng: nova.lat != null ? nova.lng : (antiga.lng ?? null) } : {})
         });
     }
 
@@ -951,6 +1004,12 @@ async function umaPassada(pagina, moldes, simular) {
         if (!simular) log(`  gravado: ${r.ordens} OS, ${r.inseridas} movimentação(ões) nova(s), ${r.ignoradas} já existiam.`);
     }
     await sincronizarPendentes(pagina, moldes, simular, { finalizadas: [...finalizadas], estado, inicio });
+    // à parte: coordenadas das OS antigas, um mês por rodada (patch-30)
+    try { await preencherCoordenadasAntigas(pagina, moldes, simular, estado); }
+    catch (e) {
+        if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
+        log("Coordenadas das OS antigas falhou: " + e.message);
+    }
     // à parte: se a base de clientes falhar, não derruba a rodada das ordens (tenta de novo na próxima)
     try { await sincronizarClientesCto(pagina, moldes, simular, { estado, inicio }); }
     catch (e) {
