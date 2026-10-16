@@ -776,9 +776,14 @@ async function calcularAtrasadas() {
         if (ixcNorm(o.status) === "encaminhada") continue;   // encaminhada depois de agendada: o agendamento não conta mais
         const dia = agIso[String(o.id)];
         if (!dia || dia >= hojeIso || dia < limiteIso) continue;   // só agendamento passado recente (últimos dias)
-        const nome = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
+        // técnico = quem REALMENTE foi (deslocamento/execução); o da agenda só
+        // vale se a OS ainda está "Agendada" (senão é só quem agendou, ex.: COP
+        // agendou uma instalação Veloz e ninguém de campo pegou -> não é dele).
+        const nome = (o.visitantes && o.visitantes[0])
+            || (ixcNorm(o.status) === "agendada" && o.agendaIxc && o.agendaIxc.tecnico)
+            || null;
         const tech = nome ? (techs || []).find(t => Motor.nomeBate(nome, t)) : null;
-        if (!tech) continue;   // só OS de técnicos da escala
+        if (!tech) continue;   // sem técnico de campo resolvido (só agendador/sem visita) -> fora
         const info = separar(tech.nome);
         itens.push({
             id: o.id, cliente: o.cliente, assunto: o.assunto,
