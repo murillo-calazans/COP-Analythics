@@ -43,6 +43,9 @@ let camadaCalor = null;          // L.heatLayer
 let mapaCalorRegioes = null;     // { idx, centroRegiao: Map, centroCidade: Map }
 let mapaCalorToken = 0;
 let mapaCalorPrimeiroEnquadre = true;
+let mapaCalorOrdens = null;      // recorte do Filtro Global da última renderização
+let mapaCalorPosicao = null;     // login -> posição da CTO (refino), reaproveitado ao trocar o assunto
+let mapaCalorAssunto = "";       // filtro de assunto próprio do mapa ("" = todos)
 
 function carregarScriptCalor(src) {
     return new Promise((ok, erro) => {
@@ -175,19 +178,52 @@ async function renderizarMapaCalor() {
     }
     setTimeout(() => mapaCalor.invalidateSize(), 0); // a seção estava escondida
 
-    const ordens = FiltroEngine.ordensFiltradas();
-    desenharMapaCalor(localizarOrdensMapaCalor(ordens, null), ordens.size, false);
+    mapaCalorOrdens = FiltroEngine.ordensFiltradas();
+    preencherAssuntosMapaCalor();
+    redesenharMapaCalor(false);
 
     // refino: posição da CTO de cada login (se o cadastro de CTOs existir)
     try {
-        const posicao = await posicoesCtoDosLogins([...ordens.values()].map(o => o.login));
+        const posicao = await posicoesCtoDosLogins([...mapaCalorOrdens.values()].map(o => o.login));
         if (token !== mapaCalorToken) return;
         if (!posicao) { document.querySelector(".mapa-calor-refinando")?.remove(); return; }
-        desenharMapaCalor(localizarOrdensMapaCalor(ordens, posicao), ordens.size, true);
+        mapaCalorPosicao = posicao;
+        redesenharMapaCalor(true);
     } catch (erro) {
         console.warn("Mapa de calor — CTOs:", erro);
         document.querySelector(".mapa-calor-refinando")?.remove();
     }
+}
+
+/** Recorte do Filtro Global + o assunto escolhido em cima do mapa. */
+function ordensDoMapaCalor() {
+    if (!mapaCalorAssunto) return mapaCalorOrdens;
+    return new Map([...mapaCalorOrdens].filter(([, o]) => (o.assunto ?? "") === mapaCalorAssunto));
+}
+
+function redesenharMapaCalor(refinado) {
+    const ordens = ordensDoMapaCalor();
+    desenharMapaCalor(localizarOrdensMapaCalor(ordens, mapaCalorPosicao), ordens.size, refinado || !!mapaCalorPosicao);
+}
+
+/** Assuntos do recorte atual, do mais frequente pro menos (com a contagem). */
+function preencherAssuntosMapaCalor() {
+    const select = document.getElementById("filtroAssuntoMapaCalor");
+    if (!select) return;
+    if (!select.dataset.ligado) {
+        select.dataset.ligado = "1";
+        select.addEventListener("change", () => { mapaCalorAssunto = select.value; redesenharMapaCalor(true); });
+    }
+    const contagem = new Map();
+    for (const o of mapaCalorOrdens.values()) {
+        const a = o.assunto ?? "";
+        if (a) contagem.set(a, (contagem.get(a) ?? 0) + 1);
+    }
+    const assuntos = [...contagem].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR"));
+    if (mapaCalorAssunto && !contagem.has(mapaCalorAssunto)) mapaCalorAssunto = "";
+    select.innerHTML = `<option value="">Todos os assuntos (${mapaCalorOrdens.size.toLocaleString("pt-BR")})</option>` +
+        assuntos.map(([a, n]) => `<option value="${escaparHtml(a)}">${escaparHtml(a)} (${n.toLocaleString("pt-BR")})</option>`).join("");
+    select.value = mapaCalorAssunto;
 }
 
 /** login (minúsculo) -> {lat,lng} da CTO dele no IXC; null se o cadastro de CTOs não existe/está vazio. */
@@ -224,7 +260,7 @@ function desenharMapaCalor(r, totalOrdens, refinado) {
     }
 
     document.getElementById("mapaCalorResumo").innerHTML = `
-        <span><b>${fmt(totalOrdens)}</b> OS no filtro</span>
+        <span><b>${fmt(totalOrdens)}</b> OS${mapaCalorAssunto ? " do assunto" : " no filtro"}</span>
         <span>pela coordenada da OS: <b>${fmt(r.fonte.os)}</b> (${pct(r.fonte.os)})</span>
         <span>pela CTO: <b>${fmt(r.fonte.cto)}</b> (${pct(r.fonte.cto)})</span>
         <span>pelo bairro: <b>${fmt(r.fonte.bairro)}</b> (${pct(r.fonte.bairro)})</span>

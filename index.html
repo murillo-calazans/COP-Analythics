@@ -573,7 +573,7 @@
     </section>
 
     <section id="secao-mapa-calor" class="secao">
-        <div class="placeholder-card auditoria-card">
+        <div class="placeholder-card auditoria-card mapa-calor-card">
             <div class="dashboard-cabecalho">
                 <div>
                     <h2>🗺️ Mapa de calor das OS</h2>
@@ -583,6 +583,11 @@
                         Clique numa região ou bairro do ranking pra aproximar.
                     </p>
                 </div>
+            </div>
+            <div class="mapa-calor-filtros">
+                <select id="filtroAssuntoMapaCalor" class="ctos-select" aria-label="Assunto">
+                    <option value="">Todos os assuntos</option>
+                </select>
             </div>
             <div id="mapaCalorResumo" class="resumo-filtro mapa-calor-resumo"></div>
             <div class="mapa-calor-corpo">
