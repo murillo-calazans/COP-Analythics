@@ -92,7 +92,12 @@ function mostrarAppAutenticado() {
 
     aplicarGateDePapel();
     if (typeof atualizarMenuLateralAdmin === "function") atualizarMenuLateralAdmin();
-    if (typeof renderizarNotificacoes === "function") renderizarNotificacoes();
+    // Notificações puxam a os_pendentes inteira (pesada) — adia pra não competir
+    // com o carregamento principal (deixa a tela abrir primeiro).
+    if (typeof renderizarNotificacoes === "function") {
+        const adiar = window.requestIdleCallback || (fn => setTimeout(fn, 3500));
+        adiar(() => renderizarNotificacoes());
+    }
 
     // Saudação já aparece; os números do mês entram quando os dados chegarem.
     if (secaoAtiva() === "inicio") renderizarInicio();
