@@ -46,13 +46,20 @@ async function solicitarAtualizacaoRobo() {
         if (error) throw error;
 
         const id = data.id;
-        const limite = Date.now() + 120000; // espera até 2 min o robô processar
+        // Espera até 6 min: a 1ª rodada do dia faz os retratos completos (529 +
+        // base de CTOs) e pode levar ~4-5 min; as rodadas incrementais são rápidas.
+        const limite = Date.now() + 360000;
+        let viuProcessando = false;
 
         while (Date.now() < limite) {
             await new Promise(r => setTimeout(r, 3000));
             const { data: row } = await supabaseClient
                 .from("robo_comandos").select("status, resultado").eq("id", id).maybeSingle();
 
+            if (row?.status === "processando" && !viuProcessando) {
+                viuProcessando = true;   // o robô pegou o pedido e está trabalhando
+                roboToast("O robô está atualizando… (pode demorar na 1ª rodada do dia)");
+            }
             if (row?.status === "concluido") {
                 roboToast("Banco atualizado pelo robô ✓", "ok");
                 if (typeof aovivoVerificar === "function") await aovivoVerificar(); // puxa o novo pra tela
@@ -64,7 +71,10 @@ async function solicitarAtualizacaoRobo() {
                 return;
             }
         }
-        roboToast("O robô não respondeu em 2 min. Verifique se o 'iniciar.cmd' está aberto no PC.", "erro");
+        // estourou o tempo: se o robô chegou a "processando", ele está vivo e só
+        // demorando (rodada pesada) — não é erro; os dados entram sozinhos ao fim.
+        if (viuProcessando) roboToast("O robô ainda está processando (rodada pesada). Os dados aparecem sozinhos quando terminar.", "info");
+        else roboToast("O robô não respondeu. Verifique se o 'iniciar.cmd' está aberto no PC.", "erro");
     } catch (e) {
         roboToast("Não consegui enviar o pedido: " + (e.message || e), "erro");
     } finally {
