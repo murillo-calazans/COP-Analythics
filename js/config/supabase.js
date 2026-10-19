@@ -9,9 +9,11 @@
  * A chave secreta (service_role) NUNCA deve entrar aqui.
  */
 
-const SUPABASE_URL = "https://ldpiitymhvdhemdrntlx.supabase.co";
-const SUPABASE_ANON_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkcGlpdHltaHZkaGVtZHJudGx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NDY3ODUsImV4cCI6MjEwMjIyMjc4NX0.M0_0vZicw_y-WOqJuDHL5NodyRS11JgxmEA3TGDGB9I";
+// Projeto novo (migração 19/10/2026 — o antigo foi bloqueado por egress).
+// "anon key" aqui = a publishable key nova (sb_publishable_…), equivalente
+// pública da anon; o supabase-js aceita normalmente.
+const SUPABASE_URL = "https://tdeyuiicayhcxsikzotj.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_BV33dmVQ6axdL4Kb0_p-oA_Peqqrbpq";
 
 // window.supabase vem do script CDN (@supabase/supabase-js, carregado
 // no index.html antes deste arquivo) — createClient é a função de fábrica.
