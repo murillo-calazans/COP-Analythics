@@ -620,6 +620,27 @@ const lerEstado = () => { try { return JSON.parse(fs.readFileSync(ARQ_ESTADO, "u
 const salvarEstado = e => { try { fs.writeFileSync(ARQ_ESTADO, JSON.stringify(e, null, 2), "utf8"); } catch (x) { log("não salvou o estado das puxadas: " + x.message); } };
 const desdeComFolga = iso => new Date(new Date(iso).getTime() - FOLGA_MIN * 60000);
 
+// Janela grande (1ª rodada / backfill de meses) faz o IXC demorar demais pra
+// devolver UMA página só da visão 343 e estourar o timeout de 90s do fetch
+// (AbortError em puxarRecentes) — aí a rodada toda falha e o período fica sem
+// puxar (foi o que deixou outubro/2026 incompleto na migração). A solução é
+// puxar a janela em PEDAÇOS de poucos dias: cada pedaço responde rápido. A
+// puxada incremental normal (janela de minutos/horas) vira um pedaço só, igual
+// a antes. Ver uso em umaPassada.
+const MAX_DIAS_JANELA = 7;
+function fatiarJanela(ini, fim, maxDias = MAX_DIAS_JANELA) {
+    const fatias = [];
+    const passoMs = maxDias * 86400000;
+    let a = new Date(ini);
+    const alvo = new Date(fim);
+    while (a <= alvo) {
+        const b = new Date(Math.min(a.getTime() + passoMs - 1, alvo.getTime()));
+        fatias.push({ ini: a, fim: b });
+        a = new Date(b.getTime() + 1);
+    }
+    return fatias.length ? fatias : [{ ini: new Date(ini), fim: new Date(fim) }];
+}
+
 const ID_OS = "ID OS";
 const FILTRO_ID_OS = "dados->>ID%20OS";
 // colunas que são da OS (e não da movimentação): repetem em toda linha da OS
@@ -1013,14 +1034,23 @@ async function umaPassada(pagina, moldes, simular) {
 
     // ordens: OS finalizadas desde a última puxada (1ª vez: últimos JANELA_DIAS dias)
     const ini = estado.ordensDesde ? desdeComFolga(estado.ordensDesde) : new Date(inicio.getTime() - JANELA_DIAS * 86400000);
+    const fimJanela = fimDoDia(inicio);
+    // Fatia janelas grandes (1ª rodada / backfill) em pedaços de MAX_DIAS_JANELA
+    // dias, senão o IXC estoura o timeout de 90s numa página só (ver fatiarJanela).
+    // Grava CADA pedaço na hora: se um pedaço falhar, o que já entrou fica (dedup
+    // ignora repetido) e a próxima rodada retoma do mesmo ponto sem perder nada.
+    const fatias = fatiarJanela(ini, fimJanela);
     for (const id of VISOES_PARA_SINCRONIZAR) {
         const molde = moldes.find(m => m.viewId === id);
         if (!molde) { log(`molde da visão ${id} não encontrado em templates.json`); continue; }
-        log(`Visão ${id} "${molde.viewName}": puxando OS finalizadas desde ${ini.toLocaleString("pt-BR")}...`);
-        const linhas = await puxarRecentes(pagina, molde, { ini, fim: fimDoDia(inicio) });
-        for (const r of linhas) if (!vazio(r.su_oss_chamado_mensagem_su_oss_chamado_id)) finalizadas.add(String(r.su_oss_chamado_mensagem_su_oss_chamado_id));
-        const r = await processarEGravar(linhas, { simular });
-        if (!simular) log(`  gravado: ${r.ordens} OS, ${r.inseridas} movimentação(ões) nova(s), ${r.ignoradas} já existiam.`);
+        if (fatias.length > 1) log(`Visão ${id} "${molde.viewName}": janela grande (${ini.toLocaleString("pt-BR")} → ${fimJanela.toLocaleString("pt-BR")}) — puxando em ${fatias.length} pedaços de até ${MAX_DIAS_JANELA} dias.`);
+        for (const fat of fatias) {
+            log(`Visão ${id} "${molde.viewName}": OS finalizadas ${fat.ini.toLocaleString("pt-BR")} → ${fat.fim.toLocaleString("pt-BR")}...`);
+            const linhas = await puxarRecentes(pagina, molde, { ini: fat.ini, fim: fat.fim });
+            for (const r of linhas) if (!vazio(r.su_oss_chamado_mensagem_su_oss_chamado_id)) finalizadas.add(String(r.su_oss_chamado_mensagem_su_oss_chamado_id));
+            const r = await processarEGravar(linhas, { simular });
+            if (!simular) log(`  gravado: ${r.ordens} OS, ${r.inseridas} movimentação(ões) nova(s), ${r.ignoradas} já existiam.`);
+        }
     }
     await sincronizarPendentes(pagina, moldes, simular, { finalizadas: [...finalizadas], estado, inicio });
     // à parte: coordenadas das OS antigas, um mês por rodada (patch-30)
