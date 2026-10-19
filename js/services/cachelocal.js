@@ -26,6 +26,14 @@ const CACHE_DB_VERSAO = 1;
 const CACHE_STORE = "snapshot";
 const CACHE_CHAVE = "atual";
 
+// Qual projeto Supabase gerou este cache. Um cache do projeto A NUNCA pode ser
+// reaproveitado contra o projeto B (migração por egress em 19/10/2026): as datas,
+// ids e a marca d'água do incremental são de outro banco, e mesclar daria dados
+// parciais/errados. SUPABASE_URL é global (js/config/supabase.js carrega antes).
+function projetoDoCache() {
+    try { return typeof SUPABASE_URL === "string" ? SUPABASE_URL : ""; } catch { return ""; }
+}
+
 function abrirBancoCacheLocal() {
     return new Promise((resolve, reject) => {
         const pedido = indexedDB.open(CACHE_DB_NOME, CACHE_DB_VERSAO);
@@ -59,7 +67,8 @@ async function salvarCacheLocal(referenciasBrutas, ordensBrutas) {
                 colaboradoresResponsaveis: referenciasBrutas.colaboradoresResponsaveis,
                 linhasOrdens: ordensBrutas.linhasOrdens,
                 linhasMovimentacoes: ordensBrutas.linhasMovimentacoes,
-                salvoEm: new Date().toISOString()
+                salvoEm: new Date().toISOString(),
+                projeto: projetoDoCache()
             }, CACHE_CHAVE);
 
             transacao.oncomplete = resolve;
@@ -85,6 +94,16 @@ async function carregarCacheLocal() {
         });
 
         banco.close();
+
+        // Cache de outro projeto Supabase (migração) → descarta e força o load
+        // completo do projeto atual. Sem isso, o incremental mesclaria contra um
+        // snapshot de outro banco e mostraria só uns poucos dados (bug dos "18").
+        if (resultado && resultado.projeto !== projetoDoCache()) {
+            console.warn(`Cache é de outro projeto (${resultado.projeto || "sem marca"}) — ignorando e apagando.`);
+            await limparCacheLocal();
+            return null;
+        }
+
         return resultado;
     } catch (erro) {
         console.error("Falha ao ler cache local:", erro);
