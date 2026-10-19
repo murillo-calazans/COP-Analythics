@@ -51,12 +51,13 @@ const TAMANHO_LOTE_ESCRITA = 500;
  * foi pedido (teto "Max Rows" do projeto) sem avisar; comparar com o
  * pedido faria a leitura parar cedo demais e perder o resto silenciosamente.
  */
-async function buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir) {
+async function buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir, aplicarFiltro) {
     const linhas = [];
     let ultimoValor = null;
 
     while (true) {
         let consulta = supabaseClient.from(tabela).select(colunas).order(colunaOrdem).limit(TAMANHO_PAGINA_LEITURA);
+        if (aplicarFiltro) consulta = aplicarFiltro(consulta);   // filtro extra (ex.: atualizado_em>marca d'água)
         if (ultimoValor !== null) consulta = consulta.gt(colunaOrdem, ultimoValor);
 
         const { data, error } = await consulta;
@@ -530,9 +531,14 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
  * acesso neste navegador, ou depois de limparDadosImportados()),
  * simplesmente não faz nada e devolve false.
  */
+// Guarda o último snapshot BRUTO (do cache ou da última busca) pra o
+// carregamento incremental mesclar só o que mudou, sem rebaixar tudo.
+let _ultimoCacheBruto = null;
+
 async function restaurarDoCacheLocal() {
     const cache = await carregarCacheLocal();
     if (!cache) return false;
+    _ultimoCacheBruto = cache;
 
     try {
         aplicarLinhasAoEstado(
@@ -573,7 +579,75 @@ async function restaurarDoCacheLocal() {
  * um "Limpar dados" feito por um admin em outro navegador, que sem isso
  * ficaria escondido atrás do cache local de quem já tinha entrado antes.
  */
+const IDADE_MAX_INCREMENTAL_MS = 24 * 3600 * 1000;   // acima disso, faz o completo (pega exclusões/novas referências)
+
+function _emLotes(arr, n) { const r = []; for (let i = 0; i < arr.length; i += n) r.push(arr.slice(i, i + n)); return r; }
+
+/**
+ * Carregamento INCREMENTAL: em vez de rebaixar as ~100k linhas toda vez
+ * (egress!), baixa só as ORDENS mudadas desde o cache (atualizado_em > marca
+ * d'água) + as movimentações dessas ordens, e mescla no snapshot do cache.
+ * Referências (pequenas) são reaproveitadas do cache. Devolve o snapshot bruto
+ * mesclado, ou null quando não dá pra incremental (sem cache, cache velho>24h,
+ * sem marca d'água) — aí o chamador faz o completo. NUNCA remove ordens do
+ * cache (sem perda de dado); no máximo fica 24h desatualizado quanto a exclusões,
+ * corrigido pelo completo diário. Ver atualizarDoSupabase.
+ */
+async function atualizarIncremental(cache, aoProgredir) {
+    if (!cache || !cache.linhasOrdens || !cache.linhasOrdens.length) return null;
+    if (cache.salvoEm && Date.now() - new Date(cache.salvoEm).getTime() > IDADE_MAX_INCREMENTAL_MS) return null;
+
+    let marca = null;
+    for (const o of cache.linhasOrdens) { const a = o.atualizado_em; if (a && (!marca || a > marca)) marca = a; }
+    if (!marca) return null;
+
+    aoProgredir?.("mudanças recentes");
+    const ordensDelta = await buscarTodasLinhas("ordens", "*", "id", null, q => q.gt("atualizado_em", marca));
+    const ids = ordensDelta.map(o => o.id);
+    const movsDelta = [];
+    for (const lote of _emLotes(ids, 150)) {
+        const parte = await buscarTodasLinhas("movimentacoes", "*", "id", null, q => q.in("ordem_id", lote));
+        movsDelta.push(...parte);
+    }
+
+    const ordensMap = new Map(cache.linhasOrdens.map(o => [o.id, o]));
+    for (const o of ordensDelta) ordensMap.set(o.id, o);
+    const mexidas = new Set(ids);
+    const movsMescladas = cache.linhasMovimentacoes.filter(m => !mexidas.has(m.ordem_id)).concat(movsDelta);
+
+    return {
+        referenciasBrutas: {
+            operadores: cache.operadores, eventos: cache.eventos, diagnosticos: cache.diagnosticos,
+            colaboradoresResponsaveis: cache.colaboradoresResponsaveis ?? []
+        },
+        ordensBrutas: { linhasOrdens: [...ordensMap.values()], linhasMovimentacoes: movsMescladas },
+        deltaOrdens: ordensDelta.length, deltaMovs: movsDelta.length
+    };
+}
+
 async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
+    // Incremental primeiro (corta egress): só o que mudou desde o último snapshot
+    // (vale tanto no 1º load com cache quanto nos refreshes do aovivo).
+    if (_ultimoCacheBruto) {
+        try {
+            const inc = await atualizarIncremental(_ultimoCacheBruto, aoProgredir);
+            if (inc) {
+                aplicarLinhasAoEstado(inc.referenciasBrutas, inc.ordensBrutas);
+                APP.status.baseCarregada = APP.dados.ordens.size > 0;
+                salvarCacheLocal(inc.referenciasBrutas, inc.ordensBrutas);
+                _ultimoCacheBruto = {
+                    ...inc.referenciasBrutas,
+                    linhasOrdens: inc.ordensBrutas.linhasOrdens, linhasMovimentacoes: inc.ordensBrutas.linhasMovimentacoes,
+                    salvoEm: new Date().toISOString()
+                };
+                console.log(`atualizarDoSupabase (incremental): ${inc.deltaOrdens} ordens mudadas, ${inc.deltaMovs} movimentações; total ${inc.ordensBrutas.linhasOrdens.length} ordens.`);
+                return APP.status.baseCarregada;
+            }
+        } catch (erro) {
+            console.warn("Incremental falhou — fazendo o carregamento completo:", erro);
+        }
+    }
+
     for (let tentativa = 1; tentativa <= 2; tentativa++) {
         try {
             const [referenciasBrutas, ordensBrutas] = await Promise.all([
@@ -600,6 +674,11 @@ async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
             APP.status.baseCarregada = !vazio;
 
             salvarCacheLocal(referenciasBrutas, ordensBrutas); // best-effort, não bloqueia o retorno
+            _ultimoCacheBruto = {   // marca d'água pro incremental da próxima vez
+                ...referenciasBrutas,
+                linhasOrdens: ordensBrutas.linhasOrdens, linhasMovimentacoes: ordensBrutas.linhasMovimentacoes,
+                salvoEm: new Date().toISOString()
+            };
 
             return APP.status.baseCarregada;
 
