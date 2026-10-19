@@ -111,6 +111,64 @@ async function buscarTodasLinhasParalelo(tabela, colunas, colunaOrdem, aoProgred
 }
 
 /**
+ * Igual em volume à buscarTodasLinhasParalelo, mas por KEYSET (id > último)
+ * dentro de FAIXAS de id — NÃO por offset. Offset fundo (ex.: linha 150 mil)
+ * faz o Postgres varrer e descartar tudo que vem antes a CADA página; com a
+ * RLS de movimentacoes (que junta "ordens" linha a linha pra checar o setor) o
+ * custo multiplica e estoura o tempo limite da consulta, derrubando o
+ * Promise.all da carga inteira — o site cai pro cache e mostra só um punhado de
+ * ordens (sintoma real: "semana passada só 18 ordens", porque sem as
+ * movimentações nenhuma OS tem fechamento calculável e sai do filtro de
+ * período). Keyset usa o índice da PK direto: toda página é rápida em qualquer
+ * profundidade. Só vale pra id NUMÉRICO (particiona [min,max] em faixas e cada
+ * faixa pagina por keyset); id texto cai no keyset sequencial (buscarTodasLinhas).
+ * As faixas correm concorrentes — o próprio navegador limita a ~6 conexões/host.
+ */
+async function buscarTodasLinhasKeysetParalelo(tabela, colunas, colunaId, aoProgredir) {
+    const { count, error } = await supabaseClient.from(tabela).select(colunaId, { count: "exact", head: true });
+    if (error || !count) return buscarTodasLinhas(tabela, colunas, colunaId, aoProgredir);
+
+    const [extMin, extMax] = await Promise.all([
+        supabaseClient.from(tabela).select(colunaId).order(colunaId, { ascending: true }).limit(1),
+        supabaseClient.from(tabela).select(colunaId).order(colunaId, { ascending: false }).limit(1)
+    ]);
+    const minId = extMin.data?.[0]?.[colunaId], maxId = extMax.data?.[0]?.[colunaId];
+    // id não numérico (ex.: ordens.id é texto) → keyset sequencial simples.
+    if (typeof minId !== "number" || typeof maxId !== "number") {
+        return buscarTodasLinhas(tabela, colunas, colunaId, aoProgredir);
+    }
+
+    const LINHAS_POR_FAIXA = 8000;   // ~8 páginas de 1000 por faixa; ~20 faixas em 160k linhas
+    const nFaixas = Math.max(1, Math.ceil(count / LINHAS_POR_FAIXA));
+    const passo = Math.max(1, Math.ceil((maxId - minId + 1) / nFaixas));
+
+    let carregadas = 0;
+    async function puxarFaixa(lo, hi) {
+        const out = [];
+        let ultimo = lo - 1;   // 1ª página da faixa: id > lo-1 && id <= hi  ==  [lo, hi]
+        while (true) {
+            const { data, error: e } = await supabaseClient.from(tabela).select(colunas)
+                .gt(colunaId, ultimo).lte(colunaId, hi).order(colunaId).limit(TAMANHO_PAGINA_LEITURA);
+            if (e) throw e;
+            if (data.length === 0) break;
+            out.push(...data);
+            ultimo = data[data.length - 1][colunaId];
+            carregadas += data.length;
+            if (aoProgredir) aoProgredir(carregadas);
+        }
+        return out;
+    }
+
+    const faixas = [];
+    for (let lo = minId; lo <= maxId; lo += passo) faixas.push(puxarFaixa(lo, Math.min(lo + passo - 1, maxId)));
+    const partes = await Promise.all(faixas);
+
+    const linhas = [];
+    for (const p of partes) linhas.push(...p);
+    return linhas;
+}
+
+/**
  * Executa "operacao" em pedaços de "linhas", chamando aoProgredir(feitas,
  * total) depois de cada lote — pra UI conseguir mostrar progresso em vez
  * de parecer travada numa importação grande.
@@ -185,8 +243,11 @@ function reconstruirReferencias({ operadores, eventos, diagnosticos, colaborador
 /** Busca as linhas brutas de ordens/movimentações do Supabase — sem reconstruir nada ainda (ver reconstruirOrdens). */
 async function buscarLinhasOrdens(aoProgredir) {
     const [linhasOrdens, linhasMovimentacoes] = await Promise.all([
+        // ordens.id é TEXTO e a tabela é pequena (RLS barata, sem join) → offset tá ok.
         buscarTodasLinhasParalelo("ordens", "*", "id", n => aoProgredir?.(`ordens: ${n}`)),
-        buscarTodasLinhasParalelo("movimentacoes", "*", "id", n => aoProgredir?.(`movimentações: ${n}`))
+        // movimentacoes.id é BIGINT e a tabela é grande com RLS que junta ordens
+        // linha a linha → offset fundo estoura o tempo; keyset por faixa resolve.
+        buscarTodasLinhasKeysetParalelo("movimentacoes", "*", "id", n => aoProgredir?.(`movimentações: ${n}`))
     ]);
 
     return { linhasOrdens, linhasMovimentacoes };
