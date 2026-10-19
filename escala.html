@@ -720,6 +720,79 @@
   var sessaoAtual = null; // sessão de login (Supabase Auth)
   var papelAtual = null;  // papel do usuário logado na tabela "perfis" (admin/editor/leitor)
 
+  // ---------- Modo contingência (banco fora do ar) ----------
+  // Quando o Supabase não responde (cota estourada, fora do ar, sem rede) a
+  // página abre com a cópia deste navegador, sem exigir login, e deixa
+  // editar. O que mudar fica marcado como PENDENTE e não é sobrescrito pela
+  // versão do banco quando ele voltar — aparece a opção de enviar ou descartar.
+  var STORAGE_EM_KEY = STORAGE_KEY + "_em";             // quando a cópia local foi salva
+  var PENDENTE_KEY = STORAGE_KEY + "_pendente";         // alterações sem banco (data)
+  var modoContingencia = false;
+  var dadosDoBancoQuandoPendente = null;
+
+  function bancoIndisponivel(erro){
+    var txt = String((erro && (erro.message || erro.msg || erro.code || erro.status)) || erro || "");
+    return /exceed|restrict|quota|402|503|504|Failed to fetch|NetworkError|Load failed|fetch/i.test(txt);
+  }
+  function dataHoraBr(iso){
+    return iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "data desconhecida";
+  }
+  function avisoContingencia(html, cor){
+    var el = document.getElementById("avisoContingencia");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "avisoContingencia";
+      el.style.cssText = "padding:10px 16px;font-size:13px;line-height:1.4;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;";
+      var topo = document.querySelector(".topbar");
+      topo.parentNode.insertBefore(el, topo.nextSibling);
+    }
+    el.style.background = cor === "verde" ? "#DCFCE7" : "#FEF3C7";
+    el.style.color = cor === "verde" ? "#14532D" : "#78350F";
+    el.innerHTML = html;
+    el.hidden = !html;
+    return el;
+  }
+  function entrarContingencia(){
+    if(modoContingencia) return;
+    modoContingencia = true;
+    esconderTelaLogin();
+    atualizarVisibilidadeEdicao(true);
+    document.getElementById("authStatus").textContent = "⚠ modo contingência";
+    var pend = localStorage.getItem(PENDENTE_KEY);
+    avisoContingencia("<b>⚠ Banco de dados indisponível.</b> <span>Mostrando a cópia salva neste navegador em <b>" + dataHoraBr(localStorage.getItem(STORAGE_EM_KEY)) +
+      "</b>. Você pode editar: as mudanças ficam neste navegador" + (pend ? " (há alterações pendentes desde " + dataHoraBr(pend) + ")" : "") +
+      " e podem ser enviadas quando o banco voltar. Use <b>💾 Backup</b> pra mandar a escala em arquivo pros colegas (eles abrem com <b>📂 Restaurar backup</b>).</span>");
+    render();
+  }
+  function mostrarPendentes(){
+    var pend = localStorage.getItem(PENDENTE_KEY);
+    if(!pend || !dadosDoBancoQuandoPendente) return;
+    var el = avisoContingencia("<b>O banco voltou.</b> <span>Este navegador tem alterações na escala feitas com o banco fora do ar (desde " + dataHoraBr(pend) +
+      ") que ainda não foram enviadas.</span> <button class='btn btn-primary' id='enviarPendentesBtn'>Enviar minhas alterações pro banco</button> " +
+      "<button class='btn btn-secondary' id='descartarPendentesBtn'>Descartar e usar a versão do banco</button>", "verde");
+    el.querySelector("#enviarPendentesBtn").addEventListener("click", function(){
+      if(!sessaoAtual || !(papelAtual === "admin" || papelAtual === "editor")){ alert("Entre com uma conta de admin ou editor pra enviar."); return; }
+      supabaseClient.from("escala_tecnicos_dados")
+        .upsert({ id: ESCALA_ROW_ID, dados: techs, atualizado_em: new Date().toISOString() })
+        .then(function(res){
+          if(res.error){ alert("Não deu pra enviar: " + res.error.message); return; }
+          localStorage.removeItem(PENDENTE_KEY);
+          dadosDoBancoQuandoPendente = null;
+          avisoContingencia("<b>✓ Alterações enviadas pro banco.</b>", "verde");
+        });
+    });
+    el.querySelector("#descartarPendentesBtn").addEventListener("click", function(){
+      if(!confirm("Descartar as alterações feitas neste navegador e usar a escala do banco?")) return;
+      techs = dadosDoBancoQuandoPendente.map(migrarTech);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(techs));
+      localStorage.setItem(STORAGE_EM_KEY, new Date().toISOString());
+      localStorage.removeItem(PENDENTE_KEY);
+      dadosDoBancoQuandoPendente = null;
+      avisoContingencia("", null);
+      render();
+    });
+  }
+
   var DIAS = ["seg","ter","qua","qui","sex","sab","dom"];
   var DIA_LABEL = { seg:"Seg", ter:"Ter", qua:"Qua", qui:"Qui", sex:"Sex", sab:"Sáb", dom:"Dom" };
 
@@ -899,8 +972,15 @@
       .then(function(res){
         if(res.error) throw res.error;
         if(res.data && res.data.dados){
+          // alterações feitas com o banco fora do ar: não sobrescreve, pergunta
+          if(localStorage.getItem(PENDENTE_KEY)){
+            dadosDoBancoQuandoPendente = res.data.dados;
+            mostrarPendentes();
+            return;
+          }
           techs = res.data.dados.map(migrarTech);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(techs));
+          localStorage.setItem(STORAGE_EM_KEY, new Date().toISOString());
         }
         // Se a linha ainda não existe no banco (primeira vez), mantém o que
         // já foi carregado do cache local — quem estiver logado e salvar
@@ -908,6 +988,7 @@
       })
       .catch(function(erro){
         console.error("Falha ao carregar do Supabase, usando cache local:", erro);
+        if(bancoIndisponivel(erro)) entrarContingencia();
       });
   }
 
@@ -916,12 +997,21 @@
   // autenticou, então nem tenta gastar uma requisição à toa).
   function saveData(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(techs));
+    localStorage.setItem(STORAGE_EM_KEY, new Date().toISOString());
+    // banco fora do ar (ou com alterações ainda não enviadas): fica só aqui, marcado como pendente
+    if(modoContingencia || localStorage.getItem(PENDENTE_KEY)){
+      if(!localStorage.getItem(PENDENTE_KEY)) localStorage.setItem(PENDENTE_KEY, new Date().toISOString());
+      return;
+    }
     if(!sessaoAtual) return;
     supabaseClient
       .from("escala_tecnicos_dados")
       .upsert({ id: ESCALA_ROW_ID, dados: techs, atualizado_em: new Date().toISOString() })
       .then(function(res){
-        if(res.error) console.error("Falha ao salvar no Supabase:", res.error);
+        if(res.error){
+          console.error("Falha ao salvar no Supabase:", res.error);
+          if(bancoIndisponivel(res.error)){ localStorage.setItem(PENDENTE_KEY, new Date().toISOString()); entrarContingencia(); }
+        }
       });
   }
 
@@ -932,15 +1022,22 @@
   // "admin" ou "editor" edita (a RLS da tabela escala_tecnicos_dados garante isso
   // também do lado do servidor, essa checagem na tela é só UX).
   function podeEditar(){
-    return papelAtual === "admin" || papelAtual === "editor";
+    return modoContingencia || papelAtual === "admin" || papelAtual === "editor";
   }
 
   function carregarPapelAtual(sessao){
     if(!sessao) return Promise.resolve(null);
     return supabaseClient.from("perfis").select("papel").eq("id", sessao.user.id).maybeSingle()
       .then(function(res){
-        if(res.error){ console.error("Falha ao carregar perfil do usuário:", res.error); return null; }
+        if(res.error){
+          console.error("Falha ao carregar perfil do usuário:", res.error);
+          if(bancoIndisponivel(res.error)) entrarContingencia();
+          return null;
+        }
         return res.data ? res.data.papel : null;
+      }, function(erro){
+        if(bancoIndisponivel(erro)) entrarContingencia();
+        return null;
       });
   }
 
@@ -962,7 +1059,9 @@
   // Confere sessão + papel atuais (login inicial, após entrar, após sair) e
   // mostra a tela certa.
   function atualizarAuthUI(){
+    if(modoContingencia) return Promise.resolve();
     return carregarPapelAtual(sessaoAtual).then(function(papel){
+      if(modoContingencia) return;
       papelAtual = papel;
       var autorizado = !!(sessaoAtual && papelAtual);
       if(!autorizado){
@@ -972,6 +1071,7 @@
       }
       document.getElementById("authStatus").textContent = sessaoAtual.user.email + " · " + papelAtual;
       esconderTelaLogin();
+      mostrarPendentes();
       atualizarVisibilidadeEdicao(podeEditar());
     });
   }
