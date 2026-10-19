@@ -149,12 +149,16 @@ alter table logs_login enable row level security;
 -- autocadastro por padrão, então "to authenticated using (true)" deixaria
 -- qualquer um que se cadastre direto pela API (sem passar pela nossa tela
 -- de login) ler os dados, mesmo sem um admin ter liberado essa pessoa.
+drop policy if exists "leitura autenticada" on ref_operadores;
 create policy "leitura autenticada" on ref_operadores for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "leitura autenticada" on ref_eventos;
 create policy "leitura autenticada" on ref_eventos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "leitura autenticada" on ref_diagnosticos;
 create policy "leitura autenticada" on ref_diagnosticos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "leitura autenticada" on ref_colaboradores_responsaveis;
 create policy "leitura autenticada" on ref_colaboradores_responsaveis for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 -- ordens/movimentacoes: além de estar em "perfis", o setor do usuário
@@ -164,12 +168,14 @@ create policy "leitura autenticada" on ref_colaboradores_responsaveis for select
 -- ATENÇÃO: o patch-27 (setores_visao_total) substitui estas duas
 -- policies — setor listado lá (ex.: CONTROLE DE OPERAÇÕES) vê todas as
 -- OS. Numa instalação nova, rode o patch-27 depois deste arquivo.
+drop policy if exists "leitura autenticada" on ordens;
 create policy "leitura autenticada" on ordens for select to authenticated
     using (exists (
         select 1 from perfis p
         where p.id = auth.uid()
           and (p.setor is null or upper(p.setor) = upper(ordens.setor))
     ));
+drop policy if exists "leitura autenticada" on movimentacoes;
 create policy "leitura autenticada" on movimentacoes for select to authenticated
     using (exists (
         select 1 from perfis p
@@ -179,62 +185,86 @@ create policy "leitura autenticada" on movimentacoes for select to authenticated
     ));
 
 -- Perfis: cada usuário só enxerga o próprio papel.
+drop policy if exists "leitura do proprio perfil" on perfis;
 create policy "leitura do proprio perfil" on perfis for select to authenticated using (id = auth.uid());
 
+drop policy if exists "leitura autenticada" on logs_importacao;
 create policy "leitura autenticada" on logs_importacao for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "escrita admin" on logs_importacao;
 create policy "escrita admin" on logs_importacao for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on logs_importacao;
 create policy "exclusao admin" on logs_importacao for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
 -- Logs de login: qualquer usuário autenticado insere o próprio registro
 -- (admin e leitor os dois fazem login), leitura igual ao resto.
+drop policy if exists "leitura autenticada" on logs_login;
 create policy "leitura autenticada" on logs_login for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "escrita autenticada" on logs_login;
 create policy "escrita autenticada" on logs_login for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid()));
 
 -- Escrita (insert/update/delete): só quem tem papel 'admin' na tabela perfis.
+drop policy if exists "escrita admin" on ref_operadores;
 create policy "escrita admin" on ref_operadores for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on ref_operadores;
 create policy "atualizacao admin" on ref_operadores for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on ref_operadores;
 create policy "exclusao admin" on ref_operadores for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
+drop policy if exists "escrita admin" on ref_eventos;
 create policy "escrita admin" on ref_eventos for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on ref_eventos;
 create policy "atualizacao admin" on ref_eventos for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on ref_eventos;
 create policy "exclusao admin" on ref_eventos for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
+drop policy if exists "escrita admin" on ref_diagnosticos;
 create policy "escrita admin" on ref_diagnosticos for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on ref_diagnosticos;
 create policy "atualizacao admin" on ref_diagnosticos for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on ref_diagnosticos;
 create policy "exclusao admin" on ref_diagnosticos for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
+drop policy if exists "escrita admin" on ref_colaboradores_responsaveis;
 create policy "escrita admin" on ref_colaboradores_responsaveis for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on ref_colaboradores_responsaveis;
 create policy "atualizacao admin" on ref_colaboradores_responsaveis for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on ref_colaboradores_responsaveis;
 create policy "exclusao admin" on ref_colaboradores_responsaveis for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
+drop policy if exists "escrita admin" on ordens;
 create policy "escrita admin" on ordens for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on ordens;
 create policy "atualizacao admin" on ordens for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on ordens;
 create policy "exclusao admin" on ordens for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
+drop policy if exists "escrita admin" on movimentacoes;
 create policy "escrita admin" on movimentacoes for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on movimentacoes;
 create policy "atualizacao admin" on movimentacoes for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on movimentacoes;
 create policy "exclusao admin" on movimentacoes for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
@@ -279,21 +309,26 @@ create policy "exclusao admin" on movimentacoes for delete to authenticated
 -- realmente tem papel configurado (admin OU leitor).
 
 drop policy if exists "leitura autenticada" on ref_operadores;
+drop policy if exists "leitura autenticada" on ref_operadores;
 create policy "leitura autenticada" on ref_operadores for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
+drop policy if exists "leitura autenticada" on ref_eventos;
 drop policy if exists "leitura autenticada" on ref_eventos;
 create policy "leitura autenticada" on ref_eventos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
 drop policy if exists "leitura autenticada" on ref_diagnosticos;
+drop policy if exists "leitura autenticada" on ref_diagnosticos;
 create policy "leitura autenticada" on ref_diagnosticos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
 drop policy if exists "leitura autenticada" on ordens;
+drop policy if exists "leitura autenticada" on ordens;
 create policy "leitura autenticada" on ordens for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
+drop policy if exists "leitura autenticada" on movimentacoes;
 drop policy if exists "leitura autenticada" on movimentacoes;
 create policy "leitura autenticada" on movimentacoes for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
@@ -346,9 +381,11 @@ create table if not exists logs_importacao (
 
 alter table logs_importacao enable row level security;
 
+drop policy if exists "leitura autenticada" on logs_importacao;
 create policy "leitura autenticada" on logs_importacao for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
+drop policy if exists "escrita admin" on logs_importacao;
 create policy "escrita admin" on logs_importacao for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
@@ -372,9 +409,11 @@ create table if not exists logs_login (
 
 alter table logs_login enable row level security;
 
+drop policy if exists "leitura autenticada" on logs_login;
 create policy "leitura autenticada" on logs_login for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
+drop policy if exists "escrita autenticada" on logs_login;
 create policy "escrita autenticada" on logs_login for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid()));
 
@@ -457,6 +496,7 @@ create index if not exists ordens_setor_idx on ordens (setor);
 -- "instalação" digitado diferente.
 
 drop policy if exists "leitura autenticada" on ordens;
+drop policy if exists "leitura autenticada" on ordens;
 create policy "leitura autenticada" on ordens for select to authenticated
     using (exists (
         select 1 from perfis p
@@ -464,6 +504,7 @@ create policy "leitura autenticada" on ordens for select to authenticated
           and (p.setor is null or upper(p.setor) = upper(ordens.setor))
     ));
 
+drop policy if exists "leitura autenticada" on movimentacoes;
 drop policy if exists "leitura autenticada" on movimentacoes;
 create policy "leitura autenticada" on movimentacoes for select to authenticated
     using (exists (
@@ -608,12 +649,16 @@ create table if not exists ref_colaboradores_responsaveis (
 
 alter table ref_colaboradores_responsaveis enable row level security;
 
+drop policy if exists "leitura autenticada" on ref_colaboradores_responsaveis;
 create policy "leitura autenticada" on ref_colaboradores_responsaveis for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "escrita admin" on ref_colaboradores_responsaveis;
 create policy "escrita admin" on ref_colaboradores_responsaveis for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on ref_colaboradores_responsaveis;
 create policy "atualizacao admin" on ref_colaboradores_responsaveis for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on ref_colaboradores_responsaveis;
 create policy "exclusao admin" on ref_colaboradores_responsaveis for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
@@ -653,6 +698,7 @@ alter table movimentacoes add column if not exists proxima_tarefa text;
 -- Importar Dados depois de limpar. Todas as outras tabelas (ref_*,
 -- ordens, movimentacoes) já tinham essa política — só faltava aqui.
 
+drop policy if exists "exclusao admin" on logs_importacao;
 create policy "exclusao admin" on logs_importacao for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
@@ -683,44 +729,56 @@ alter table perfis add constraint perfis_papel_check check (papel in ('admin', '
 -- schema-supabase.sql) continua SEM alteração, só admin.
 
 drop policy if exists "escrita admin" on ref_operadores;
+drop policy if exists "escrita admin ou editor" on ref_operadores;
 create policy "escrita admin ou editor" on ref_operadores for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 drop policy if exists "atualizacao admin" on ref_operadores;
+drop policy if exists "atualizacao admin ou editor" on ref_operadores;
 create policy "atualizacao admin ou editor" on ref_operadores for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "escrita admin" on ref_eventos;
+drop policy if exists "escrita admin ou editor" on ref_eventos;
 create policy "escrita admin ou editor" on ref_eventos for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 drop policy if exists "atualizacao admin" on ref_eventos;
+drop policy if exists "atualizacao admin ou editor" on ref_eventos;
 create policy "atualizacao admin ou editor" on ref_eventos for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "escrita admin" on ref_diagnosticos;
+drop policy if exists "escrita admin ou editor" on ref_diagnosticos;
 create policy "escrita admin ou editor" on ref_diagnosticos for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 drop policy if exists "atualizacao admin" on ref_diagnosticos;
+drop policy if exists "atualizacao admin ou editor" on ref_diagnosticos;
 create policy "atualizacao admin ou editor" on ref_diagnosticos for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "escrita admin" on ref_colaboradores_responsaveis;
+drop policy if exists "escrita admin ou editor" on ref_colaboradores_responsaveis;
 create policy "escrita admin ou editor" on ref_colaboradores_responsaveis for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 drop policy if exists "atualizacao admin" on ref_colaboradores_responsaveis;
+drop policy if exists "atualizacao admin ou editor" on ref_colaboradores_responsaveis;
 create policy "atualizacao admin ou editor" on ref_colaboradores_responsaveis for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "escrita admin" on ordens;
+drop policy if exists "escrita admin ou editor" on ordens;
 create policy "escrita admin ou editor" on ordens for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 drop policy if exists "atualizacao admin" on ordens;
+drop policy if exists "atualizacao admin ou editor" on ordens;
 create policy "atualizacao admin ou editor" on ordens for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "escrita admin" on movimentacoes;
+drop policy if exists "escrita admin ou editor" on movimentacoes;
 create policy "escrita admin ou editor" on movimentacoes for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 drop policy if exists "atualizacao admin" on movimentacoes;
+drop policy if exists "atualizacao admin ou editor" on movimentacoes;
 create policy "atualizacao admin ou editor" on movimentacoes for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
@@ -731,6 +789,7 @@ create policy "atualizacao admin ou editor" on movimentacoes for update to authe
 -- perfil já lê, ver schema-supabase.sql) — o card em si só some da UI
 -- pra quem não é admin (aplicarGateDePapel).
 drop policy if exists "escrita admin" on logs_importacao;
+drop policy if exists "escrita admin ou editor" on logs_importacao;
 create policy "escrita admin ou editor" on logs_importacao for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
@@ -783,12 +842,16 @@ alter table auditoria_correcoes enable row level security;
 -- onde leitor nunca escreve nada. É uma marcação leve e reversível (não
 -- apaga nem altera nenhum dado importado), então não faz sentido travar
 -- atrás de admin/editor só isso.
+drop policy if exists "leitura autenticada" on auditoria_correcoes;
 create policy "leitura autenticada" on auditoria_correcoes for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "escrita qualquer perfil" on auditoria_correcoes;
 create policy "escrita qualquer perfil" on auditoria_correcoes for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "atualizacao qualquer perfil" on auditoria_correcoes;
 create policy "atualizacao qualquer perfil" on auditoria_correcoes for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "exclusao qualquer perfil" on auditoria_correcoes;
 create policy "exclusao qualquer perfil" on auditoria_correcoes for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
@@ -910,13 +973,17 @@ drop policy if exists "atualizacao publica" on escala_tecnicos_dados;
 drop policy if exists "escrita autenticada" on escala_tecnicos_dados;
 drop policy if exists "atualizacao autenticada" on escala_tecnicos_dados;
 
+drop policy if exists "leitura autenticada" on escala_tecnicos_dados;
 create policy "leitura autenticada" on escala_tecnicos_dados for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
+drop policy if exists "escrita admin" on escala_tecnicos_dados;
 create policy "escrita admin" on escala_tecnicos_dados for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on escala_tecnicos_dados;
 create policy "atualizacao admin" on escala_tecnicos_dados for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on escala_tecnicos_dados;
 create policy "exclusao admin" on escala_tecnicos_dados for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
@@ -953,13 +1020,17 @@ drop policy if exists "escrita admin" on agenda_publicada;
 drop policy if exists "atualizacao admin" on agenda_publicada;
 drop policy if exists "exclusao admin" on agenda_publicada;
 
+drop policy if exists "leitura autenticada" on agenda_publicada;
 create policy "leitura autenticada" on agenda_publicada for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
+drop policy if exists "escrita admin" on agenda_publicada;
 create policy "escrita admin" on agenda_publicada for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "atualizacao admin" on agenda_publicada;
 create policy "atualizacao admin" on agenda_publicada for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
+drop policy if exists "exclusao admin" on agenda_publicada;
 create policy "exclusao admin" on agenda_publicada for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
@@ -1100,10 +1171,13 @@ drop policy if exists "escrita admin ou editor" on escala_tecnicos_dados;
 drop policy if exists "atualizacao admin ou editor" on escala_tecnicos_dados;
 drop policy if exists "exclusao admin ou editor" on escala_tecnicos_dados;
 
+drop policy if exists "escrita admin ou editor" on escala_tecnicos_dados;
 create policy "escrita admin ou editor" on escala_tecnicos_dados for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "atualizacao admin ou editor" on escala_tecnicos_dados;
 create policy "atualizacao admin ou editor" on escala_tecnicos_dados for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "exclusao admin ou editor" on escala_tecnicos_dados;
 create policy "exclusao admin ou editor" on escala_tecnicos_dados for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
@@ -1115,45 +1189,55 @@ drop policy if exists "escrita admin ou editor" on agenda_publicada;
 drop policy if exists "atualizacao admin ou editor" on agenda_publicada;
 drop policy if exists "exclusao admin ou editor" on agenda_publicada;
 
+drop policy if exists "escrita admin ou editor" on agenda_publicada;
 create policy "escrita admin ou editor" on agenda_publicada for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "atualizacao admin ou editor" on agenda_publicada;
 create policy "atualizacao admin ou editor" on agenda_publicada for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "exclusao admin ou editor" on agenda_publicada;
 create policy "exclusao admin ou editor" on agenda_publicada for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 -- 3) Exclusão dos dados importados e dos logs de importação
 drop policy if exists "exclusao admin" on ordens;
 drop policy if exists "exclusao admin ou editor" on ordens;
+drop policy if exists "exclusao admin ou editor" on ordens;
 create policy "exclusao admin ou editor" on ordens for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "exclusao admin" on movimentacoes;
+drop policy if exists "exclusao admin ou editor" on movimentacoes;
 drop policy if exists "exclusao admin ou editor" on movimentacoes;
 create policy "exclusao admin ou editor" on movimentacoes for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "exclusao admin" on ref_operadores;
 drop policy if exists "exclusao admin ou editor" on ref_operadores;
+drop policy if exists "exclusao admin ou editor" on ref_operadores;
 create policy "exclusao admin ou editor" on ref_operadores for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "exclusao admin" on ref_eventos;
+drop policy if exists "exclusao admin ou editor" on ref_eventos;
 drop policy if exists "exclusao admin ou editor" on ref_eventos;
 create policy "exclusao admin ou editor" on ref_eventos for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "exclusao admin" on ref_diagnosticos;
 drop policy if exists "exclusao admin ou editor" on ref_diagnosticos;
+drop policy if exists "exclusao admin ou editor" on ref_diagnosticos;
 create policy "exclusao admin ou editor" on ref_diagnosticos for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "exclusao admin" on ref_colaboradores_responsaveis;
 drop policy if exists "exclusao admin ou editor" on ref_colaboradores_responsaveis;
+drop policy if exists "exclusao admin ou editor" on ref_colaboradores_responsaveis;
 create policy "exclusao admin ou editor" on ref_colaboradores_responsaveis for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
 drop policy if exists "exclusao admin" on logs_importacao;
+drop policy if exists "exclusao admin ou editor" on logs_importacao;
 drop policy if exists "exclusao admin ou editor" on logs_importacao;
 create policy "exclusao admin ou editor" on logs_importacao for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
@@ -1201,6 +1285,7 @@ $$;
 
 -- 3) Log de cada importação (insert) por admin ou editor.
 drop policy if exists "escrita admin" on logs_importacao;
+drop policy if exists "escrita admin ou editor" on logs_importacao;
 drop policy if exists "escrita admin ou editor" on logs_importacao;
 create policy "escrita admin ou editor" on logs_importacao for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
@@ -1251,10 +1336,13 @@ drop policy if exists "leitura autenticada" on terceiras_config;
 drop policy if exists "escrita admin ou editor" on terceiras_config;
 drop policy if exists "atualizacao admin ou editor" on terceiras_config;
 
+drop policy if exists "leitura autenticada" on terceiras_config;
 create policy "leitura autenticada" on terceiras_config for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "escrita admin ou editor" on terceiras_config;
 create policy "escrita admin ou editor" on terceiras_config for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "atualizacao admin ou editor" on terceiras_config;
 create policy "atualizacao admin ou editor" on terceiras_config for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
@@ -1263,12 +1351,16 @@ drop policy if exists "escrita admin ou editor" on terceiras_fechamentos;
 drop policy if exists "atualizacao admin ou editor" on terceiras_fechamentos;
 drop policy if exists "exclusao admin" on terceiras_fechamentos;
 
+drop policy if exists "leitura autenticada" on terceiras_fechamentos;
 create policy "leitura autenticada" on terceiras_fechamentos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "escrita admin ou editor" on terceiras_fechamentos;
 create policy "escrita admin ou editor" on terceiras_fechamentos for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "atualizacao admin ou editor" on terceiras_fechamentos;
 create policy "atualizacao admin ou editor" on terceiras_fechamentos for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "exclusao admin" on terceiras_fechamentos;
 create policy "exclusao admin" on terceiras_fechamentos for delete to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel = 'admin'));
 
@@ -1298,6 +1390,7 @@ create table if not exists os_pendentes (
 alter table os_pendentes enable row level security;
 
 -- Leitura: qualquer usuário autenticado (o Agendador roda logado).
+drop policy if exists "leitura autenticada" on os_pendentes;
 create policy "leitura autenticada" on os_pendentes for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
@@ -1331,10 +1424,12 @@ create index if not exists robo_comandos_status_idx on robo_comandos (status, so
 alter table robo_comandos enable row level security;
 
 -- Leitura: qualquer autenticado (o site precisa acompanhar o status).
+drop policy if exists "leitura autenticada" on robo_comandos;
 create policy "leitura autenticada" on robo_comandos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
 
 -- Só admin/editor pode PEDIR uma atualização.
+drop policy if exists "pedido admin/editor" on robo_comandos;
 create policy "pedido admin/editor" on robo_comandos for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
@@ -1398,10 +1493,13 @@ drop policy if exists "leitura autenticada" on ctos_lacres_cadastro;
 drop policy if exists "escrita admin ou editor" on ctos_lacres_cadastro;
 drop policy if exists "atualizacao admin ou editor" on ctos_lacres_cadastro;
 
+drop policy if exists "leitura autenticada" on ctos_lacres_cadastro;
 create policy "leitura autenticada" on ctos_lacres_cadastro for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
+drop policy if exists "escrita admin ou editor" on ctos_lacres_cadastro;
 create policy "escrita admin ou editor" on ctos_lacres_cadastro for insert to authenticated
     with check (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
+drop policy if exists "atualizacao admin ou editor" on ctos_lacres_cadastro;
 create policy "atualizacao admin ou editor" on ctos_lacres_cadastro for update to authenticated
     using (exists (select 1 from perfis where id = auth.uid() and papel in ('admin', 'editor')));
 
@@ -1438,6 +1536,7 @@ create index if not exists clientes_cto_completo on clientes_cto (completo);
 
 alter table clientes_cto enable row level security;
 
+drop policy if exists "leitura autenticada" on clientes_cto;
 drop policy if exists "leitura autenticada" on clientes_cto;
 create policy "leitura autenticada" on clientes_cto for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
@@ -1486,9 +1585,11 @@ on conflict (setor) do nothing;
 alter table setores_visao_total enable row level security;
 
 drop policy if exists "leitura autenticada" on setores_visao_total;
+drop policy if exists "leitura autenticada" on setores_visao_total;
 create policy "leitura autenticada" on setores_visao_total for select to authenticated
     using (true);
 
+drop policy if exists "leitura autenticada" on ordens;
 drop policy if exists "leitura autenticada" on ordens;
 create policy "leitura autenticada" on ordens for select to authenticated
     using (exists (
@@ -1501,6 +1602,7 @@ create policy "leitura autenticada" on ordens for select to authenticated
           )
     ));
 
+drop policy if exists "leitura autenticada" on movimentacoes;
 drop policy if exists "leitura autenticada" on movimentacoes;
 create policy "leitura autenticada" on movimentacoes for select to authenticated
     using (exists (
@@ -1555,6 +1657,7 @@ where setor is not null
 -- ---------- RLS: setores visíveis por usuário ----------
 
 drop policy if exists "leitura autenticada" on ordens;
+drop policy if exists "leitura autenticada" on ordens;
 create policy "leitura autenticada" on ordens for select to authenticated
     using (exists (
         select 1 from perfis p
@@ -1566,6 +1669,7 @@ create policy "leitura autenticada" on ordens for select to authenticated
           )
     ));
 
+drop policy if exists "leitura autenticada" on movimentacoes;
 drop policy if exists "leitura autenticada" on movimentacoes;
 create policy "leitura autenticada" on movimentacoes for select to authenticated
     using (exists (
@@ -1673,6 +1777,7 @@ create table if not exists ctos (
 
 alter table ctos enable row level security;
 
+drop policy if exists "leitura autenticada" on ctos;
 drop policy if exists "leitura autenticada" on ctos;
 create policy "leitura autenticada" on ctos for select to authenticated
     using (exists (select 1 from perfis where id = auth.uid()));
