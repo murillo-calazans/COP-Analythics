@@ -766,6 +766,31 @@ const ROTULO_MOTIVO_REABERTURA = {
 };
 
 /**
+ * Mensagem do fechamento sem o "esqueleto" do modelo de resposta padrão
+ * (ex.: SEM CONEXÃO traz CABOS:/CABO DROP ( )/CONECTOR ( )/POTÊNCIA:...)
+ * — sobra só o que o técnico escreveu ou marcou. Item marcado ("(x)") e
+ * campo com valor ("POTÊNCIA: -19") ficam; item vazio, cabeçalho sem
+ * nada depois dos dois-pontos e a frase fixa de "CERTIFIQUE-SE" saem.
+ * Linhas juntadas com " / " pra caber numa célula do CSV. Também conta
+ * quantos itens do checklist foram marcados.
+ */
+function limparMensagemFechamento(mensagem) {
+    const linhas = String(mensagem ?? "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const marcados = (String(mensagem ?? "").match(/\(\s*x\s*\)/gi) ?? []).length;
+
+    const uteis = linhas.filter(linha => {
+        const n = normalizarTexto(linha);
+        if (/\(\s*\)\s*$/.test(linha) && !/\(\s*x\s*\)/i.test(linha)) return false; // item do checklist não marcado
+        if (/^[^:]{1,60}:\s*$/.test(linha)) return false;                          // cabeçalho/campo vazio ("CABOS:", "POTÊNCIA:")
+        if (n.startsWith("CONFIGURACOES DE REDE - CERTIFIQUE-SE")) return false;
+        if (/^POTENCIA\s*$/.test(n)) return false;
+        return true;
+    });
+
+    return { texto: uteis.join(" / "), marcados };
+}
+
+/**
  * Resultado da Auditoria (Diagnóstico x Próxima Tarefa) de UMA OS, no
  * fechamento efetivo — mesma sequência de AuditoriaOperacionalEngine.auditar
  * (estrutura -> sem regra -> ok/erro -> corrigido), só que devolvendo o
@@ -800,7 +825,8 @@ function resultadoAuditoriaOS(ordem, info) {
  * Claude que gera a auditoria semanal) precisa e não tem como calcular só
  * com uma linha por OS: Próxima Tarefa e resultado da Auditoria do
  * fechamento efetivo, quem pôs em Deslocamento/Execução, reabertura,
- * TMS/TMA e recorrência do login dentro do filtro.
+ * TMS/TMA, recorrência do login dentro do filtro e o texto que o
+ * técnico escreveu no fechamento (sem o esqueleto do modelo).
  */
 function gerarPlanilhaDetalheOS() {
     const ordens = FiltroEngine.ordensFiltradas();
@@ -830,7 +856,8 @@ function gerarPlanilhaDetalheOS() {
         "Equipe", "Técnico (fechamento auditado)", "Diagnóstico (fechamento auditado)", "Próxima Tarefa", "Resultado Auditoria", "Próxima Tarefa esperada",
         "Duplicidade de equipamento", "Reaberta", "Motivo da reabertura", "Reaberta por", "Refechada por outro colaborador", "Reagendada",
         "Deslocamento por", "Setor (deslocamento)", "Início deslocamento", "Execução por", "Setor (execução)", "Início execução",
-        "Deslocamentos abandonados", "TMS (min)", "TMA (min)", "OS do login no período"
+        "Deslocamentos abandonados", "TMS (min)", "TMA (min)", "OS do login no período",
+        "Resposta padrão", "Mensagem do fechamento", "Itens do checklist marcados"
     ];
 
     const linhas = coletarLinhasDetalheOS(ordens).map(d => {
@@ -848,6 +875,7 @@ function gerarPlanilhaDetalheOS() {
             .filter(m => m.data && normalizarTexto(m.status ?? "") === normalizarTexto(alvo))
             .sort((a, b) => a.data - b.data)[0];
         const desloc = primeiraComStatus(IndicatorEngine.STATUS_DESLOCAMENTO);
+        const mensagem = limparMensagemFechamento(efetivo?.mensagem);
         const exec = primeiraComStatus(IndicatorEngine.STATUS_EM_EXECUCAO);
 
         return [
@@ -885,7 +913,10 @@ function gerarPlanilhaDetalheOS() {
             info?.deslocamentosAbandonados?.length ?? 0,
             info?.excluidoDoTempo ? "" : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosSolucao ?? [])),
             info?.excluidoDoTempo ? "" : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosAtendimento ?? [])),
-            d.login ? (osPorLogin.get(d.login) ?? 1) : ""
+            d.login ? (osPorLogin.get(d.login) ?? 1) : "",
+            (efetivo?.respostaPadrao ?? "").toString().trim(),
+            mensagem.texto,
+            efetivo ? mensagem.marcados : ""
         ];
     });
 
