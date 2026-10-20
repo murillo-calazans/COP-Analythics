@@ -754,24 +754,140 @@ function tabelaOsTempoBaixo(ordens) {
     `;
 }
 
-/** Botão "Baixar planilha (.csv)" (Dashboard) — só o detalhamento por OS, sem passar pelo relatório em HTML. */
+const ROTULO_RESULTADO_AUDITORIA = {
+    "diagnostico-ausente": "Erro - Diagnóstico ausente",
+    "proxima-tarefa-ausente": "Erro - Próxima Tarefa ausente",
+    "inconsistencia": "Erro - Próxima Tarefa incompatível"
+};
+
+const ROTULO_MOTIVO_REABERTURA = {
+    servico_nao_executado: "Serviço não executado",
+    erro_processo: "Erro de processo"
+};
+
+/**
+ * Resultado da Auditoria (Diagnóstico x Próxima Tarefa) de UMA OS, no
+ * fechamento efetivo — mesma sequência de AuditoriaOperacionalEngine.auditar
+ * (estrutura -> sem regra -> ok/erro -> corrigido), só que devolvendo o
+ * rótulo por OS em vez do resumo agregado. Usado pela planilha de
+ * detalhamento (gerarPlanilhaDetalheOS), que vai pro auditor externo.
+ */
+function resultadoAuditoriaOS(ordem, info) {
+    const fechamento = info?.fechamentoEfetivo;
+    if (!fechamento) return { rotulo: "Sem fechamento", esperado: "" };
+    if (AuditoriaOperacionalEngine.assuntoEhOrdemDeEstrutura(ordem.assunto)) return { rotulo: "Ordem de estrutura (não auditada)", esperado: "" };
+
+    const r = AuditoriaOperacionalEngine.auditarFechamento(fechamento);
+    if (r.status === "sem-regra") return { rotulo: r.foraDoEscopo ? "Fora do escopo" : "Sem regra", esperado: "" };
+    if (r.status === "ok") return { rotulo: "OK", esperado: "" };
+
+    const esperado = (r.achado.proximaTarefaEsperada ?? []).join(" | ");
+    const corrigidoAutomaticamente = !!(
+        info.ultimoFechamento &&
+        info.ultimoFechamento !== fechamento &&
+        AuditoriaOperacionalEngine.auditarFechamento(info.ultimoFechamento).status === "ok"
+    );
+    if (corrigidoAutomaticamente || AuditoriaOperacionalEngine.buscarCorrecaoAchado(ordem.id, r.achado.tipo)) {
+        return { rotulo: "Corrigido", esperado };
+    }
+    return { rotulo: ROTULO_RESULTADO_AUDITORIA[r.achado.tipo] ?? "Erro", esperado };
+}
+
+/**
+ * Botão "Baixar planilha (.csv)" (Dashboard) — detalhamento por OS, sem
+ * passar pelo relatório em HTML. As 11 primeiras colunas são as de
+ * sempre; as demais trazem o que um auditor de fora (ex.: Projeto do
+ * Claude que gera a auditoria semanal) precisa e não tem como calcular só
+ * com uma linha por OS: Próxima Tarefa e resultado da Auditoria do
+ * fechamento efetivo, quem pôs em Deslocamento/Execução, reabertura,
+ * TMS/TMA e recorrência do login dentro do filtro.
+ */
 function gerarPlanilhaDetalheOS() {
     const ordens = FiltroEngine.ordensFiltradas();
-    const cabecalho = ["ID OS", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Colaborador Responsável", "Diagnóstico", "Abertura", "Fechamento", "Status"];
+    const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
+    const auditoria = AuditoriaOperacionalEngine.auditar(ordens);
+    const idsComAchado = tipo => new Set(auditoria.achados.filter(a => a.tipo === tipo && !a.corrigido).map(a => a.ordemId));
+    const duplicidade = idsComAchado("duplicidade");
+    const reaberturaOutro = idsComAchado("reabertura-outro-colaborador");
 
-    const linhas = coletarLinhasDetalheOS(ordens).map(d => [
-        d.id,
-        d.cliente ?? "",
-        d.login ?? "",
-        d.cidade ?? "",
-        d.bairro ?? "",
-        d.assunto ?? "",
-        d.tecnico ?? "",
-        d.diagnostico ?? "",
-        formatarDataHora(d.dataAbertura),
-        formatarDataHora(d.dataFechamento),
-        d.status ?? ""
-    ]);
+    const osPorLogin = new Map();
+    for (const ordem of ordens.values()) {
+        if (ordem.login) osPorLogin.set(ordem.login, (osPorLogin.get(ordem.login) ?? 0) + 1);
+    }
+
+    const nomeOperador = codigo => codigo == null || codigo === ""
+        ? ""
+        : AuditEngine.resolverReferencia(APP.referencias.operadores, codigo, CONFIG_BASE.operadores.nome) ?? "";
+    const setorOperador = codigo => {
+        const linha = IndicatorEngine.encontrarLinhaReferencia(APP.referencias.operadores, codigo);
+        const coluna = linha ? encontrarColuna(linha, CONFIG_BASE.operadores.setor) : null;
+        return coluna ? (linha[coluna] ?? "") : "";
+    };
+    const minutos = horas => (horas === null || horas === undefined || Number.isNaN(horas)) ? "" : Math.round(horas * 60);
+
+    const cabecalho = [
+        "ID OS", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Colaborador Responsável", "Diagnóstico", "Abertura", "Fechamento", "Status",
+        "Equipe", "Técnico (fechamento auditado)", "Diagnóstico (fechamento auditado)", "Próxima Tarefa", "Resultado Auditoria", "Próxima Tarefa esperada",
+        "Duplicidade de equipamento", "Reaberta", "Motivo da reabertura", "Reaberta por", "Refechada por outro colaborador", "Reagendada",
+        "Deslocamento por", "Setor (deslocamento)", "Início deslocamento", "Execução por", "Setor (execução)", "Início execução",
+        "Deslocamentos abandonados", "TMS (min)", "TMA (min)", "OS do login no período"
+    ];
+
+    const linhas = coletarLinhasDetalheOS(ordens).map(d => {
+        const ordem = ordens.get(d.id);
+        const info = analise.get(d.id);
+        const efetivo = info?.fechamentoEfetivo;
+        const tecnicoAuditado = IndicatorEngine.nomeResponsavelFechamento(efetivo) ?? "";
+        const terceira = TerceirasEngine.terceiraDoNome(tecnicoAuditado || d.tecnico);
+        const auditado = ordem ? resultadoAuditoriaOS(ordem, info) : { rotulo: "", esperado: "" };
+        // Direto das movimentações (1ª com o status), não dos segmentos de
+        // TMS/TMA — esses só existem quando o par fecha certinho, e o caso
+        // que mais interessa aqui (COP pôs em Deslocamento, técnico
+        // executou) às vezes não vira segmento.
+        const primeiraComStatus = alvo => ordem?.movimentacoes
+            .filter(m => m.data && normalizarTexto(m.status ?? "") === normalizarTexto(alvo))
+            .sort((a, b) => a.data - b.data)[0];
+        const desloc = primeiraComStatus(IndicatorEngine.STATUS_DESLOCAMENTO);
+        const exec = primeiraComStatus(IndicatorEngine.STATUS_EM_EXECUCAO);
+
+        return [
+            d.id,
+            d.cliente ?? "",
+            d.login ?? "",
+            d.cidade ?? "",
+            d.bairro ?? "",
+            d.assunto ?? "",
+            d.tecnico ?? "",
+            d.diagnostico ?? "",
+            formatarDataHora(d.dataAbertura),
+            formatarDataHora(d.dataFechamento),
+            d.status ?? "",
+            !(tecnicoAuditado || d.tecnico) ? "" : terceira ? TerceirasEngine.nomeTerceira(terceira) : "Interna",
+            tecnicoAuditado,
+            efetivo?.diagnostico
+                ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, efetivo.diagnostico, CONFIG_BASE.diagnosticos.nome) ?? ""
+                : "",
+            (efetivo?.proximaTarefa ?? "").toString().trim(),
+            auditado.rotulo,
+            auditado.esperado,
+            duplicidade.has(d.id) ? "Sim" : "",
+            info?.temReabertura ? "Sim" : "Não",
+            info?.motivoReabertura ? (ROTULO_MOTIVO_REABERTURA[info.motivoReabertura] ?? "Não classificado") : "",
+            nomeOperador(info?.operadorReabertura),
+            reaberturaOutro.has(d.id) ? "Sim" : "",
+            info?.temReagendamento ? "Sim" : "Não",
+            nomeOperador(desloc?.operador),
+            desloc ? setorOperador(desloc.operador) : "",
+            desloc ? formatarDataHora(desloc.data) : "",
+            nomeOperador(exec?.operador),
+            exec ? setorOperador(exec.operador) : "",
+            exec ? formatarDataHora(exec.data) : "",
+            info?.deslocamentosAbandonados?.length ?? 0,
+            info?.excluidoDoTempo ? "" : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosSolucao ?? [])),
+            info?.excluidoDoTempo ? "" : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosAtendimento ?? [])),
+            d.login ? (osPorLogin.get(d.login) ?? 1) : ""
+        ];
+    });
 
     baixarCsv(`detalhamento-os-${carimboDataHora()}.csv`, [cabecalho, ...linhas]);
 }
