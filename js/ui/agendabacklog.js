@@ -70,7 +70,7 @@ function recorteBacklog(model) {
     const itens = backlogCidade ? model.itens.filter(i => (i.cidade || "—") === backlogCidade) : model.itens;
     const porAssunto = new Map();
     for (const i of itens) {
-        const k = i.assunto || "—";
+        const k = assuntoUnificado(i.assunto);
         if (!porAssunto.has(k)) porAssunto.set(k, { assunto: k, oss: [] });
         porAssunto.get(k).oss.push(i);
     }
@@ -95,6 +95,21 @@ function backlogHaDias(data) {
     const dias = Math.floor((Date.now() - data.getTime()) / 86400000);
     if (dias <= 0) return "hoje";
     return `há ${dias} ${dias === 1 ? "dia" : "dias"}`;
+}
+
+// Junta o assunto "- Terceirizado/a" com o interno: "INSTALAÇÃO NOVO CLIENTE" e
+// "INSTALAÇÃO NOVO CLIENTE - TERCEIRIZADO" viram um card só. O sufixo de
+// terceira é quem executa (ver [[equipe-pelo-nome-do-tecnico]]), não um tipo de
+// OS diferente — pra agenda, interessa o ASSUNTO, não quem faz. Também tira os
+// códigos "(70)" pra o mesmo assunto não quebrar por código diferente.
+function assuntoUnificado(a) {
+    return String(a || "—")
+        .replace(/\s*\(\d+\)/g, "")                    // tira os códigos "(70)" etc.
+        .replace(/\s*[-–]\s*terceiriza\w*\b/gi, "")    // "- TERCEIRIZADO/A" no fim/meio
+        .replace(/\s+terceiriza\w*\b/gi, "")           // "TERCEIRIZADA" solta no texto
+        .replace(/\s{2,}/g, " ")
+        .trim()
+        .toUpperCase() || "—";
 }
 
 function backlogAssuntoCurto(a) {
