@@ -91,9 +91,11 @@ function ixcDiaPedidoDaOs(msgs) {
 /** Lê todas as linhas (eventos) da os_pendentes. */
 async function buscarOsPendentes() {
     if (typeof supabaseClient === "undefined") return [];
-    // paralelo (bem mais rápido no cold load); fallback sequencial se não houver.
-    if (typeof buscarTodasLinhasParalelo === "function")
-        return buscarTodasLinhasParalelo("os_pendentes", "dados, capturado_em", "id");
+    // KEYSET paralelo por faixa de id (bigint): rápido no cold load e sem o risco
+    // de timeout do offset fundo (.range) com a RLS — mesmo motivo do conserto das
+    // movimentações. Precisa do "id" no select pra paginar por keyset (id > último).
+    if (typeof buscarTodasLinhasKeysetParalelo === "function")
+        return buscarTodasLinhasKeysetParalelo("os_pendentes", "id, dados, capturado_em", "id");
     const linhas = [];
     for (let de = 0; ; de += 1000) {
         const { data, error } = await supabaseClient
