@@ -760,6 +760,33 @@ const ROTULO_RESULTADO_AUDITORIA = {
     "inconsistencia": "Erro - Próxima Tarefa incompatível"
 };
 
+// Setores (aba Operadores) que são parceiros externos mesmo quando o nome
+// do técnico vem SEM sufixo de terceirizada (ex.: Recolhimento Terceirizado).
+const EQUIPE_POR_SETOR_TERCEIRO = {
+    "AZUL": "Azul",
+    "CONECT VELOZ": "Veloz",
+    "TECHNOMAIS": "Technomais",
+    "RECOLHIMENTO TERCEIRIZADO": "Recolhimento terceirizado",
+    "CLICKPLAY": "Clickplay",
+    "INFINITE": "Infinite",
+    "INFOVIAS": "Infovias",
+    "INOVA - EXPANSAO TERCEIRIZADA": "Inova",
+    "PJ NETWORK": "PJ Network"
+};
+
+/**
+ * Equipe de quem fechou: sufixo do nome ("- AZUL", "- MOTOEXPRESS"...)
+ * primeiro; sem sufixo, o setor do Operador de mesmo nome decide se é
+ * parceiro externo; senão "Interna".
+ */
+function equipeDoColaborador(nome, setor) {
+    const terceira = TerceirasEngine.terceiraDoNome(nome);
+    if (terceira) return TerceirasEngine.nomeTerceira(terceira);
+    const sufixo = normalizarTexto(nome ?? "").match(/\s-\s*([A-Z.]+)\s*$/);
+    if (sufixo) return sufixo[1].charAt(0) + sufixo[1].slice(1).toLowerCase();
+    return EQUIPE_POR_SETOR_TERCEIRO[normalizarTexto(setor ?? "")] ?? "Interna";
+}
+
 const ROTULO_MOTIVO_REABERTURA = {
     servico_nao_executado: "Serviço não executado",
     erro_processo: "Erro de processo"
@@ -849,6 +876,14 @@ function gerarPlanilhaDetalheOS() {
         const coluna = linha ? encontrarColuna(linha, CONFIG_BASE.operadores.setor) : null;
         return coluna ? (linha[coluna] ?? "") : "";
     };
+    // Setor por NOME (não por ID): o Colaborador Responsável tem cadastro
+    // próprio, sem setor, e os IDs dele não batem com os de Operadores.
+    const setorPorNome = new Map();
+    for (const linha of APP.referencias.operadores.values()) {
+        const colNome = encontrarColuna(linha, CONFIG_BASE.operadores.nome);
+        const colSetor = encontrarColuna(linha, CONFIG_BASE.operadores.setor);
+        if (colNome && colSetor && linha[colNome]) setorPorNome.set(normalizarTexto(linha[colNome]), linha[colSetor] ?? "");
+    }
     const minutos = horas => (horas === null || horas === undefined || Number.isNaN(horas)) ? "" : Math.round(horas * 60);
 
     const cabecalho = [
@@ -857,7 +892,7 @@ function gerarPlanilhaDetalheOS() {
         "Duplicidade de equipamento", "Reaberta", "Motivo da reabertura", "Reaberta por", "Refechada por outro colaborador", "Reagendada",
         "Deslocamento por", "Setor (deslocamento)", "Início deslocamento", "Execução por", "Setor (execução)", "Início execução",
         "Deslocamentos abandonados", "TMS (min)", "TMA (min)", "OS do login no período",
-        "Resposta padrão", "Mensagem do fechamento", "Itens do checklist marcados"
+        "Resposta padrão", "Mensagem do fechamento", "Itens do checklist marcados", "Setor (técnico auditado)"
     ];
 
     const linhas = coletarLinhasDetalheOS(ordens).map(d => {
@@ -865,7 +900,8 @@ function gerarPlanilhaDetalheOS() {
         const info = analise.get(d.id);
         const efetivo = info?.fechamentoEfetivo;
         const tecnicoAuditado = IndicatorEngine.nomeResponsavelFechamento(efetivo) ?? "";
-        const terceira = TerceirasEngine.terceiraDoNome(tecnicoAuditado || d.tecnico);
+        const nomeDono = tecnicoAuditado || d.tecnico || "";
+        const setorDono = setorPorNome.get(normalizarTexto(nomeDono)) ?? "";
         const auditado = ordem ? resultadoAuditoriaOS(ordem, info) : { rotulo: "", esperado: "" };
         // Direto das movimentações (1ª com o status), não dos segmentos de
         // TMS/TMA — esses só existem quando o par fecha certinho, e o caso
@@ -890,7 +926,7 @@ function gerarPlanilhaDetalheOS() {
             formatarDataHora(d.dataAbertura),
             formatarDataHora(d.dataFechamento),
             d.status ?? "",
-            !(tecnicoAuditado || d.tecnico) ? "" : terceira ? TerceirasEngine.nomeTerceira(terceira) : "Interna",
+            nomeDono ? equipeDoColaborador(nomeDono, setorDono) : "",
             tecnicoAuditado,
             efetivo?.diagnostico
                 ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, efetivo.diagnostico, CONFIG_BASE.diagnosticos.nome) ?? ""
@@ -916,7 +952,8 @@ function gerarPlanilhaDetalheOS() {
             d.login ? (osPorLogin.get(d.login) ?? 1) : "",
             (efetivo?.respostaPadrao ?? "").toString().trim(),
             mensagem.texto,
-            efetivo ? mensagem.marcados : ""
+            efetivo ? mensagem.marcados : "",
+            setorDono
         ];
     });
 
