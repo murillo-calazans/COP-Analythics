@@ -14,12 +14,21 @@
 
 let painelOpCache = null;
 
-/** EVENTO 10 = reagendamento; 5 = agendamento (ver js/agendador/motor.js). */
+/** Técnico (equipe de campo) que iniciou o deslocamento — lido do texto do evento. */
+function tecnicoDoDeslocamento(msg) {
+    const m = String(msg || "").match(/usu[aá]rio\s+(.+?)\s*,\s*iniciou o deslocamento/i);
+    return m ? m[1].trim() : null;
+}
+
+/** EVENTO 10 = reagendamento; 5 = agendamento; 2 = deslocamento; 9 = execução. */
 async function calcularPainelOperacao() {
     const linhas = typeof buscarOsPendentesCacheado === "function" ? await buscarOsPendentesCacheado() : [];
     const parse = typeof ixcDataBR === "function" ? ixcDataBR : () => null;
     const norm = typeof ixcNorm === "function" ? ixcNorm : (t => String(t || "").toLowerCase());
     const ehCop = typeof assuntoEhDoCop === "function" ? assuntoEhDoCop : () => false;
+    const techsEscala = typeof carregarEscalaTecnicos === "function" ? await carregarEscalaTecnicos().catch(() => []) : [];
+    const bate = (typeof Motor !== "undefined" && Motor.nomeBate) ? Motor.nomeBate : () => false;
+    const nomeCurto = typeof separarTerceira === "function" ? (n => separarTerceira(n).nome) : (n => n);
 
     const hoje = hojeMeiaNoite();
     const amanha = hoje.getTime() + 86400000;
@@ -70,7 +79,32 @@ async function calcularPainelOperacao() {
     grupos.agendadas.sort((a, b) => (a.agendamento || 0) - (b.agendamento || 0));
     grupos.cop.sort((a, b) => (a.cliente || "").localeCompare(b.cliente || "", "pt-BR"));
 
-    return { grupos, fechamentos, eventosPorOs, osInfo, capturadoEm };
+    // Início da operação hoje: equipe = o técnico que foi a campo (com ou sem
+    // auxiliar), lido do texto do deslocamento. Conta quantas equipes já têm ≥1 OS
+    // em deslocamento / execução HOJE, e quais da escala ainda não saíram.
+    const deslocHoje = new Map(), execHoje = new Map();   // nomeTécnico -> [OS]
+    for (const id in eventosPorOs) {
+        const evs = eventosPorOs[id];
+        let tec = null;
+        for (const e of evs) if (+e.evento === 2) { const t = tecnicoDoDeslocamento(e.msg); if (t) tec = t; }
+        if (!tec) continue;
+        const o = os.get(id) || {};
+        const info = { id, cliente: o.cliente, assunto: o.assunto, cidade: o.cidade, bairro: o.bairro, statusUlt: o.statusUlt };
+        if (evs.some(e => +e.evento === 2 && ehHoje(e.data))) { if (!deslocHoje.has(tec)) deslocHoje.set(tec, []); deslocHoje.get(tec).push(info); }
+        if (evs.some(e => +e.evento === 9 && ehHoje(e.data))) { if (!execHoje.has(tec)) execHoje.set(tec, []); execHoje.get(tec).push(info); }
+    }
+    const emMov = [...new Set([...deslocHoje.keys(), ...execHoje.keys()])];
+    const semMov = techsEscala
+        .filter(t => !emMov.some(nm => bate(nm, t)))
+        .map(t => nomeCurto(t.nome))
+        .filter((v, i, a) => v && a.indexOf(v) === i)
+        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const equipesLista = mp => [...mp.entries()]
+        .map(([nome, oss]) => ({ nome: nomeCurto(nome), oss }))
+        .sort((a, b) => b.oss.length - a.oss.length);
+    const inicioOperacao = { desloc: equipesLista(deslocHoje), exec: equipesLista(execHoje), semMov };
+
+    return { grupos, fechamentos, eventosPorOs, osInfo, capturadoEm, inicioOperacao };
 }
 
 const PAINEL_OP_CARTOES = [
@@ -105,12 +139,61 @@ async function renderizarPainelOperacao() {
             </button>`;
     }).join("");
 
+    const io = m.inicioOperacao || { desloc: [], exec: [], semMov: [] };
+    const somaOs = lista => lista.reduce((s, e) => s + e.oss.length, 0);
+    const inicioTiles = [
+        { id: "io-desloc", rotulo: "Equipes em deslocamento", valor: io.desloc.length, sub: `${somaOs(io.desloc)} OS` },
+        { id: "io-exec",   rotulo: "Equipes em execução",     valor: io.exec.length,   sub: `${somaOs(io.exec)} OS` },
+        { id: "io-semmov", rotulo: "Equipes sem movimento",   valor: io.semMov.length, sub: "ainda não saíram" }
+    ].map(c => `
+        <button type="button" class="stat-tile stat-tile-link painel-op-tile" data-io="${c.id}">
+            <div class="stat-label">${c.rotulo}</div>
+            <div class="stat-valor">${c.valor.toLocaleString("pt-BR")}</div>
+            <div class="stat-sub">${c.sub}</div>
+        </button>`).join("");
+
     alvo.innerHTML = `
         <div class="indicadores-secao-titulo">Operação hoje</div>
-        <div class="kpi-row">${tiles}</div>`;
+        <div class="kpi-row">${tiles}</div>
+        <div class="indicadores-secao-titulo" style="margin-top:16px;">Início da operação hoje</div>
+        <div class="kpi-row">${inicioTiles}</div>`;
 
     alvo.querySelectorAll("[data-painel-cartao]").forEach(botao =>
         botao.addEventListener("click", () => abrirPopupPainel(PAINEL_OP_CARTOES.find(c => c.id === botao.dataset.painelCartao))));
+    alvo.querySelector('[data-io="io-desloc"]')?.addEventListener("click", () =>
+        abrirPopupEquipes("Equipes em deslocamento", "Técnicos que já iniciaram deslocamento hoje", io.desloc, true));
+    alvo.querySelector('[data-io="io-exec"]')?.addEventListener("click", () =>
+        abrirPopupEquipes("Equipes em execução", "Técnicos com OS em execução hoje", io.exec, true));
+    alvo.querySelector('[data-io="io-semmov"]')?.addEventListener("click", () =>
+        abrirPopupEquipes("Equipes sem movimento", "Técnicos da escala que ainda não saíram hoje", io.semMov.map(n => ({ nome: n, oss: [] })), false));
+}
+
+/** Popup de EQUIPES (técnicos), não de OS — usado pelo bloco "Início da operação". */
+function abrirPopupEquipes(titulo, descricao, equipes, comOs) {
+    fecharPopupPainel();
+    const linhas = equipes.map(e => `
+        <li class="ixc-os">
+          <div class="ixc-os-linha">
+            <span class="ixc-os-cliente">${escaparHtml(e.nome || "—")}</span>
+            ${comOs ? `<span class="escala-pilula">${e.oss.length} OS</span>` : ""}
+          </div>
+          ${comOs && e.oss.length ? `<div class="ixc-os-sub">${e.oss.slice(0, 10).map(o => "#" + escaparHtml(String(o.id))).join(" · ")}${e.oss.length > 10 ? " …" : ""}</div>` : ""}
+        </li>`).join("");
+    const fundo = document.createElement("div");
+    fundo.className = "ixc-popup-fundo painel-popup-fundo";
+    fundo.innerHTML = `
+      <div class="ixc-popup" role="dialog" aria-modal="true" aria-label="${escaparHtml(titulo)}">
+        <div class="ixc-popup-topo">
+          <div><h2>${escaparHtml(titulo)} <span class="escala-pilula">${equipes.length} equipe(s)</span></h2><p>${escaparHtml(descricao)}</p></div>
+          <button type="button" class="ixc-popup-fechar" aria-label="Fechar">✕</button>
+        </div>
+        <div class="ixc-popup-corpo">${equipes.length ? `<ul class="ixc-lista">${linhas}</ul>` : '<p class="alerta-vazio">Ninguém aqui agora.</p>'}</div>
+      </div>`;
+    (document.getElementById("secao-inicio") || document.body).appendChild(fundo);
+    document.body.classList.add("ixc-popup-aberto");
+    fundo.addEventListener("click", e => { if (e.target === fundo) fecharPopupPainel(); });
+    fundo.querySelector(".ixc-popup-fechar").addEventListener("click", fecharPopupPainel);
+    fundo.querySelector(".ixc-popup-fechar").focus();
 }
 
 function abrirPopupPainel(cartao) {
