@@ -53,6 +53,7 @@ const COL_DATA = 14;          // índice da coluna su_oss_chamado_mensagem_data 
 // desde a anterior); a puxada completa do pré-agendamento fica só na 1ª do dia.
 // Puxada extra = botão "Atualizar banco".
 const HORARIOS_RODADA = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+const MINUTO_RODADA = 30;   // roda nos :30 de cada hora (7h30, 8h30…19h30), não na hora cheia
 const FOLGA_MIN = 10;   // cada janela começa 10 min antes do fim da anterior (o repetido é ignorado)
 const ARQ_ESTADO = path.join(__dirname, "estado-puxadas.json");
 const PULSO_MS = 5 * 60 * 1000;   // mantém a sessão viva a cada 5 min (auto-refresh interno)
@@ -1250,12 +1251,13 @@ async function principal() {
     const agenda = async () => {
         const agora = new Date();
         if (!HORARIOS_RODADA.includes(agora.getHours())) return;
+        if (agora.getMinutes() < MINUTO_RODADA) return;   // só a partir dos :30 da hora
         const chave = chaveRodada(agora);
         if (rodadasFeitas.has(chave)) return;
         if (await rodar()) rodadasFeitas.add(chave);
     };
 
-    log(`Pronto. Rodadas de hora em hora, das ${HORARIOS_RODADA[0]}h às ${HORARIOS_RODADA.at(-1)}h (extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
+    log(`Pronto. Rodadas de hora em hora, das ${HORARIOS_RODADA[0]}h${MINUTO_RODADA} às ${HORARIOS_RODADA.at(-1)}h${MINUTO_RODADA} (extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
     setInterval(pulso, PULSO_MS);
     setInterval(agenda, 60 * 1000);
     setInterval(verificarComandos, 30 * 1000);
