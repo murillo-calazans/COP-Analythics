@@ -104,6 +104,11 @@
                 CTOs e Lacres
             </button>
 
+            <button data-secao="enderecos">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Endereços a corrigir
+            </button>
+
             <button data-secao="auditoria">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>
                 Auditoria
@@ -676,6 +681,33 @@
 
             <div id="resumoClientesCto" class="resumo-filtro"></div>
             <div id="listaClientesCto"></div>
+        </div>
+    </section>
+
+    <section id="secao-enderecos" class="secao">
+        <div class="placeholder-card auditoria-card">
+            <div class="dashboard-cabecalho">
+                <div>
+                    <h2>📍 Endereços a corrigir</h2>
+                    <p>
+                        Clientes cujo endereço no IXC não bate com o GPS das ordens de serviço: a OS foi atendida em
+                        outra cidade, ou está cadastrada numa cidade fora da área (normalmente o endereço da sede do cliente).
+                        Corrija o cadastro no IXC. Recorte do Filtro Global.
+                    </p>
+                </div>
+                <div class="dashboard-cabecalho-acoes">
+                    <button type="button" id="btnBaixarEnderecos" class="botao-secundario">Baixar planilha (.csv)</button>
+                </div>
+            </div>
+
+            <div id="cardsEnderecos" class="kpi-row clientes-cto-cards"></div>
+
+            <div class="ordens-filtros">
+                <input type="search" id="buscaEnderecos" class="seletor-multiplo-input" placeholder="Buscar por cliente, login ou cidade..." autocomplete="off">
+            </div>
+
+            <div id="resumoEnderecos" class="resumo-filtro"></div>
+            <div id="listaEnderecos"></div>
         </div>
     </section>
 
@@ -1260,6 +1292,7 @@
 <script src="js/config/assuntosequivalentes.js"></script>
 <script src="js/config/motivosreabertura.js"></script>
 <script src="js/config/regiaoatuacao.js"></script>
+<script src="js/config/enderecos.js"></script>
 <script src="js/config/supabase.js"></script>
 
 <script src="js/models/Movimentacao.js"></script>
@@ -1282,6 +1315,7 @@
 <script src="js/engine/regiaoatuacaoengine.js"></script>
 <script src="js/engine/producaoengine.js"></script>
 <script src="js/engine/terceirasengine.js"></script>
+<script src="js/engine/enderecoengine.js"></script>
 
 <script src="js/services/configuracoes.js"></script>
 <script src="js/services/filtroglobal.js"></script>
@@ -1307,6 +1341,7 @@
 <script src="js/ui/ctoslacres.js"></script>
 <script src="js/ui/clientescto.js"></script>
 <script src="js/ui/mapacalor.js"></script>
+<script src="js/ui/enderecos.js"></script>
 <script src="js/agendador/escala-dia.js"></script>
 <script src="js/ui/escalahoje.js"></script>
 <script src="js/ui/agendahoje.js"></script>

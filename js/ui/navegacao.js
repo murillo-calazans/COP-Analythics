@@ -26,6 +26,7 @@ const MODULO_DA_SECAO = {
     "clientes-cto": "clientes",
     "alertas": "clientes",
     "ctos-lacres": "clientes",
+    "enderecos": "clientes",
     "terceiras": "terceiras",
     "terceiras-fechamento": "terceiras",
     "terceiras-lpu": "terceiras",
@@ -155,6 +156,7 @@ function mostrarSecao(nome) {
     if (nome === "alertas") renderizarAlertas();
     if (nome === "ctos-lacres") renderizarCtosLacres();
     if (nome === "clientes-cto") renderizarClientesCto();
+    if (nome === "enderecos") renderizarEnderecos();
     if (nome === "mapa-calor") renderizarMapaCalor();
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "agenda-hoje") {
