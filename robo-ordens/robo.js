@@ -318,20 +318,34 @@ async function puxarRecentes(pagina, molde, janela) {
 
     for (let i = 0; i < MAX_PAGINAS; i++) {
         const body = montarPayload(molde, i * TAM_PAGINA, TAM_PAGINA, i + 1, janela);
-        const txt = await pagina.evaluate(async ({ url, body, timeoutMs }) => {
-            // timeout: sem isso, um fetch que a rede deixa "meio aberto" (VPN oscilou)
-            // fica esperando pra sempre e TRAVA o robô. AbortController derruba em timeoutMs.
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), timeoutMs);
+        // Uma página lenta do IXC estoura o AbortController (90s). Isso NÃO é a
+        // sessão caindo — é só o IXC demorando. Tenta de novo até 3x na MESMA
+        // página; só então desiste (PULL_TIMEOUT) — sem reiniciar o navegador.
+        let txt;
+        for (let tent = 1; ; tent++) {
             try {
-                const r = await fetch(url, {
-                    method: "POST", credentials: "include",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-Requested-With": "XMLHttpRequest" },
-                    body, signal: ctrl.signal
-                });
-                return { status: r.status, texto: await r.text() };
-            } finally { clearTimeout(t); }
-        }, { url: URL_DADOS, body, timeoutMs: 90000 });
+                txt = await pagina.evaluate(async ({ url, body, timeoutMs }) => {
+                    // AbortController derruba o fetch em timeoutMs (senão um fetch
+                    // "meio aberto" por VPN oscilando ficaria esperando pra sempre).
+                    const ctrl = new AbortController();
+                    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+                    try {
+                        const r = await fetch(url, {
+                            method: "POST", credentials: "include",
+                            headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-Requested-With": "XMLHttpRequest" },
+                            body, signal: ctrl.signal
+                        });
+                        return { status: r.status, texto: await r.text() };
+                    } finally { clearTimeout(t); }
+                }, { url: URL_DADOS, body, timeoutMs: 90000 });
+                break;
+            } catch (e) {
+                const timeout = /aborted|AbortError|timed? ?out/i.test(e && e.message || "");
+                if (timeout && tent < 3) { log(`  visão ${molde.viewId} pág ${i}: IXC demorou >90s (tentativa ${tent}/3), repetindo...`); continue; }
+                if (timeout) throw new Error("PULL_TIMEOUT");   // não casa com ehFalhaDeRede → não reinicia o navegador
+                throw e;
+            }
+        }
 
         if (txt.status === 401 || /\/login/.test(txt.texto)) throw new Error("SESSAO_CAIU");
         let j; try { j = JSON.parse(txt.texto); } catch { throw new Error("resposta não-JSON do IXC (sessão caiu?)"); }
@@ -1125,7 +1139,10 @@ async function principal() {
     const fechouNavegador = e => /has been closed|Target closed|browser has disconnected/i.test(e && e.message || "");
     // Falha de REDE na puxada (fetch dentro da página não completou): VPN caiu,
     // sessão morta, ou a aba foi parar numa página inválida. Recuperável relogando.
-    const ehFalhaDeRede = e => /Failed to fetch|NetworkError|net::|ERR_|ERR_NETWORK|ECONN|fetch failed|load failed|aborted|AbortError|timed? ?out/i.test(e && e.message || "");
+    // NÃO inclui AbortError/timeout: o timeout de 90s é da NOSSA trava (IXC lento),
+    // não a sessão caindo. Tratá-lo como falha de rede fazia o robô fechar+reabrir o
+    // navegador toda vez que uma puxada demorasse (janela nova na cara do usuário).
+    const ehFalhaDeRede = e => /Failed to fetch|NetworkError|net::|ERR_|ERR_NETWORK|ECONN|fetch failed|load failed/i.test(e && e.message || "");
 
     // Recuperação forte: fecha o navegador inteiro e reabre do zero (garantirNavegador
     // relança + preparaPagina = re-login + volta pro IXC_HOME). Usado quando uma puxada
