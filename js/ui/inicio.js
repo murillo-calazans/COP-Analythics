@@ -2,10 +2,10 @@
  * ==========================================================
  * Tela Inicial
  * ==========================================================
- * Primeira tela depois do login: saudação com o nome do usuário,
- * o que ele já fez no mês (pelas OS — ver ProducaoEngine) e um
- * "hoje no COP" curto (escala, agenda, alertas) que leva pros
- * módulos. Sem abas no topo: os módulos ficam no menu lateral.
+ * Primeira tela depois do login: hero de saudação + stats do dia, o
+ * painel de operação, o "Seu mês" (pelas OS — ver ProducaoEngine) e um
+ * "hoje no COP" curto (escala, agenda, alertas) que leva pros módulos.
+ * Visual moderno: cards com ícone/cor (.op-card, CSS em agendaixc.css).
  */
 
 function saudacaoDoHorario(data = new Date()) {
@@ -15,11 +15,43 @@ function saudacaoDoHorario(data = new Date()) {
     return "Boa noite";
 }
 
-function tileInicio(rotulo, valor, secao) {
-    const conteudo = `<div class="stat-label">${rotulo}</div><div class="stat-valor">${valor}</div>`;
+// Ícones (SVG paths) usados nos cards/títulos da tela inicial.
+const ICONES_INICIO = {
+    plus: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+    cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>',
+    redo: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5"/>',
+    ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14a6 6 0 0 1 3.5 6"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+    warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>'
+};
+const svgIcone = n => `<svg viewBox="0 0 24 24" class="op-svg">${ICONES_INICIO[n] || ""}</svg>`;
+
+/** Título de seção com ícone (visual novo). */
+function secTitulo(texto, icone) {
+    return `<div class="sec-titulo">${icone ? svgIcone(icone) : ""}<span>${escaparHtml(texto)}</span></div>`;
+}
+
+/** Card com ícone + cor. Clicável (vai pro módulo) se "secao" for passado. */
+function cardInicio(rotulo, valor, cor, icone, secao) {
+    const inner = `<span class="op-ic">${svgIcone(icone)}</span><span class="op-txt"><small>${rotulo}</small><strong>${valor}</strong></span>`;
     return secao
-        ? `<button type="button" class="stat-tile stat-tile-link" data-ir-secao="${secao}">${conteudo}</button>`
-        : `<div class="stat-tile">${conteudo}</div>`;
+        ? `<button type="button" class="op-card" data-ir-secao="${secao}" style="--c:${cor}">${inner}</button>`
+        : `<div class="op-card op-card-estatico" style="--c:${cor}">${inner}</div>`;
+}
+
+/** Nº de OS finalizadas hoje (pro stat do hero). */
+function fechamentosDeHoje() {
+    const ords = APP?.dados?.ordens;
+    if (!ords) return 0;
+    const h = hojeMeiaNoite().getTime(), a = h + 86400000;
+    let n = 0;
+    for (const o of ords.values()) {
+        const df = o.dataFechamento;
+        if (df && df.getTime() >= h && df.getTime() < a && String(o.statusAtual || "").toLowerCase() === "finalizada") n++;
+    }
+    return n;
 }
 
 function renderizarInicio() {
@@ -29,23 +61,31 @@ function renderizarInicio() {
     const agora = new Date();
     const nome = primeiroNomeUsuario();
     const mes = agora.toLocaleDateString("pt-BR", { month: "long" });
+    const fechHoje = fechamentosDeHoje().toLocaleString("pt-BR");
 
     container.innerHTML = `
-        <div class="inicio-saudacao">
-            <h2>${saudacaoDoHorario(agora)}${nome ? `, ${escaparHtml(nome)}` : ""}! 👋</h2>
-            <p>Tenha um ótimo dia de trabalho. Hoje é ${formatarDataLonga(agora).toLowerCase()}.</p>
-        </div>
+        <section class="inicio-hero">
+            <div class="inicio-hero-txt">
+                <h1>${saudacaoDoHorario(agora)}${nome ? `, ${escaparHtml(nome)}` : ""} 👋</h1>
+                <p>${escaparHtml(formatarDataLonga(agora))}. Tenha um ótimo dia de trabalho.</p>
+            </div>
+            <div class="inicio-hero-live">
+                <div><b id="heroTecnicos">…</b><span>técnicos na escala</span></div>
+                <div><b id="heroAgenda">…</b><span>OS na agenda</span></div>
+                <div><b>${fechHoje}</b><span>fechamentos hoje</span></div>
+            </div>
+        </section>
 
         <div id="inicioPainelOperacao"></div>
 
-        <div class="indicadores-secao-titulo">Seu mês de ${mes}</div>
+        ${secTitulo(`Seu mês de ${mes}`, "users")}
         <div id="inicioMeuMes">${conteudoMeuMes()}</div>
 
-        <div class="indicadores-secao-titulo">Hoje no COP</div>
+        ${secTitulo("Hoje no COP", "list")}
         <div class="kpi-row" id="inicioHoje">
-            ${tileInicio("Técnicos na escala", '<span id="inicioTecnicosHoje">…</span>', "escala-hoje")}
-            ${tileInicio("OS na agenda do dia", '<span id="inicioAgendaHoje">…</span>', "agenda-hoje")}
-            ${tileInicio("Alertas de recorrência", (APP.indicadores.recorrenciaAlertas?.size ?? 0).toLocaleString("pt-BR"), "alertas")}
+            ${cardInicio("Técnicos na escala", '<span id="inicioTecnicosHoje">…</span>', "#7c3aed", "users", "escala-hoje")}
+            ${cardInicio("OS na agenda do dia", '<span id="inicioAgendaHoje">…</span>', "#2563eb", "list", "agenda-hoje")}
+            ${cardInicio("Alertas de recorrência", (APP.indicadores.recorrenciaAlertas?.size ?? 0).toLocaleString("pt-BR"), "#dc2626", "repeat", "alertas")}
         </div>
 
         <div id="inicioAtrasadas"></div>
@@ -71,13 +111,14 @@ async function preencherAtrasadas() {
         if (!total) { alvo.innerHTML = ""; return; }
 
         alvo.innerHTML = `
-            <div class="indicadores-secao-titulo">⚠ Pendências de reagendamento</div>
-            <div class="kpi-row">
-                <button type="button" class="stat-tile stat-tile-link atrasadas-tile" id="atrasadasCard">
-                    <div class="stat-label">OS de dias anteriores em aberto</div>
-                    <div class="stat-valor">${total}</div>
-                </button>
-            </div>`;
+            <button type="button" class="inicio-alert" id="atrasadasCard">
+                <span class="op-ic">${svgIcone("warn")}</span>
+                <span class="inicio-alert-txt">
+                    <strong>Pendências de reagendamento</strong>
+                    <small>OS de dias anteriores marcadas e ainda em aberto</small>
+                </span>
+                <span class="inicio-alert-num">${total}</span>
+            </button>`;
 
         const corpo = document.getElementById("modalAtrasadasCorpo");
         if (corpo) {
@@ -117,23 +158,29 @@ function conteudoMeuMes() {
     const n = v => v.toLocaleString("pt-BR");
     return `
         <div class="kpi-row">
-            ${tileInicio("Aberturas", n(eu.aberturas))}
-            ${tileInicio("Agendamentos", n(eu.agendamentos))}
-            ${tileInicio("Reagendamentos", n(eu.reagendamentos))}
-            ${tileInicio("Fechamentos", n(eu.fechamentos))}
+            ${cardInicio("Aberturas", n(eu.aberturas), "#0891b2", "plus")}
+            ${cardInicio("Agendamentos", n(eu.agendamentos), "#2563eb", "cal")}
+            ${cardInicio("Reagendamentos", n(eu.reagendamentos), "#d97706", "redo")}
+            ${cardInicio("Fechamentos", n(eu.fechamentos), "#059669", "ok")}
         </div>`;
 }
 
 async function preencherHojeNoCop() {
     const tecnicos = document.getElementById("inicioTecnicosHoje");
+    const heroTec = document.getElementById("heroTecnicos");
     const agenda = document.getElementById("inicioAgendaHoje");
+    const heroAg = document.getElementById("heroAgenda");
 
     carregarEscalaTecnicos()
         .then(techs => {
-            if (tecnicos) tecnicos.textContent = montarEscalaDoDia(techs, hojeMeiaNoite()).filter(d => d.trabalha).length;
+            const v = montarEscalaDoDia(techs, hojeMeiaNoite()).filter(d => d.trabalha).length;
+            if (tecnicos) tecnicos.textContent = v;
+            if (heroTec) heroTec.textContent = v;
         })
-        .catch(() => { if (tecnicos) tecnicos.textContent = "—"; });
+        .catch(() => { if (tecnicos) tecnicos.textContent = "—"; if (heroTec) heroTec.textContent = "—"; });
 
     const total = await totalAgendaDeHoje();
-    if (agenda) agenda.textContent = total === null ? "—" : total;
+    const v = total === null ? "—" : total;
+    if (agenda) agenda.textContent = v;
+    if (heroAg) heroAg.textContent = v;
 }

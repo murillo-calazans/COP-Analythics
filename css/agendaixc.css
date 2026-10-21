@@ -475,3 +475,22 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 .op-txt{display:flex;flex-direction:column;min-width:0}
 .op-txt small{color:var(--cor-texto-suave);font-size:13px;font-weight:500}
 .op-txt strong{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.12;font-variant-numeric:tabular-nums;color:var(--cor-texto)}
+
+/* ===== Tela inicial moderna (hero + títulos com ícone + alerta) ===== */
+.sec-titulo{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--cor-texto);margin:26px 0 12px}
+.sec-titulo .op-svg{width:18px;height:18px;color:var(--cor-texto-suave)}
+.inicio-hero{border-radius:20px;padding:24px 28px;color:#fff;background:linear-gradient(115deg,#0c1630 0%,#17306e 60%,#2563eb 130%);display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:6px}
+.inicio-hero h1{font-size:25px;font-weight:800;letter-spacing:-.02em;margin:0}
+.inicio-hero p{color:#b9c8ea;margin:6px 0 0;font-size:13.5px}
+.inicio-hero-live{display:flex;gap:10px;flex-wrap:wrap}
+.inicio-hero-live div{background:#ffffff14;border:1px solid #ffffff22;border-radius:14px;padding:10px 16px;min-width:108px}
+.inicio-hero-live b{font-size:22px;font-weight:800;display:block;font-variant-numeric:tabular-nums}
+.inicio-hero-live span{font-size:12px;color:#b9c8ea}
+.op-card-estatico{cursor:default}
+.op-card-estatico:hover{transform:none;box-shadow:0 1px 3px var(--cor-sombra);border-color:var(--cor-borda)}
+.inicio-alert{display:flex;align-items:center;gap:13px;width:100%;margin-top:26px;background:color-mix(in srgb,#dc2626 11%,var(--cor-fundo-card));border:1px solid color-mix(in srgb,#dc2626 32%,transparent);border-radius:14px;padding:14px 18px;cursor:pointer;text-align:left}
+.inicio-alert .op-ic{background:color-mix(in srgb,#dc2626 16%,transparent);color:#dc2626}
+.inicio-alert-txt{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.inicio-alert-txt strong{color:var(--cor-texto);font-size:15px}
+.inicio-alert-txt small{color:var(--cor-texto-suave);font-size:12.5px}
+.inicio-alert-num{font-size:26px;font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums}

@@ -166,10 +166,13 @@ async function renderizarPainelOperacao() {
             <span class="io-txt"><strong>${valor.toLocaleString("pt-BR")}</strong><small>${titulo}${sub ? ` · ${sub}` : ""}</small></span>
         </button>`;
 
+    const svgT = p => `<svg viewBox="0 0 24 24" class="op-svg">${p}</svg>`;
+    const icOp = '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>';
+    const icTruck = '<path d="M2 6h11v10H2zM13 10h4l4 3v3h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>';
     alvo.innerHTML = `
-        <div class="indicadores-secao-titulo">Operação hoje</div>
+        <div class="sec-titulo">${svgT(icOp)}<span>Operação hoje</span></div>
         <div class="kpi-row">${tiles}</div>
-        <div class="indicadores-secao-titulo" style="margin-top:16px;">Início da operação agora</div>
+        <div class="sec-titulo">${svgT(icTruck)}<span>Início da operação agora</span></div>
         <div class="io-wrap">
             <div class="io-bar" role="img" aria-label="${nD} equipes em deslocamento, ${nE} em execução, ${nS} sem movimento">
                 ${seg(nD, COR_D)}${seg(nE, COR_E)}${seg(nS, COR_S)}
