@@ -29,6 +29,7 @@ async function aovivoMaiorAtualizacao() {
 }
 
 async function aovivoVerificar() {
+    if (typeof atualizarBannerGlobal === "function") atualizarBannerGlobal();   // banner "atualizado em" global, independente dos guards abaixo
     if (aovivoRodando) return;
     if (APP.status.carregando) return;                 // não durante importação/carregamento
     if (document.querySelector(".modal.aberto")) return; // não atrapalha quem está vendo um detalhe
@@ -63,6 +64,7 @@ async function iniciarAoVivo() {
     pararAoVivo();
     // base = estado que acabou de ser carregado, pra não disparar um recarregamento à toa
     aovivoUltimo = await aovivoMaiorAtualizacao();
+    if (typeof atualizarBannerGlobal === "function") atualizarBannerGlobal();   // mostra o banner já no 1º load
     aovivoTimer = setInterval(aovivoVerificar, AOVIVO_INTERVALO_MS);
     // ao voltar pra aba (depois de ficar noutra), confere na hora
     document.removeEventListener("visibilitychange", aovivoAoVoltar);

@@ -185,8 +185,7 @@ function desenharBacklog(model) {
     // cidade escolhida sumiu numa recarga? volta pra "todas"
     if (backlogCidade && !model.cidades.some(c => c.cidade === backlogCidade)) backlogCidade = "";
 
-    const banner = typeof bannerAtualizacaoIxc === "function" ? bannerAtualizacaoIxc(model.capturadoEm) : "";
-    const rec = recorteBacklog(model);
+    const rec = recorteBacklog(model);   // banner "atualizado em" agora é global (acima das seções)
     const sufixo = backlogCidade ? ` · ${escaparHtml(backlogCidade)}` : "";
 
     const opcoes = `<option value="">Todas as cidades (${model.total.toLocaleString("pt-BR")})</option>` +
@@ -213,7 +212,6 @@ function desenharBacklog(model) {
         </button>`).join("");
 
     alvo.innerHTML = `
-        ${banner}
         ${filtroCidade}
         <div class="kpi-row">${kpis}</div>
         <div class="indicadores-secao-titulo">Em aberto por assunto${sufixo}</div>

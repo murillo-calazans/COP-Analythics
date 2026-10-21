@@ -494,3 +494,6 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 .inicio-alert-txt strong{color:var(--cor-texto);font-size:15px}
 .inicio-alert-txt small{color:var(--cor-texto-suave);font-size:12.5px}
 .inicio-alert-num{font-size:26px;font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums}
+
+/* Banner "atualizado em" global (acima das seções, todas as abas) */
+.banner-global-atu:not(:empty){margin:0 0 14px}

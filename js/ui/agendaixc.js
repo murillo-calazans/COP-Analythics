@@ -607,7 +607,7 @@ function ixcRodadaAnterior(n) {
     const hoje = new Date();
     for (let dia = 0; dia <= 2; dia++) {
         for (const h of [...IXC_HORARIOS_RODADA].sort((a, b) => b - a)) {
-            const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - dia, h);
+            const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - dia, h, 30);  // rodadas nos :30
             if (d <= hoje) slots.push(d);
         }
     }
@@ -649,8 +649,23 @@ function bannerAtualizacaoIxc(capturadoEm) {
     return `<div class="ixc-atualizado ${classe}">
         <span class="ixc-atualizado-ponto"></span>
         ${texto}
-        <span class="ixc-atualizado-obs">o robô atualiza de hora em hora (7h às 19h) · extra pelo botão Atualizar banco</span>
+        <span class="ixc-atualizado-obs">o robô atualiza de hora em hora (7h30 às 19h30) · extra pelo botão Atualizar banco</span>
     </div>`;
+}
+
+/**
+ * Banner "atualizado em" GLOBAL — renderizado acima das seções (#bannerGlobalAtualizacao),
+ * aparece em TODAS as abas. Busca o capturado_em mais recente da os_pendentes (1 linha,
+ * leve) e reusa bannerAtualizacaoIxc. Chamado pelo aovivo (a cada tick) e no init.
+ */
+async function atualizarBannerGlobal() {
+    const el = document.getElementById("bannerGlobalAtualizacao");
+    if (!el || typeof supabaseClient === "undefined") return;
+    try {
+        const { data } = await supabaseClient
+            .from("os_pendentes").select("capturado_em").order("capturado_em", { ascending: false }).limit(1);
+        el.innerHTML = bannerAtualizacaoIxc(data && data[0] && data[0].capturado_em);
+    } catch { /* silencioso: banner é só indicador, não quebra nada */ }
 }
 
 function renderizarAgendaIxc(model) {
@@ -669,8 +684,6 @@ function renderizarAgendaIxc(model) {
     const icone = caminhos => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${caminhos}</svg>`;
 
     alvo.innerHTML = `
-      ${bannerAtualizacaoIxc(model.capturadoEm)}
-
       <div class="escala-kpis ixc-cartoes" role="group" aria-label="Resumo da agenda do IXC">
         ${AGENDA_IXC_CARTOES.map(c => `
           <button type="button" class="escala-kpi kpi-ixc-${c.id}" data-cartao-ixc="${c.id}" title="${escaparHtml(c.titulo)} — clique para ver todas">
