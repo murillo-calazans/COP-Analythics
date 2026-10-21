@@ -343,7 +343,7 @@ async function puxarRecentes(pagina, molde, janela) {
             } catch (e) {
                 const timeout = /aborted|AbortError|timed? ?out/i.test(e && e.message || "");
                 if (timeout && tent < 3) { log(`  visão ${molde.viewId} pág ${i}: IXC demorou >90s (tentativa ${tent}/3), repetindo...`); continue; }
-                if (timeout) throw new Error("PULL_TIMEOUT");   // não casa com ehFalhaDeRede → não reinicia o navegador
+                if (timeout) throw new Error("PULL_TIMEOUT");   // 3 falhas seguidas = sessão travada → rodar() reinicia pra relogar
                 throw e;
             }
         }
@@ -1165,7 +1165,7 @@ async function principal() {
         try { await garantirNavegador(); await umaPassada(pagina, moldes, simular); await publicarAgendaSeNaHora(); }
         catch (e) {
             if (fechouNavegador(e)) log("Navegador/aba fechou durante a rodada — reabro na próxima.");
-            else if (e.message === "SESSAO_CAIU" || ehFalhaDeRede(e)) {
+            else if (e.message === "SESSAO_CAIU" || e.message === "PULL_TIMEOUT" || ehFalhaDeRede(e)) {
                 // puxada não completou (sessão caiu / Failed to fetch): fecha o
                 // navegador e reabre do zero, pra limpar o estado e relogar.
                 logErro("rodada (puxada falhou: sessão/rede)", e);
@@ -1209,7 +1209,7 @@ async function principal() {
             log("Comando concluído.");
         } catch (e) {
             await supabase("PATCH", `robo_comandos?id=eq.${cmd.id}`, { status: "erro", processado_em: new Date(), resultado: { erro: e.message } }, "return=minimal").catch(() => {});
-            if (e.message === "SESSAO_CAIU" || ehFalhaDeRede(e)) {
+            if (e.message === "SESSAO_CAIU" || e.message === "PULL_TIMEOUT" || ehFalhaDeRede(e)) {
                 logErro("comando (puxada falhou: sessão/rede)", e);
                 log("Puxada do comando falhou (sessão/rede) — fechando e reabrindo o navegador...");
                 await reiniciarNavegador().catch(x => log("Reinício do navegador não concluiu: " + x.message));
