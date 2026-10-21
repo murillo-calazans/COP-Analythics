@@ -454,3 +454,15 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 /* #2 v3: usa o mesmo tile dos outros KPIs, só com destaque vermelho */
 .atrasadas-tile { border-color: rgba(220, 38, 38, .35); }
 .atrasadas-tile .stat-valor { color: #dc2626; }
+
+/* Início da operação (painel inicial): barra empilhada + legenda */
+.io-wrap{background:var(--cor-fundo-card);border:1px solid var(--cor-borda);border-radius:var(--raio-card,16px);padding:16px 18px}
+.io-bar{display:flex;height:14px;border-radius:99px;overflow:hidden;gap:3px;margin-bottom:14px}
+.io-bar i{display:block;border-radius:99px;min-width:4px;transition:flex .3s}
+.io-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.io-item{display:flex;align-items:center;gap:11px;background:transparent;border:0;cursor:pointer;text-align:left;padding:8px 10px;border-radius:12px;transition:background .12s}
+.io-item:hover{background:var(--cor-fundo-elevado)}
+.io-dot{width:11px;height:11px;border-radius:50%;flex:none}
+.io-txt{display:flex;flex-direction:column;line-height:1.15}
+.io-txt strong{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--cor-texto)}
+.io-txt small{color:var(--cor-texto-suave);font-size:12px;margin-top:1px}

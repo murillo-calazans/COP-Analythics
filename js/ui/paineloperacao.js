@@ -79,30 +79,37 @@ async function calcularPainelOperacao() {
     grupos.agendadas.sort((a, b) => (a.agendamento || 0) - (b.agendamento || 0));
     grupos.cop.sort((a, b) => (a.cliente || "").localeCompare(b.cliente || "", "pt-BR"));
 
-    // Início da operação hoje: equipe = o técnico que foi a campo (com ou sem
-    // auxiliar), lido do texto do deslocamento. Conta quantas equipes já têm ≥1 OS
-    // em deslocamento / execução HOJE, e quais da escala ainda não saíram.
-    const deslocHoje = new Map(), execHoje = new Map();   // nomeTécnico -> [OS]
+    // Início da operação: RETRATO do momento da importação (status ATUAL de cada
+    // OS, não "eventos do dia"). Equipe = o técnico de campo (com/sem auxiliar),
+    // lido do texto do deslocamento. Quem está AGORA em deslocamento, quem em
+    // execução, e quem da escala ainda não saiu (sem nenhuma OS em desloc/execução).
+    const deslocAgora = new Map(), execAgora = new Map();   // nomeTécnico -> [OS]
     for (const id in eventosPorOs) {
+        const o = os.get(id) || {};
+        const st = norm(o.statusUlt);
+        const isDesloc = st === "deslocamento";
+        const isExec = st.includes("execu");
+        if (!isDesloc && !isExec) continue;            // só o que está em campo AGORA
         const evs = eventosPorOs[id];
         let tec = null;
         for (const e of evs) if (+e.evento === 2) { const t = tecnicoDoDeslocamento(e.msg); if (t) tec = t; }
-        if (!tec) continue;
-        const o = os.get(id) || {};
+        if (!tec) continue;                            // sem técnico identificável no deslocamento
         const info = { id, cliente: o.cliente, assunto: o.assunto, cidade: o.cidade, bairro: o.bairro, statusUlt: o.statusUlt };
-        if (evs.some(e => +e.evento === 2 && ehHoje(e.data))) { if (!deslocHoje.has(tec)) deslocHoje.set(tec, []); deslocHoje.get(tec).push(info); }
-        if (evs.some(e => +e.evento === 9 && ehHoje(e.data))) { if (!execHoje.has(tec)) execHoje.set(tec, []); execHoje.get(tec).push(info); }
+        const alvo = isDesloc ? deslocAgora : execAgora;
+        if (!alvo.has(tec)) alvo.set(tec, []);
+        alvo.get(tec).push(info);
     }
-    const emMov = [...new Set([...deslocHoje.keys(), ...execHoje.keys()])];
+    const emMov = [...new Set([...deslocAgora.keys(), ...execAgora.keys()])];
     const semMov = techsEscala
         .filter(t => !emMov.some(nm => bate(nm, t)))
         .map(t => nomeCurto(t.nome))
         .filter((v, i, a) => v && a.indexOf(v) === i)
-        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+        .sort((a, b) => a.localeCompare(b, "pt-BR"))
+        .map(nome => ({ nome, oss: [] }));
     const equipesLista = mp => [...mp.entries()]
         .map(([nome, oss]) => ({ nome: nomeCurto(nome), oss }))
         .sort((a, b) => b.oss.length - a.oss.length);
-    const inicioOperacao = { desloc: equipesLista(deslocHoje), exec: equipesLista(execHoje), semMov };
+    const inicioOperacao = { desloc: equipesLista(deslocAgora), exec: equipesLista(execAgora), semMov };
 
     return { grupos, fechamentos, eventosPorOs, osInfo, capturadoEm, inicioOperacao };
 }
@@ -141,31 +148,39 @@ async function renderizarPainelOperacao() {
 
     const io = m.inicioOperacao || { desloc: [], exec: [], semMov: [] };
     const somaOs = lista => lista.reduce((s, e) => s + e.oss.length, 0);
-    const inicioTiles = [
-        { id: "io-desloc", rotulo: "Equipes em deslocamento", valor: io.desloc.length, sub: `${somaOs(io.desloc)} OS` },
-        { id: "io-exec",   rotulo: "Equipes em execução",     valor: io.exec.length,   sub: `${somaOs(io.exec)} OS` },
-        { id: "io-semmov", rotulo: "Equipes sem movimento",   valor: io.semMov.length, sub: "ainda não saíram" }
-    ].map(c => `
-        <button type="button" class="stat-tile stat-tile-link painel-op-tile" data-io="${c.id}">
-            <div class="stat-label">${c.rotulo}</div>
-            <div class="stat-valor">${c.valor.toLocaleString("pt-BR")}</div>
-            <div class="stat-sub">${c.sub}</div>
-        </button>`).join("");
+    const nD = io.desloc.length, nE = io.exec.length, nS = io.semMov.length;
+    const osD = somaOs(io.desloc), osE = somaOs(io.exec);
+    const COR_D = "var(--escala-azul,#2563eb)", COR_E = "var(--escala-verde,#059669)", COR_S = "var(--escala-laranja,#d97706)";
+    const seg = (n, cor) => `<i style="flex:${n || 0.001};background:${cor}"></i>`;
+    const item = (id, cor, valor, titulo, sub) => `
+        <button type="button" class="io-item" data-io="${id}">
+            <span class="io-dot" style="background:${cor}"></span>
+            <span class="io-txt"><strong>${valor.toLocaleString("pt-BR")}</strong><small>${titulo}${sub ? ` · ${sub}` : ""}</small></span>
+        </button>`;
 
     alvo.innerHTML = `
         <div class="indicadores-secao-titulo">Operação hoje</div>
         <div class="kpi-row">${tiles}</div>
-        <div class="indicadores-secao-titulo" style="margin-top:16px;">Início da operação hoje</div>
-        <div class="kpi-row">${inicioTiles}</div>`;
+        <div class="indicadores-secao-titulo" style="margin-top:16px;">Início da operação agora</div>
+        <div class="io-wrap">
+            <div class="io-bar" role="img" aria-label="${nD} equipes em deslocamento, ${nE} em execução, ${nS} sem movimento">
+                ${seg(nD, COR_D)}${seg(nE, COR_E)}${seg(nS, COR_S)}
+            </div>
+            <div class="io-legend">
+                ${item("io-desloc", COR_D, nD, "Em deslocamento", `${osD} OS`)}
+                ${item("io-exec", COR_E, nE, "Em execução", `${osE} OS`)}
+                ${item("io-semmov", COR_S, nS, "Sem movimento", "ainda não saíram")}
+            </div>
+        </div>`;
 
     alvo.querySelectorAll("[data-painel-cartao]").forEach(botao =>
         botao.addEventListener("click", () => abrirPopupPainel(PAINEL_OP_CARTOES.find(c => c.id === botao.dataset.painelCartao))));
     alvo.querySelector('[data-io="io-desloc"]')?.addEventListener("click", () =>
-        abrirPopupEquipes("Equipes em deslocamento", "Técnicos que já iniciaram deslocamento hoje", io.desloc, true));
+        abrirPopupEquipes("Em deslocamento agora", "Técnicos com OS em deslocamento neste momento", io.desloc, true));
     alvo.querySelector('[data-io="io-exec"]')?.addEventListener("click", () =>
-        abrirPopupEquipes("Equipes em execução", "Técnicos com OS em execução hoje", io.exec, true));
+        abrirPopupEquipes("Em execução agora", "Técnicos com OS em execução neste momento", io.exec, true));
     alvo.querySelector('[data-io="io-semmov"]')?.addEventListener("click", () =>
-        abrirPopupEquipes("Equipes sem movimento", "Técnicos da escala que ainda não saíram hoje", io.semMov.map(n => ({ nome: n, oss: [] })), false));
+        abrirPopupEquipes("Sem movimento", "Técnicos da escala que ainda não saíram", io.semMov, false));
 }
 
 /** Popup de EQUIPES (técnicos), não de OS — usado pelo bloco "Início da operação". */
@@ -177,7 +192,7 @@ function abrirPopupEquipes(titulo, descricao, equipes, comOs) {
             <span class="ixc-os-cliente">${escaparHtml(e.nome || "—")}</span>
             ${comOs ? `<span class="escala-pilula">${e.oss.length} OS</span>` : ""}
           </div>
-          ${comOs && e.oss.length ? `<div class="ixc-os-sub">${e.oss.slice(0, 10).map(o => "#" + escaparHtml(String(o.id))).join(" · ")}${e.oss.length > 10 ? " …" : ""}</div>` : ""}
+          ${comOs && e.oss.length ? `<div class="ixc-os-sub">${e.oss.slice(0, 12).map(o => "#" + escaparHtml(String(o.id)) + (o.cliente ? " · " + escaparHtml(o.cliente) : "")).join(" &nbsp;|&nbsp; ")}${e.oss.length > 12 ? " …" : ""}</div>` : ""}
         </li>`).join("");
     const fundo = document.createElement("div");
     fundo.className = "ixc-popup-fundo painel-popup-fundo";
