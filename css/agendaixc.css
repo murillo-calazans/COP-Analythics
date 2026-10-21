@@ -466,3 +466,12 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 .io-txt{display:flex;flex-direction:column;line-height:1.15}
 .io-txt strong{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--cor-texto)}
 .io-txt small{color:var(--cor-texto-suave);font-size:12px;margin-top:1px}
+
+/* Operação hoje: cartões modernos com ícone + cor (cor vem inline em --c) */
+.op-card{display:flex;gap:14px;align-items:center;width:100%;background:var(--cor-fundo-card);border:1px solid var(--cor-borda);border-radius:var(--raio-card,16px);padding:18px 20px;cursor:pointer;text-align:left;box-shadow:0 1px 3px var(--cor-sombra);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.op-card:hover{transform:translateY(-2px);box-shadow:0 10px 26px var(--cor-sombra);border-color:var(--c)}
+.op-ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--c) 15%,transparent);color:var(--c)}
+.op-svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.op-txt{display:flex;flex-direction:column;min-width:0}
+.op-txt small{color:var(--cor-texto-suave);font-size:13px;font-weight:500}
+.op-txt strong{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.12;font-variant-numeric:tabular-nums;color:var(--cor-texto)}

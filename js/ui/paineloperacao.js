@@ -114,12 +114,20 @@ async function calcularPainelOperacao() {
     return { grupos, fechamentos, eventosPorOs, osInfo, capturadoEm, inicioOperacao };
 }
 
+// Ícone (SVG) + cor por cartão — visual moderno (ver mock do usuário).
+const IC = {
+    cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>',
+    redo: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5"/>',
+    ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/>',
+    clip: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',
+    inbox: '<path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5l1 3h6l1-3h5"/>'
+};
 const PAINEL_OP_CARTOES = [
-    { id: "agendadas",   rotulo: "Agendadas hoje",     fonte: "painel", lista: m => m.grupos.agendadas,   titulo: "OS de campo marcadas pra hoje" },
-    { id: "reagendadas", rotulo: "Reagendadas hoje",   fonte: "painel", lista: m => m.grupos.reagendadas, titulo: "OS que foram reagendadas hoje" },
-    { id: "fechamentos", rotulo: "Fechamentos hoje",   fonte: "fech",   lista: m => m.fechamentos,        titulo: "OS finalizadas hoje" },
-    { id: "assumidas",   rotulo: "Assumidas em aberto", fonte: "painel", lista: m => m.grupos.assumidas,  titulo: "OS que um colaborador assumiu e ainda não finalizou" },
-    { id: "cop",         rotulo: "COP em aberto",      fonte: "painel", lista: m => m.grupos.cop,          titulo: "OS do Controle de Operações ainda em aberto" }
+    { id: "agendadas",   rotulo: "Agendadas hoje",     fonte: "painel", cor: "#2563eb", icone: IC.cal,   lista: m => m.grupos.agendadas,   titulo: "OS de campo marcadas pra hoje" },
+    { id: "reagendadas", rotulo: "Reagendadas hoje",   fonte: "painel", cor: "#d97706", icone: IC.redo,  lista: m => m.grupos.reagendadas, titulo: "OS que foram reagendadas hoje" },
+    { id: "fechamentos", rotulo: "Fechamentos hoje",   fonte: "fech",   cor: "#059669", icone: IC.ok,    lista: m => m.fechamentos,        titulo: "OS finalizadas hoje" },
+    { id: "assumidas",   rotulo: "Assumidas em aberto", fonte: "painel", cor: "#7c3aed", icone: IC.clip,  lista: m => m.grupos.assumidas,  titulo: "OS que um colaborador assumiu e ainda não finalizou" },
+    { id: "cop",         rotulo: "COP em aberto",      fonte: "painel", cor: "#0891b2", icone: IC.inbox, lista: m => m.grupos.cop,          titulo: "OS do Controle de Operações ainda em aberto" }
 ];
 
 const PAINEL_OP_TETO = 300;   // teto de OS listadas por card
@@ -140,9 +148,9 @@ async function renderizarPainelOperacao() {
     const tiles = PAINEL_OP_CARTOES.map(c => {
         const n = c.lista(m).length;
         return `
-            <button type="button" class="stat-tile stat-tile-link painel-op-tile" data-painel-cartao="${c.id}" title="${escaparHtml(c.titulo)}">
-                <div class="stat-label">${c.rotulo}</div>
-                <div class="stat-valor">${n.toLocaleString("pt-BR")}</div>
+            <button type="button" class="op-card painel-op-tile" data-painel-cartao="${c.id}" title="${escaparHtml(c.titulo)}" style="--c:${c.cor}">
+                <span class="op-ic"><svg viewBox="0 0 24 24" class="op-svg">${c.icone}</svg></span>
+                <span class="op-txt"><small>${c.rotulo}</small><strong>${n.toLocaleString("pt-BR")}</strong></span>
             </button>`;
     }).join("");
 
