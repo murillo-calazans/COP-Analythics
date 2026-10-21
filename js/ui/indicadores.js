@@ -330,18 +330,19 @@ function renderizarSecaoIndicadores() {
 
     renderizarProducaoCop();
 
+    // Esconde os meses com valor 0 (só mostra os que têm movimento).
     renderizarGraficoBarras("mensalVolume",
-        meses.map(m => ({ rotulo: m.rotulo, valor: m.totalFinalizadas })),
+        meses.map(m => ({ rotulo: m.rotulo, valor: m.totalFinalizadas })).filter(m => m.valor > 0),
         { serie: "serie-1", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
     );
 
     renderizarGraficoBarras("mensalReaberturas",
-        meses.map(m => ({ rotulo: m.rotulo, valor: m.reabertas })),
+        meses.map(m => ({ rotulo: m.rotulo, valor: m.reabertas })).filter(m => m.valor > 0),
         { serie: "serie-2", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
     );
 
     renderizarGraficoBarras("mensalTecnicosAtivos",
-        meses.map(m => ({ rotulo: m.rotulo, valor: m.tecnicosAtivos })),
+        meses.map(m => ({ rotulo: m.rotulo, valor: m.tecnicosAtivos })).filter(m => m.valor > 0),
         { serie: "serie-1", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
     );
 
