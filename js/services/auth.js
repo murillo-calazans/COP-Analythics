@@ -77,9 +77,33 @@ function nomeDoEmail(email) {
         .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(" ");
 }
 
-/** Primeiro nome, pra saudação. */
+/** Nome que a pessoa escolheu pra ser chamada (só no navegador dela; não muda o cadastro). */
+function nomePreferido() {
+    try { return (localStorage.getItem("cop_nome_exibicao") || "").trim(); } catch { return ""; }
+}
+function salvarNomePreferido(valor) {
+    try {
+        const t = (valor || "").trim();
+        if (t) localStorage.setItem("cop_nome_exibicao", t);
+        else localStorage.removeItem("cop_nome_exibicao");
+    } catch { /* localStorage indisponível: ignora */ }
+}
+
+/** Primeiro nome, pra saudação (usa o preferido, se tiver). */
 function primeiroNomeUsuario() {
+    const pref = nomePreferido();
+    if (pref) return pref.split(/\s+/)[0];
     return (APP.usuario?.nome ?? "").split(/\s+/)[0] || "";
+}
+
+/** Nome curto pro cabeçalho: o preferido, senão primeiro + último nome. */
+function nomeCurtoUsuario() {
+    const pref = nomePreferido();
+    if (pref) return pref;
+    const completo = (APP.usuario?.nome ?? "").trim();
+    if (!completo) return (APP.usuario?.email ?? "").split("@")[0];
+    const p = completo.split(/\s+/);
+    return p.length === 1 ? p[0] : `${p[0]} ${p[p.length - 1]}`;
 }
 
 function ehAdmin() {

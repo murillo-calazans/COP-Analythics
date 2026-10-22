@@ -203,6 +203,21 @@ header{
 
 }
 
+.usuario-nome-btn{
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.usuario-nome-btn:hover{ background: rgba(255,255,255,.12); }
+.usuario-nome-btn:focus-visible{ outline: 2px solid #F5B335; outline-offset: 2px; }
+.usuario-papel{ color: #CBD5E1; }
+
 /*
  * Sem sessão: só a tela de login aparece — cabeçalho e conteúdo
  * ficam escondidos até autenticar (ver js/core/app.js).

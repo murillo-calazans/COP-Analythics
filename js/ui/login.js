@@ -80,15 +80,8 @@ function mostrarTelaLogin() {
 function mostrarAppAutenticado() {
     document.body.classList.remove("nao-autenticado");
 
-    const rotulo = document.getElementById("usuarioLogado");
-    if (rotulo) {
-        const papel = APP.usuario.papel === "admin" || APP.usuario.papel === "editor"
-            ? APP.usuario.papel
-            : "leitor";
-        const setor = APP.usuario.setor ? ` (${APP.usuario.setor})` : "";
-        rotulo.textContent = `${APP.usuario.nome || APP.usuario.email} · ${papel}${setor}`;
-        rotulo.title = APP.usuario.email;
-    }
+    atualizarRotuloUsuario();
+    configurarModalMeuNome();
 
     aplicarGateDePapel();
     if (typeof atualizarMenuLateralAdmin === "function") atualizarMenuLateralAdmin();
@@ -101,6 +94,52 @@ function mostrarAppAutenticado() {
 
     // Saudação já aparece; os números do mês entram quando os dados chegarem.
     if (secaoAtiva() === "inicio") renderizarInicio();
+}
+
+/** Nome (curto, clicável) + papel no canto direito do cabeçalho. */
+function atualizarRotuloUsuario() {
+    const rotulo = document.getElementById("usuarioLogado");
+    if (!rotulo || !APP.usuario) return;
+    const papel = APP.usuario.papel === "admin" || APP.usuario.papel === "editor" ? APP.usuario.papel : "leitor";
+    const setor = APP.usuario.setor ? ` (${APP.usuario.setor})` : "";
+    rotulo.innerHTML =
+        `<button type="button" class="usuario-nome-btn" id="btnMeuNome" title="Mudar como quer ser chamado">${escaparHtml(nomeCurtoUsuario())}</button>` +
+        `<span class="usuario-papel"> · ${escaparHtml(papel)}${escaparHtml(setor)}</span>`;
+    rotulo.title = APP.usuario.email;
+    document.getElementById("btnMeuNome")?.addEventListener("click", abrirModalMeuNome);
+}
+
+function abrirModalMeuNome() {
+    const inp = document.getElementById("inputMeuNome");
+    if (inp) { inp.value = nomePreferido(); setTimeout(() => inp.focus(), 60); }
+    if (typeof abrirModal === "function") abrirModal("modalMeuNome");
+}
+
+let _meuNomeConfigurado = false;
+function configurarModalMeuNome() {
+    if (_meuNomeConfigurado) return;
+    _meuNomeConfigurado = true;
+    if (typeof registrarModal === "function") registrarModal("modalMeuNome");
+
+    const salvar = () => {
+        salvarNomePreferido(document.getElementById("inputMeuNome")?.value || "");
+        aplicarNomeExibicao();
+        if (typeof fecharModal === "function") fecharModal("modalMeuNome");
+    };
+    document.getElementById("btnSalvarMeuNome")?.addEventListener("click", salvar);
+    document.getElementById("inputMeuNome")?.addEventListener("keydown", e => { if (e.key === "Enter") salvar(); });
+    document.getElementById("btnLimparMeuNome")?.addEventListener("click", () => {
+        salvarNomePreferido("");
+        const inp = document.getElementById("inputMeuNome"); if (inp) inp.value = "";
+        aplicarNomeExibicao();
+        if (typeof fecharModal === "function") fecharModal("modalMeuNome");
+    });
+}
+
+/** Reaplica o nome escolhido no cabeçalho e na saudação do Início. */
+function aplicarNomeExibicao() {
+    atualizarRotuloUsuario();
+    if (typeof secaoAtiva === "function" && secaoAtiva() === "inicio" && typeof renderizarInicio === "function") renderizarInicio();
 }
 
 /**
