@@ -1274,25 +1274,34 @@
 </div>
 
 
-<div id="modalMeuNome" class="modal">
+<div id="modalMinhaConta" class="modal">
     <div class="modal-conteudo">
 
         <div class="modal-cabecalho">
-            <h2>Como quer ser chamado(a)?</h2>
+            <h2>Minha conta</h2>
             <button class="modal-fechar" type="button" data-fechar-modal>&times;</button>
         </div>
 
+        <h3 class="modal-subtitulo">Como quer ser chamado(a)?</h3>
         <p class="modal-descricao">
-            Esse nome aparece só pra você — no cabeçalho e na saudação da tela inicial.
-            Não altera seu cadastro no sistema.
+            Aparece só pra você — no cabeçalho e na saudação da tela inicial. Não altera seu cadastro.
         </p>
-
         <input type="text" id="inputMeuNome" class="input-busca-modal" placeholder="Ex.: Murillo" autocomplete="off" maxlength="40">
-
         <div class="form-config-acoes">
-            <button type="button" id="btnSalvarMeuNome">Salvar</button>
+            <button type="button" id="btnSalvarMeuNome">Salvar nome</button>
             <button type="button" id="btnLimparMeuNome" class="botao-secundario">Usar meu nome padrão</button>
         </div>
+
+        <h3 class="modal-subtitulo">Trocar senha</h3>
+        <p class="modal-descricao">
+            Mínimo de 6 caracteres. Você continua logado depois de trocar.
+        </p>
+        <input type="password" id="inputNovaSenha" class="input-busca-modal" placeholder="Nova senha" autocomplete="new-password">
+        <input type="password" id="inputNovaSenha2" class="input-busca-modal" placeholder="Repita a nova senha" autocomplete="new-password">
+        <div class="form-config-acoes">
+            <button type="button" id="btnSalvarSenha">Trocar senha</button>
+        </div>
+        <p id="senhaFeedback" class="minha-conta-feedback" hidden></p>
 
     </div>
 </div>

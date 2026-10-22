@@ -33,6 +33,13 @@ async function entrar(email, senha) {
     return { ok: true, sessao: data.session };
 }
 
+/** Troca a senha do usuário logado (sessão atual). */
+async function trocarSenha(novaSenha) {
+    const { error } = await supabaseClient.auth.updateUser({ password: novaSenha });
+    if (error) return { ok: false, mensagem: error.message || "Não deu pra trocar a senha." };
+    return { ok: true };
+}
+
 async function sair() {
     await supabaseClient.auth.signOut();
     APP.usuario = null;

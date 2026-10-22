@@ -218,6 +218,9 @@ header{
 .usuario-nome-btn:focus-visible{ outline: 2px solid #F5B335; outline-offset: 2px; }
 .usuario-papel{ color: #CBD5E1; }
 
+.minha-conta-feedback{ margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--cor-erro); }
+.minha-conta-feedback.ok{ color: #16A34A; }
+
 /*
  * Sem sessão: só a tela de login aparece — cabeçalho e conteúdo
  * ficam escondidos até autenticar (ver js/core/app.js).

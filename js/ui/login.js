@@ -81,7 +81,7 @@ function mostrarAppAutenticado() {
     document.body.classList.remove("nao-autenticado");
 
     atualizarRotuloUsuario();
-    configurarModalMeuNome();
+    configurarMinhaConta();
 
     aplicarGateDePapel();
     if (typeof atualizarMenuLateralAdmin === "function") atualizarMenuLateralAdmin();
@@ -106,34 +106,62 @@ function atualizarRotuloUsuario() {
         `<button type="button" class="usuario-nome-btn" id="btnMeuNome" title="Mudar como quer ser chamado">${escaparHtml(nomeCurtoUsuario())}</button>` +
         `<span class="usuario-papel"> · ${escaparHtml(papel)}${escaparHtml(setor)}</span>`;
     rotulo.title = APP.usuario.email;
-    document.getElementById("btnMeuNome")?.addEventListener("click", abrirModalMeuNome);
+    document.getElementById("btnMeuNome")?.addEventListener("click", abrirMinhaConta);
 }
 
-function abrirModalMeuNome() {
+function abrirMinhaConta() {
     const inp = document.getElementById("inputMeuNome");
     if (inp) { inp.value = nomePreferido(); setTimeout(() => inp.focus(), 60); }
-    if (typeof abrirModal === "function") abrirModal("modalMeuNome");
+    ["inputNovaSenha", "inputNovaSenha2"].forEach(id => { const e = document.getElementById(id); if (e) e.value = ""; });
+    const fb = document.getElementById("senhaFeedback"); if (fb) fb.hidden = true;
+    if (typeof abrirModal === "function") abrirModal("modalMinhaConta");
 }
 
-let _meuNomeConfigurado = false;
-function configurarModalMeuNome() {
-    if (_meuNomeConfigurado) return;
-    _meuNomeConfigurado = true;
-    if (typeof registrarModal === "function") registrarModal("modalMeuNome");
+function feedbackSenha(msg, ok) {
+    const fb = document.getElementById("senhaFeedback");
+    if (!fb) return;
+    fb.textContent = msg;
+    fb.classList.toggle("ok", !!ok);
+    fb.hidden = false;
+}
 
-    const salvar = () => {
+let _minhaContaConfigurada = false;
+function configurarMinhaConta() {
+    if (_minhaContaConfigurada) return;
+    _minhaContaConfigurada = true;
+    if (typeof registrarModal === "function") registrarModal("modalMinhaConta");
+
+    // Nome de exibição
+    const salvarNome = () => {
         salvarNomePreferido(document.getElementById("inputMeuNome")?.value || "");
         aplicarNomeExibicao();
-        if (typeof fecharModal === "function") fecharModal("modalMeuNome");
+        if (typeof fecharModal === "function") fecharModal("modalMinhaConta");
     };
-    document.getElementById("btnSalvarMeuNome")?.addEventListener("click", salvar);
-    document.getElementById("inputMeuNome")?.addEventListener("keydown", e => { if (e.key === "Enter") salvar(); });
+    document.getElementById("btnSalvarMeuNome")?.addEventListener("click", salvarNome);
+    document.getElementById("inputMeuNome")?.addEventListener("keydown", e => { if (e.key === "Enter") salvarNome(); });
     document.getElementById("btnLimparMeuNome")?.addEventListener("click", () => {
         salvarNomePreferido("");
         const inp = document.getElementById("inputMeuNome"); if (inp) inp.value = "";
         aplicarNomeExibicao();
-        if (typeof fecharModal === "function") fecharModal("modalMeuNome");
+        if (typeof fecharModal === "function") fecharModal("modalMinhaConta");
     });
+
+    // Troca de senha
+    const salvarSenha = async () => {
+        const s1 = document.getElementById("inputNovaSenha")?.value || "";
+        const s2 = document.getElementById("inputNovaSenha2")?.value || "";
+        if (s1.length < 6) return feedbackSenha("A senha precisa ter pelo menos 6 caracteres.", false);
+        if (s1 !== s2) return feedbackSenha("As senhas não coincidem.", false);
+        const botao = document.getElementById("btnSalvarSenha");
+        if (botao) botao.disabled = true;
+        const r = (typeof trocarSenha === "function") ? await trocarSenha(s1) : { ok: false, mensagem: "Indisponível." };
+        if (botao) botao.disabled = false;
+        if (!r.ok) return feedbackSenha(r.mensagem || "Não deu pra trocar a senha.", false);
+        ["inputNovaSenha", "inputNovaSenha2"].forEach(id => { const e = document.getElementById(id); if (e) e.value = ""; });
+        feedbackSenha("Senha trocada com sucesso! 👍", true);
+    };
+    document.getElementById("btnSalvarSenha")?.addEventListener("click", salvarSenha);
+    document.getElementById("inputNovaSenha2")?.addEventListener("keydown", e => { if (e.key === "Enter") salvarSenha(); });
 }
 
 /** Reaplica o nome escolhido no cabeçalho e na saudação do Início. */
