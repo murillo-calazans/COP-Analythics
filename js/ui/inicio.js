@@ -67,7 +67,7 @@ function renderizarInicio() {
         <section class="inicio-hero">
             <div class="inicio-hero-txt">
                 <h1>${saudacaoDoHorario(agora)}${nome ? `, ${escaparHtml(nome)}` : ""} 👋</h1>
-                <p>${escaparHtml(formatarDataLonga(agora))}. Tenha um ótimo dia de trabalho.</p>
+                <p class="inicio-hero-resumo" id="inicioHeroResumo">${escaparHtml(formatarDataLonga(agora))}.</p>
             </div>
             <div class="inicio-hero-live">
                 <div><b id="heroTecnicos">…</b><span>técnicos na escala</span></div>
@@ -96,7 +96,45 @@ function renderizarInicio() {
 
     preencherHojeNoCop();
     preencherAtrasadas();
+    preencherResumoHero();
     if (typeof renderizarPainelOperacao === "function") renderizarPainelOperacao();
+}
+
+/**
+ * Resumo do dia no hero: pendências de reagendamento (OS de dias anteriores
+ * ainda em aberto) + equipes que já saíram pra campo (em deslocamento agora).
+ * Dados reais; cada número é clicável e leva pra Gestão de Ordens.
+ */
+async function preencherResumoHero() {
+    const alvo = document.getElementById("inicioHeroResumo");
+    if (!alvo) return;
+    try {
+        const [pendRes, painel] = await Promise.all([
+            typeof calcularAtrasadas === "function" ? calcularAtrasadas() : Promise.resolve(null),
+            typeof calcularPainelOperacao === "function" ? calcularPainelOperacao() : Promise.resolve(null)
+        ]);
+        const pend = pendRes?.total || 0;
+        const desl = painel?.inicioOperacao?.desloc?.length || 0;
+
+        const link = (valor, rotulo) =>
+            `<button type="button" class="inicio-hero-link" data-ir-secao="agenda-hoje"><b>${valor} ${rotulo}</b></button>`;
+        const partes = [];
+        if (pend > 0) partes.push(`${link(pend, "OS")} do dia anterior ${pend === 1 ? "ainda não foi reagendada" : "ainda não foram reagendadas"}`);
+        if (desl > 0) partes.push(`${link(desl, desl === 1 ? "equipe" : "equipes")} ${desl === 1 ? "já está em deslocamento" : "já estão em deslocamento"}`);
+
+        if (!partes.length) {
+            alvo.textContent = "Tudo em dia por aqui. Tenha um ótimo dia de trabalho.";
+            return;
+        }
+        const frase = partes.length > 1
+            ? partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1]
+            : partes[0];
+        alvo.innerHTML = frase + ".";
+        alvo.querySelectorAll("[data-ir-secao]").forEach(b =>
+            b.addEventListener("click", () => mostrarSecao(b.dataset.irSecao)));
+    } catch (e) {
+        console.warn("Resumo do hero:", e);
+    }
 }
 
 /**

@@ -486,6 +486,10 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 .inicio-hero-live div{background:#ffffff14;border:1px solid #ffffff22;border-radius:14px;padding:10px 16px;min-width:108px}
 .inicio-hero-live b{font-size:22px;font-weight:800;display:block;font-variant-numeric:tabular-nums}
 .inicio-hero-live span{font-size:12px;color:#b9c8ea}
+.inicio-hero p.inicio-hero-resumo{color:#dbe5fb;font-size:15px;line-height:1.55;max-width:60ch;margin-top:10px}
+.inicio-hero-resumo b{color:#fff}
+.inicio-hero-link{all:unset;cursor:pointer;color:#fff;font-weight:800;border-bottom:2px solid #f5b335}
+.inicio-hero-link:hover{background:#ffffff1a}
 .op-card-estatico{cursor:default}
 .op-card-estatico:hover{transform:none;box-shadow:0 1px 3px var(--cor-sombra);border-color:var(--cor-borda)}
 .inicio-alert{display:flex;align-items:center;gap:13px;width:100%;margin-top:26px;background:color-mix(in srgb,#dc2626 11%,var(--cor-fundo-card));border:1px solid color-mix(in srgb,#dc2626 32%,transparent);border-radius:14px;padding:14px 18px;cursor:pointer;text-align:left}
