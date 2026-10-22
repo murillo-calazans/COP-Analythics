@@ -21,6 +21,8 @@
 /* Com o menu ativo: some o menu antigo do topo e o hambúrguer. */
 body.menu-roda-ativa nav.menu{ display:none !important; }
 body.menu-roda-ativa .menu-hamburguer{ display:none !important; }
+/* a nav.menu tinha flex:1 e empurrava os utilitários pra direita; sem ela, reempurra */
+body.menu-roda-ativa .header-utilitarios{ margin-left:auto; }
 
 /* O conteúdo abre espaço só pra engrenagem RECOLHIDA — a expansão é por cima (overlay). */
 body.menu-roda-ativa:not(.nao-autenticado) main{
