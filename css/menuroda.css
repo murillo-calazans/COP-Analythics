@@ -1,0 +1,93 @@
+/*
+ * ==========================================================
+ * Menu em roda (só no index.html)
+ * ==========================================================
+ * Roda LATERAL = módulos do COP (seleção sempre no meio, amarela;
+ * os outros nomes opacos sobre o fundo do site; giro infinito;
+ * recolhe encostada na borda e expande no hover/toque).
+ * Roda do RODAPÉ = sub-abas do módulo ativo (mesma roda, deitada,
+ * arqueando pra baixo). Lógica em js/ui/menuroda.js.
+ */
+
+:root{
+    --ro-ouro:#F5B335;
+    --ro-min:94px;      /* largura recolhida (encostada na lateral) */
+    --ro-exp:336px;     /* largura expandida (hover/toque) */
+    --ro-top:66px;      /* altura do cabeçalho */
+}
+
+/* Com a roda ativa, some o menu antigo do topo e o hambúrguer. */
+body.menu-roda-ativa nav.menu{ display:none !important; }
+body.menu-roda-ativa .menu-hamburguer{ display:none !important; }
+
+/* Conteúdo abre espaço pra roda recolhida e pro rodapé. */
+body.menu-roda-ativa:not(.nao-autenticado) main{
+    margin-left:var(--ro-min);
+    padding-bottom:124px;
+    transition:margin-left .42s cubic-bezier(.3,.85,.25,1);
+}
+
+body.nao-autenticado .menu-roda,
+body.nao-autenticado .menu-subroda{ display:none !important; }
+
+/* ---------- Roda lateral (módulos) ---------- */
+.menu-roda{
+    position:fixed; left:0; top:var(--ro-top); bottom:0; width:var(--ro-min); z-index:60;
+    transition:width .42s cubic-bezier(.3,.85,.25,1);
+    -webkit-mask:linear-gradient(180deg,transparent 0,#000 13%,#000 87%,transparent 100%);
+            mask:linear-gradient(180deg,transparent 0,#000 13%,#000 87%,transparent 100%);
+}
+.menu-roda:hover,.menu-roda.aberta{ width:min(var(--ro-exp),86vw); }
+
+/* Véu suave do fundo do site só quando expandida (pra ler os nomes sobre o conteúdo). */
+.menu-roda::before{
+    content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; opacity:0; transition:opacity .4s;
+    background:linear-gradient(90deg,var(--cor-fundo) 56%,color-mix(in srgb,var(--cor-fundo) 2%,transparent) 100%);
+}
+.menu-roda:hover::before,.menu-roda.aberta::before{ opacity:.96; }
+
+.ro-item{
+    position:absolute; left:16px; top:50%; display:flex; align-items:center; gap:14px; height:52px; padding:0 22px;
+    border:0; background:transparent; cursor:pointer; white-space:nowrap; border-radius:999px;
+    color:var(--cor-texto-suave); font:600 16.5px/1 inherit;
+    transform-origin:left center; will-change:transform,opacity;
+    transition:transform .44s cubic-bezier(.3,.9,.25,1),opacity .44s,background .25s,color .2s;
+}
+.ro-item .ro-ic{ width:24px; display:grid; place-items:center; flex:none; }
+.ro-item svg{ width:23px; height:23px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.ro-item .ro-tx{ transition:opacity .3s,max-width .4s; max-width:240px; overflow:hidden; }
+.ro-item:hover{ color:var(--cor-texto); }
+.ro-item.centro{ background:var(--ro-ouro); color:#0C1630; font-weight:800; box-shadow:0 14px 34px rgba(245,179,53,.30); cursor:default; }
+.ro-item.centro:hover{ color:#0C1630; }
+.ro-item.centro svg{ stroke:#0C1630; }
+
+/* Recolhida: some todo mundo menos o centro, que vira pílula só com o ícone. */
+.menu-roda:not(:hover):not(.aberta) .ro-item:not(.centro){ opacity:0 !important; pointer-events:none !important; }
+.menu-roda:not(:hover):not(.aberta) .ro-item.centro .ro-tx{ opacity:0; max-width:0; }
+.menu-roda:not(:hover):not(.aberta) .ro-item.centro{ padding:0 15px; }
+
+/* ---------- Roda do rodapé (sub-abas): a mesma roda, deitada, arqueando pra baixo ---------- */
+.menu-subroda{
+    position:fixed; left:var(--ro-min); right:0; bottom:calc(10px + env(safe-area-inset-bottom,0px)); height:96px; z-index:60;
+    -webkit-mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
+            mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
+}
+.menu-subroda[hidden]{ display:none; }
+.ro-sitem{
+    position:absolute; left:50%; top:27px; display:inline-flex; align-items:center; justify-content:center; height:44px; padding:0 24px;
+    border:0; background:transparent; cursor:pointer; white-space:nowrap; border-radius:999px;
+    color:var(--cor-texto-suave); font:600 15px/1 inherit;
+    transform-origin:center center; will-change:transform,opacity;
+    transition:transform .44s cubic-bezier(.3,.9,.25,1),opacity .44s,background .25s,color .2s;
+}
+.ro-sitem:hover{ color:var(--cor-texto); }
+.ro-sitem.centro{ background:var(--ro-ouro); color:#0C1630; font-weight:800; box-shadow:0 14px 32px rgba(245,179,53,.30); cursor:default; }
+.ro-sitem.centro:hover{ color:#0C1630; }
+
+@media (max-width:760px){
+    :root{ --ro-min:76px; --ro-exp:300px; }
+    .menu-subroda{ left:var(--ro-min); }
+}
+@media (prefers-reduced-motion:reduce){
+    .menu-roda,.ro-item,.ro-sitem,body.menu-roda-ativa main{ transition:none !important; }
+}

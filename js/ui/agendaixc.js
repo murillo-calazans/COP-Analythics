@@ -629,27 +629,20 @@ function bannerAtualizacaoIxc(capturadoEm) {
     }
     const d = new Date(capturadoEm);
     const idade = Date.now() - d.getTime();
-    const completo = d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", " às");
+    const p2 = n => String(n).padStart(2, "0");
+    const curto = `${p2(d.getDate())}/${p2(d.getMonth() + 1)} ${p2(d.getHours())}h${p2(d.getMinutes())}`;
     // rodada em andamento: nos 30 min após o horário ainda vale a rodada anterior
     const ultima = ixcRodadaAnterior(0);
     const folga = Date.now() - ultima.getTime() < 30 * 60000 ? 1 : 0;
-    const esperada = ixcRodadaAnterior(folga), anterior = ixcRodadaAnterior(folga + 1);
+    const esperada = ixcRodadaAnterior(folga);
 
-    let classe, texto;
-    if (d >= esperada) {
-        classe = "ixc-atu-ok";
-        texto = `Atualizado <b>${ixcHaQuanto(idade)}</b> (${completo})`;
-    } else if (d >= anterior) {
-        classe = "ixc-atu-atraso";
-        texto = `⚠ Última atualização <b>${ixcHaQuanto(idade)}</b> (${completo}) — o robô pode estar atrasado`;
-    } else {
-        classe = "ixc-atu-parado";
-        texto = `⚠ Desatualizado — última atualização <b>${ixcHaQuanto(idade)}</b> (${completo}). Verifique o robô.`;
-    }
+    // só dois estados: em dia (verde) ou desatualizado (vermelho) — curto e direto
+    const emDia = d >= esperada;
+    const classe = emDia ? "ixc-atu-ok" : "ixc-atu-parado";
+    const texto = `${emDia ? "" : "⚠ "}Atualizado <b>${ixcHaQuanto(idade)}</b> (${curto})`;
     return `<div class="ixc-atualizado ${classe}">
         <span class="ixc-atualizado-ponto"></span>
         ${texto}
-        <span class="ixc-atualizado-obs">o robô atualiza de hora em hora (7h30 às 19h30) · extra pelo botão Atualizar banco</span>
     </div>`;
 }
 
