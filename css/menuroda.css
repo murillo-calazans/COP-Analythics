@@ -1,74 +1,92 @@
 /*
  * ==========================================================
- * Menu em roda (só no index.html)
+ * Menu em engrenagem (só no index.html)
  * ==========================================================
- * Roda LATERAL = módulos do COP (seleção sempre no meio, amarela;
- * os outros nomes opacos sobre o fundo do site; giro infinito;
- * recolhe encostada na borda e expande no hover/toque).
- * Roda do RODAPÉ = sub-abas do módulo ativo (mesma roda, deitada,
- * arqueando pra baixo). Lógica em js/ui/menuroda.js.
+ * Engrenagem grande meio escondida na borda esquerda: os módulos
+ * giram em volta dela e o selecionado para no "3 horas" (marcado
+ * pela setinha dourada), com o nome do módulo embaixo. Botão no
+ * topo recolhe/expande. O rodapé continua sendo a mesma roda deitada
+ * com as sub-abas do módulo ativo. Lógica em js/ui/menuroda.js.
  */
 
 :root{
+    --gear-S:clamp(220px,calc(100vh - 340px),360px);   /* diâmetro da engrenagem */
+    --gear-rw:calc(var(--gear-S)/2 + 28px);            /* largura que o menu ocupa */
+    --gear-top:66px;                                   /* altura do cabeçalho */
     --ro-ouro:#F5B335;
-    --ro-min:94px;      /* largura recolhida (encostada na lateral) */
-    --ro-exp:336px;     /* largura expandida (hover/toque) */
-    --ro-top:66px;      /* altura do cabeçalho */
 }
+:root.menuroda-rc{ --gear-S:190px; --gear-rw:92px; }   /* recolhido */
 
-/* Com a roda ativa, some o menu antigo do topo e o hambúrguer. */
+/* Com o menu ativo: some o menu antigo do topo e o hambúrguer. */
 body.menu-roda-ativa nav.menu{ display:none !important; }
 body.menu-roda-ativa .menu-hamburguer{ display:none !important; }
 
-/* Conteúdo abre espaço pra roda recolhida e pro rodapé. */
 body.menu-roda-ativa:not(.nao-autenticado) main{
-    margin-left:var(--ro-min);
+    margin-left:var(--gear-rw);
     padding-bottom:124px;
-    transition:margin-left .42s cubic-bezier(.3,.85,.25,1);
+    transition:margin .45s cubic-bezier(.3,.8,.2,1);
 }
 
-body.nao-autenticado .menu-roda,
+body.nao-autenticado .gear-rail,
 body.nao-autenticado .menu-subroda{ display:none !important; }
 
-/* ---------- Roda lateral (módulos) ---------- */
-.menu-roda{
-    position:fixed; left:0; top:var(--ro-top); bottom:0; width:var(--ro-min); z-index:60;
-    transition:width .42s cubic-bezier(.3,.85,.25,1);
-    -webkit-mask:linear-gradient(180deg,transparent 0,#000 13%,#000 87%,transparent 100%);
-            mask:linear-gradient(180deg,transparent 0,#000 13%,#000 87%,transparent 100%);
+/* ---------- Engrenagem (módulos) ---------- */
+.gear-rail{
+    position:fixed; left:0; top:var(--gear-top); bottom:0; width:var(--gear-rw); z-index:40;
+    overflow:hidden; transition:width .45s cubic-bezier(.3,.8,.2,1);
 }
-.menu-roda:hover,.menu-roda.aberta{ width:min(var(--ro-exp),86vw); }
-
-/* Véu suave do fundo do site só quando expandida (pra ler os nomes sobre o conteúdo). */
-.menu-roda::before{
-    content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; opacity:0; transition:opacity .4s;
-    background:linear-gradient(90deg,var(--cor-fundo) 56%,color-mix(in srgb,var(--cor-fundo) 2%,transparent) 100%);
+.gear-rail .gw{
+    position:absolute; left:calc(var(--gear-S)/-2); top:50%;
+    margin-top:calc(var(--gear-S)/-2 - 36px);
+    width:var(--gear-S); height:var(--gear-S);
+    transition:width .45s cubic-bezier(.3,.8,.2,1),height .45s cubic-bezier(.3,.8,.2,1),left .45s cubic-bezier(.3,.8,.2,1),margin-top .45s cubic-bezier(.3,.8,.2,1);
 }
-.menu-roda:hover::before,.menu-roda.aberta::before{ opacity:.96; }
-
-.ro-item{
-    position:absolute; left:16px; top:50%; display:flex; align-items:center; gap:14px; height:52px; padding:0 22px;
-    border:0; background:transparent; cursor:pointer; white-space:nowrap; border-radius:999px;
-    color:var(--cor-texto-suave); font:600 16.5px/1 inherit;
-    transform-origin:left center; will-change:transform,opacity;
-    transition:transform .44s cubic-bezier(.3,.9,.25,1),opacity .44s,background .25s,color .2s;
+.gear-rail .gb{
+    position:absolute; inset:0; width:100%; height:100%;
+    filter:drop-shadow(0 10px 22px #0c163066);
+    transform:rotate(var(--rot,0deg)); transition:transform 1s cubic-bezier(.25,1.2,.4,1);
 }
-.ro-item .ro-ic{ width:24px; display:grid; place-items:center; flex:none; }
-.ro-item svg{ width:23px; height:23px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-.ro-item .ro-tx{ transition:opacity .3s,max-width .4s; max-width:240px; overflow:hidden; }
-.ro-item:hover{ color:var(--cor-texto); }
-.ro-item.centro{ background:var(--ro-ouro); color:#0C1630; font-weight:800; box-shadow:0 14px 34px rgba(245,179,53,.30); cursor:default; }
-.ro-item.centro:hover{ color:#0C1630; }
-.ro-item.centro svg{ stroke:#0C1630; }
+.gear-rail .ring{ position:absolute; inset:0; transform:rotate(var(--th,0deg)); transition:transform 1s cubic-bezier(.25,1.2,.4,1); }
+.gear-rail .arm{ position:absolute; inset:0; transform:rotate(var(--a)); }
+.gear-rail .it2{
+    position:absolute; left:calc(50% + var(--gear-S)*.335); top:50%;
+    width:40px; height:40px; margin:-20px 0 0 -20px; border-radius:50%;
+    display:grid; place-items:center; cursor:pointer;
+    color:#dbe5fb; background:#ffffff1c; border:1px solid #ffffff33;
+    transform:rotate(calc(-1*var(--th) - var(--a)));
+    transition:transform 1s cubic-bezier(.25,1.2,.4,1),background .3s,color .3s,box-shadow .3s;
+}
+.gear-rail .it2 svg{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.gear-rail .it2:hover{ background:#ffffff38; }
+.gear-rail .it2[aria-current=true]{ background:var(--ro-ouro); color:#0c1630; border-color:var(--ro-ouro); box-shadow:0 0 0 6px #f5b33540; }
+.gear-rail .pt{
+    position:absolute; left:100%; top:50%; margin:-9px 0 0 3px;
+    border:9px solid transparent; border-left:0; border-right:12px solid var(--ro-ouro); transition:opacity .25s;
+}
+.gear-rail .nm{
+    position:absolute; left:0; right:0; top:calc(50% + var(--gear-S)/2 - 12px);
+    text-align:center; padding:0 10px; transition:opacity .25s;
+}
+.gear-rail .nm b{ display:block; font-size:16px; font-weight:800; letter-spacing:-.01em; color:var(--cor-texto); }
+.gear-rail .nm small{ display:block; color:var(--cor-texto-suave); font-size:12px; margin-top:3px; }
+.gear-rail .pn{ display:flex; gap:10px; justify-content:center; margin-top:12px; }
+.gear-rail .pn button,.gear-rail .tg{
+    width:34px; height:34px; border-radius:50%; border:1px solid var(--cor-borda);
+    background:var(--cor-fundo-card); color:var(--cor-texto); font-size:18px; line-height:1; cursor:pointer;
+    display:grid; place-items:center;
+}
+.gear-rail .pn button:hover,.gear-rail .tg:hover{ border-color:var(--ro-ouro); }
+.gear-rail .tg{ position:absolute; top:12px; right:10px; z-index:2; }
+.gear-rail .tg svg{ width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:transform .45s; }
+.menuroda-rc .gear-rail .tg svg{ transform:rotate(180deg); }
+.menuroda-rc .gear-rail .pt,
+.menuroda-rc .gear-rail .nm{ opacity:0; visibility:hidden; pointer-events:none; transition:opacity .2s,visibility 0s .25s; }
+.gear-rail .tg:focus-visible,.gear-rail .it2:focus-visible,.gear-rail .pn button:focus-visible{ outline:2px solid var(--ro-ouro); outline-offset:3px; }
 
-/* Recolhida: some todo mundo menos o centro, que vira pílula só com o ícone. */
-.menu-roda:not(:hover):not(.aberta) .ro-item:not(.centro){ opacity:0 !important; pointer-events:none !important; }
-.menu-roda:not(:hover):not(.aberta) .ro-item.centro .ro-tx{ opacity:0; max-width:0; }
-.menu-roda:not(:hover):not(.aberta) .ro-item.centro{ padding:0 15px; }
-
-/* ---------- Roda do rodapé (sub-abas): a mesma roda, deitada, arqueando pra baixo ---------- */
+/* ---------- Roda do rodapé (sub-abas): roda deitada, arqueando pra baixo ---------- */
 .menu-subroda{
-    position:fixed; left:var(--ro-min); right:0; bottom:calc(10px + env(safe-area-inset-bottom,0px)); height:96px; z-index:60;
+    position:fixed; left:var(--gear-rw); right:0; bottom:calc(10px + env(safe-area-inset-bottom,0px)); height:96px; z-index:40;
+    transition:left .45s cubic-bezier(.3,.8,.2,1);
     -webkit-mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
             mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
 }
@@ -84,10 +102,9 @@ body.nao-autenticado .menu-subroda{ display:none !important; }
 .ro-sitem.centro{ background:var(--ro-ouro); color:#0C1630; font-weight:800; box-shadow:0 14px 32px rgba(245,179,53,.30); cursor:default; }
 .ro-sitem.centro:hover{ color:#0C1630; }
 
-@media (max-width:760px){
-    :root{ --ro-min:76px; --ro-exp:300px; }
-    .menu-subroda{ left:var(--ro-min); }
+@media (max-width:820px){
+    .menu-subroda{ left:var(--gear-rw); }
 }
 @media (prefers-reduced-motion:reduce){
-    .menu-roda,.ro-item,.ro-sitem,body.menu-roda-ativa main{ transition:none !important; }
+    .gear-rail .gb,.gear-rail .ring,.gear-rail .it2,.gear-rail .gw,.gear-rail,.ro-sitem,body.menu-roda-ativa main{ transition:none !important; }
 }
