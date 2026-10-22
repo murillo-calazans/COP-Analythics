@@ -200,52 +200,55 @@ async function renderizarPainelOperacao() {
         return;
     }
     const m = painelOpCache;
-    const tiles = PAINEL_OP_CARTOES.map(c => {
-        const n = c.lista(m).length;
-        return `
-            <button type="button" class="op-card painel-op-tile" data-painel-cartao="${c.id}" title="${escaparHtml(c.titulo)}" style="--c:${c.cor}">
-                <span class="op-ic"><svg viewBox="0 0 24 24" class="op-svg">${c.icone}</svg></span>
-                <span class="op-txt"><small>${c.rotulo}</small><strong>${n.toLocaleString("pt-BR")}</strong></span>
-            </button>`;
-    }).join("");
+    const fmt = n => n.toLocaleString("pt-BR");
+    const svgT = p => `<svg viewBox="0 0 24 24" class="op-svg">${p}</svg>`;
+    const icTruck = '<path d="M2 6h11v10H2zM13 10h4l4 3v3h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>';
 
+    // 1) Operação hoje — anel: fechamentos sobre a agenda de hoje + barras dos 5 números do dia.
+    const n = id => PAINEL_OP_CARTOES.find(c => c.id === id).lista(m).length;
+    const nAg = n("agendadas"), nFe = n("fechamentos");
+    const maiorOp = Math.max(1, ...PAINEL_OP_CARTOES.map(c => c.lista(m).length));
+    const linhasOp = PAINEL_OP_CARTOES.map(c => piLinha(`data-painel-cartao="${c.id}"`, c.rotulo, c.lista(m).length, maiorOp, c.cor,
+        c.id === "reagendadas" && nAg ? piPct(c.lista(m).length / nAg * 100) : "", c.titulo)).join("");
+    const feitas = Math.min(nFe, nAg);
+    const colOp = piColuna("#2563eb", IC.clip, "Operação hoje", "Agenda do dia e o que está em aberto", `
+        <div class="pi-destaque">
+            ${piRosca([{ n: feitas, cor: "#059669" }, { n: Math.max(nAg - feitas, 0), cor: "var(--cor-borda)" }], fmt(nFe), nAg ? `de ${fmt(nAg)}` : "fechadas")}
+            <div class="pi-leitura"><strong>${nAg ? piPct(nFe / nAg * 100) : "—"}</strong><span>fechamentos sobre a agenda de hoje</span></div>
+        </div>
+        <div class="pi-linhas">${linhasOp}</div>
+        <p class="pi-nota">${nAg > feitas ? `<b>${fmt(nAg - feitas)} OS</b> da agenda de hoje ainda sem fechamento.` : "Agenda de hoje toda fechada."}</p>`);
+
+    // 2) Deslocamento das equipes — rosca: deslocamento × execução × sem movimento.
     const io = m.inicioOperacao || { desloc: [], exec: [], semMov: [] };
     const somaOs = lista => lista.reduce((s, e) => s + e.oss.length, 0);
-    const nD = io.desloc.length, nE = io.exec.length, nS = io.semMov.length;
-    const osD = somaOs(io.desloc), osE = somaOs(io.exec);
-    const COR_D = "var(--escala-azul,#2563eb)", COR_E = "var(--escala-verde,#059669)", COR_S = "var(--escala-laranja,#d97706)";
-    const seg = (n, cor) => `<i style="flex:${n || 0.001};background:${cor}"></i>`;
-    const item = (id, cor, valor, titulo, sub) => `
-        <button type="button" class="io-item" data-io="${id}">
-            <span class="io-dot" style="background:${cor}"></span>
-            <span class="io-txt"><strong>${valor.toLocaleString("pt-BR")}</strong><small>${titulo}${sub ? ` · ${sub}` : ""}</small></span>
-        </button>`;
-
-    const svgT = p => `<svg viewBox="0 0 24 24" class="op-svg">${p}</svg>`;
-    const icOp = '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>';
-    const icTruck = '<path d="M2 6h11v10H2zM13 10h4l4 3v3h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>';
-    alvo.innerHTML = `
-        <div class="sec-titulo">${svgT(icOp)}<span>Operação hoje</span></div>
-        <div class="kpi-row">${tiles}</div>
-        <div class="sec-titulo">${svgT(icTruck)}<span>Início da operação agora</span></div>
-        <div class="io-wrap">
-            <div class="io-bar" role="img" aria-label="${nD} equipes em deslocamento, ${nE} em execução, ${nS} sem movimento">
-                ${seg(nD, COR_D)}${seg(nE, COR_E)}${seg(nS, COR_S)}
-            </div>
-            <div class="io-legend">
-                ${item("io-desloc", COR_D, nD, "Em deslocamento", `${osD} OS`)}
-                ${item("io-exec", COR_E, nE, "Em execução", `${osE} OS`)}
-                ${item("io-semmov", COR_S, nS, "Sem movimento", "ainda não saíram")}
-            </div>
+    const nD = io.desloc.length, nE = io.exec.length, nS = io.semMov.length, nT = nD + nE + nS;
+    const COR_D = "#2563eb", COR_E = "#059669", COR_S = "#d97706";
+    const colEq = piColuna("#0891b2", icTruck, "Deslocamento das equipes", "Onde cada equipe da escala está agora", `
+        <div class="pi-destaque">
+            ${piRosca([{ n: nD, cor: COR_D }, { n: nE, cor: COR_E }, { n: nS, cor: COR_S }], fmt(nT), "equipes")}
+            <div class="pi-leitura"><strong>${nT ? piPct((nD + nE) / nT * 100) : "—"}</strong><span>das equipes já estão em campo</span></div>
         </div>
-        <div id="painelPrioridades"><div class="sec-titulo"><span>Pedidos de prioridade</span></div><p class="resumo-filtro">Lendo as mensagens das OS em aberto…</p></div>`;
+        <div class="pi-linhas">
+            ${piLinha('data-io="io-desloc"', "Em deslocamento", nD, nT, COR_D, `${fmt(somaOs(io.desloc))} OS`, "Técnicos com OS em deslocamento neste momento")}
+            ${piLinha('data-io="io-exec"', "Em execução", nE, nT, COR_E, `${fmt(somaOs(io.exec))} OS`, "Técnicos com OS em execução neste momento")}
+            ${piLinha('data-io="io-semmov"', "Sem movimento", nS, nT, COR_S, "ainda não saíram", "Técnicos da escala que ainda não saíram")}
+        </div>
+        <p class="pi-nota">${nS ? `<b>${fmt(nS)} equipe(s)</b> da escala sem nenhuma OS em deslocamento ou execução.` : "Todas as equipes da escala já saíram."}</p>`);
 
-    // Depois de pintar o resto (não segura os cards do dia).
+    // 3) Pedidos de prioridade — preenchido depois (cálculo pesado, ver calcularPrioridadesPainel).
+    const icAlerta = '<path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/>';
+    const colPr = piColuna("#dc2626", icAlerta, "Pedidos de prioridade", "OS de campo em aberto com pedido de urgência",
+        `<div id="painelPrioridades"><p class="pi-nota pi-nota-solta">Lendo as mensagens das OS em aberto…</p></div>`, "pi-col-prio");
+
+    alvo.innerHTML = `<div class="pi-colunas">${colOp}${colEq}${colPr}</div>`;
+
+    // Depois de pintar o resto (não segura as outras colunas).
     setTimeout(() => {
         const caixa = document.getElementById("painelPrioridades");
         if (!caixa || painelOpCache !== m) return;
         try { m.prioridade = m.calcularPrioridade(); }
-        catch (e) { console.warn("Pedidos de prioridade:", e); caixa.innerHTML = ""; return; }
+        catch (e) { console.warn("Pedidos de prioridade:", e); caixa.innerHTML = '<p class="pi-nota pi-nota-solta">Não deu pra ler os pedidos agora.</p>'; return; }
         caixa.innerHTML = blocoPrioridadesPainel(m.prioridade);
         caixa.querySelectorAll("[data-prio-grupo]").forEach(botao =>
             botao.addEventListener("click", () => {
@@ -264,31 +267,79 @@ async function renderizarPainelOperacao() {
         abrirPopupEquipes("Sem movimento", "Técnicos da escala que ainda não saíram", io.semMov, false));
 }
 
-/** Bloco "Pedidos de prioridade": barra empilhada + % por status (cada item abre a lista). */
+// ---------- Peças do painel infográfico (3 colunas) ----------
+function piPct(v) {
+    return `${v.toLocaleString("pt-BR", { maximumFractionDigits: v > 0 && v < 10 ? 1 : 0 })}%`;
+}
+
+/** Coluna: cabeçalho com ícone colorido + corpo. */
+function piColuna(cor, icone, titulo, sub, corpo, classe = "") {
+    return `
+        <section class="pi-coluna ${classe}" style="--c:${cor}">
+            <div class="pi-cab">
+                <span class="pi-ic"><svg viewBox="0 0 24 24" class="op-svg">${icone}</svg></span>
+                <div><h3>${titulo}</h3><small>${sub}</small></div>
+            </div>
+            ${corpo}
+        </section>`;
+}
+
+/** Linha clicável: ponto colorido, rótulo, valor (+ extra) e barra proporcional ao maior da coluna. */
+function piLinha(attr, rotulo, n, total, cor, extra = "", titulo = "") {
+    const largura = total ? Math.min(100, n / total * 100) : 0;
+    return `
+        <button type="button" class="pi-linha" ${attr} style="--c:${cor}" title="${escaparHtml(titulo || rotulo)}">
+            <span class="pi-ponto"></span><span class="pi-rot">${rotulo}</span>
+            <span class="pi-val">${n.toLocaleString("pt-BR")}${extra ? `<em>${extra}</em>` : ""}</span>
+            <span class="pi-barra"><i style="width:${largura.toFixed(1)}%"></i></span>
+        </button>`;
+}
+
+/** Rosca/anel em SVG (360° = soma das fatias), com número e legenda no centro. */
+function piRosca(fatias, centro, sub) {
+    const cx = 66, cy = 66, r = 50, larg = 14, circ = 2 * Math.PI * r;
+    const total = fatias.reduce((s, f) => s + f.n, 0);
+    const vao = fatias.filter(f => f.n > 0).length > 1 ? 3 : 0;
+    let acum = 0;
+    const arcos = total ? fatias.filter(f => f.n > 0).map(f => {
+        const comp = f.n / total * circ;
+        const arco = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${f.cor}" stroke-width="${larg}" stroke-linecap="${vao ? "butt" : "round"}"
+            stroke-dasharray="${Math.max(comp - vao, 0.01).toFixed(2)} ${circ.toFixed(2)}" stroke-dashoffset="${(-acum).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+        acum += comp;
+        return arco;
+    }).join("") : "";
+    return `
+        <svg class="pi-rosca" viewBox="0 0 132 132" role="img" aria-label="${escaparHtml(`${centro} ${sub}`)}">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--cor-borda)" stroke-width="${larg}"/>
+            ${arcos}
+            <text x="${cx}" y="${cy + 2}" text-anchor="middle" class="pi-rosca-num">${escaparHtml(String(centro))}</text>
+            <text x="${cx}" y="${cy + 20}" text-anchor="middle" class="pi-rosca-sub">${escaparHtml(String(sub))}</text>
+        </svg>`;
+}
+
+/** Corpo da coluna "Pedidos de prioridade": waffle (1 quadrado = 1 OS) + destaque sem agendamento + linhas por status. */
 function blocoPrioridadesPainel(p) {
     if (!p) return "";
-    const icAlerta = '<path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/>';
-    const titulo = `<div class="sec-titulo"><svg viewBox="0 0 24 24" class="op-svg">${icAlerta}</svg><span>Pedidos de prioridade</span></div>`;
-    if (!p.total) return `${titulo}<div class="io-wrap"><p class="resumo-filtro">Nenhuma OS de campo em aberto com pedido de prioridade ou urgência nas mensagens.</p></div>`;
+    if (!p.total) return '<p class="pi-nota pi-nota-solta">Nenhuma OS de campo em aberto com pedido de prioridade ou urgência nas mensagens.</p>';
 
-    const pct = n => (n / p.total * 100);
-    const fmtPct = n => `${pct(n).toLocaleString("pt-BR", { maximumFractionDigits: pct(n) < 10 ? 1 : 0 })}%`;
-    const barra = PRIORIDADE_PAINEL_GRUPOS.map(g => `<i style="flex:${p.grupos[g.id].length || 0.001};background:${g.cor}" title="${g.rotulo}: ${p.grupos[g.id].length}"></i>`).join("");
-    const itens = PRIORIDADE_PAINEL_GRUPOS.map(g => {
-        const n = p.grupos[g.id].length;
-        return `
-        <button type="button" class="io-item" data-prio-grupo="${g.id}">
-            <span class="io-dot" style="background:${g.cor}"></span>
-            <span class="io-txt"><strong>${fmtPct(n)}</strong><small>${g.rotulo} · ${n.toLocaleString("pt-BR")} OS</small></span>
-        </button>`;
-    }).join("");
+    const TETO_WAFFLE = 100;   // acima disso, cada quadrado vale mais de 1 OS
+    const escala = Math.max(1, Math.ceil(p.total / TETO_WAFFLE));
+    const quadrados = PRIORIDADE_PAINEL_GRUPOS.flatMap(g =>
+        Array.from({ length: Math.round(p.grupos[g.id].length / escala) }, () => `<i style="--c:${g.cor}" title="${g.rotulo}"></i>`)).join("");
+    const sem = p.grupos.semAgenda.length;
+    const linhas = PRIORIDADE_PAINEL_GRUPOS.map(g => piLinha(`data-prio-grupo="${g.id}"`, g.rotulo, p.grupos[g.id].length, p.total, g.cor,
+        piPct(p.grupos[g.id].length / p.total * 100), `Pedido de prioridade · ${g.rotulo}`)).join("");
     return `
-        ${titulo}
-        <div class="io-wrap">
-            <p class="resumo-filtro" style="margin:0 0 10px">${p.total.toLocaleString("pt-BR")} OS de campo com pedido de prioridade/urgência nas mensagens${p.insistentes ? ` · <strong>${p.insistentes.toLocaleString("pt-BR")} pediram 2 vezes ou mais</strong>` : ""}</p>
-            <div class="io-bar" role="img" aria-label="Pedidos de prioridade por status">${barra}</div>
-            <div class="io-legend">${itens}</div>
-        </div>`;
+        <div class="pi-prio-topo">
+            <div class="pi-waffle" role="img" aria-label="Cada quadrado é ${escala === 1 ? "uma OS" : `${escala} OS`} com pedido de prioridade, colorida pela situação">${quadrados}</div>
+            <div class="pi-leitura pi-alerta">
+                <strong>${piPct(sem / p.total * 100)}</strong>
+                <span>pediram prioridade e ainda estão <b>sem agendamento</b></span>
+                ${p.insistentes ? `<span class="pi-chip">${p.insistentes.toLocaleString("pt-BR")} pediram 2 vezes ou mais</span>` : ""}
+            </div>
+        </div>
+        <div class="pi-linhas">${linhas}</div>
+        <p class="pi-nota"><b>${p.total.toLocaleString("pt-BR")} OS de campo</b> em aberto pedem prioridade nas mensagens. Cada quadrado é ${escala === 1 ? "uma OS" : `${escala} OS`}.</p>`;
 }
 
 /** Lista das OS com pedido de prioridade: trecho do último pedido, quantas vezes pediu e o status. */
