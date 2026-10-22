@@ -92,10 +92,12 @@
 
         let gearItens = [], gearGo = null;
         let visAnterior = "", rodaSub = null, rodapeModulo = null, navTimer = null;
-        let col = window.innerWidth < 820;
-        document.documentElement.classList.toggle("menuroda-rc", col);
 
-        function aplicarCol() { document.documentElement.classList.toggle("menuroda-rc", col); }
+        // No desktop, o hover expande/recolhe (puro CSS). No toque (sem hover),
+        // um tap abre e um tap fora recolhe.
+        const temHover = window.matchMedia("(hover: hover)").matches;
+        railEl.addEventListener("click", () => { if (!temHover) railEl.classList.add("aberta"); });
+        document.addEventListener("click", e => { if (!railEl.contains(e.target)) railEl.classList.remove("aberta"); });
 
         // ---------- Engrenagem ----------
         function construirEngrenagem(ids) {
@@ -120,7 +122,6 @@
             });
 
             railEl.innerHTML =
-                `<button class="tg" aria-label="Recolher ou expandir o menu" title="Recolher / expandir"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>` +
                 `<div class="gw">${gb}<div class="ring">${arms}</div><div class="pt"></div></div>` +
                 `<div class="nm"><b></b><small></small><div class="pn"><button class="pv" aria-label="Módulo anterior">‹</button><button class="nx" aria-label="Próximo módulo">›</button></div></div>`;
 
@@ -143,7 +144,6 @@
             its.forEach((b, k) => b.onclick = () => go(k, true));
             railEl.querySelector(".pv").onclick = () => go(cur - 1, true);
             railEl.querySelector(".nx").onclick = () => go(cur + 1, true);
-            railEl.querySelector(".tg").onclick = () => { col = !col; aplicarCol(); sp += 72; spin(); };
 
             // girar pela rolagem do mouse sobre a engrenagem (navega ao assentar)
             let acc = 0, trava = false;
