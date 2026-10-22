@@ -279,6 +279,42 @@ function renderizarSecaoIndicadores() {
 
         </div>
 
+        <div class="indicadores-secao-titulo">Pedidos de prioridade</div>
+
+        <div class="graficos-grid">
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">OS com pedido de prioridade por mês</div>
+                        <div class="grafico-subtitulo" id="prioridadeSubtitulo">% das OS finalizadas com pedido de prioridade/urgência nas mensagens</div>
+                    </div>
+                </div>
+                <div id="prioridadeMensal"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Do pedido ao fechamento</div>
+                        <div class="grafico-subtitulo" id="prioridadeTempoSubtitulo">Tempo entre o 1º pedido de prioridade e a finalização da OS</div>
+                    </div>
+                </div>
+                <div id="prioridadeTempo"></div>
+            </div>
+
+            <div class="grafico-card">
+                <div class="grafico-cabecalho">
+                    <div>
+                        <div class="grafico-titulo">Cidades com mais pedidos de prioridade</div>
+                        <div class="grafico-subtitulo">OS finalizadas com pedido nas mensagens</div>
+                    </div>
+                </div>
+                <div id="prioridadeCidades"></div>
+            </div>
+
+        </div>
+
         <div class="indicadores-secao-titulo">Funil de Assuntos</div>
 
         <div class="grafico-card">
@@ -411,6 +447,8 @@ function renderizarSecaoIndicadores() {
         campoFiltro: "operadores"
     });
 
+    renderizarIndicadoresPrioridade(ordensFiltradas);
+
     for (const metrica of METRICAS_TEMPO) {
         renderizarColunaTempo(metrica, ordensFiltradas, meses);
     }
@@ -424,6 +462,71 @@ function renderizarSecaoIndicadores() {
     if (botaoConfigurarSetoresCop) botaoConfigurarSetoresCop.addEventListener("click", abrirModalSetoresCop);
 
     renderizarTmrAgendamentoCop();
+}
+
+const MESES_CURTOS_PRIORIDADE = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+/**
+ * Pedidos de prioridade/urgência escritos nas mensagens (PrioridadeEngine)
+ * nas OS finalizadas do recorte: % por mês de fechamento, tempo do 1º
+ * pedido até a finalização (em dias de calendário) e cidades com mais pedidos.
+ */
+function renderizarIndicadoresPrioridade(ordensFiltradas) {
+    if (typeof PrioridadeEngine === "undefined") return;
+    const porMes = new Map();            // "aaaa-mm" -> { total, comPedido }
+    const faixas = { "No mesmo dia": 0, "No dia seguinte": 0, "2 a 3 dias": 0, "Mais de 3 dias": 0 };
+    const porCidade = new Map();
+    const horas = [];
+    let total = 0, comPedido = 0;
+
+    for (const ordem of ordensFiltradas.values()) {
+        const df = ordem.dataFechamento;
+        if (!df || normalizarTexto(ordem.statusAtual ?? "") !== "FINALIZADA") continue;
+        const chave = `${df.getFullYear()}-${String(df.getMonth() + 1).padStart(2, "0")}`;
+        if (!porMes.has(chave)) porMes.set(chave, { total: 0, comPedido: 0 });
+        const mes = porMes.get(chave);
+        mes.total++; total++;
+
+        const pedidos = PrioridadeEngine.pedidosDaOS(ordem.movimentacoes);
+        if (!pedidos.length) continue;
+        mes.comPedido++; comPedido++;
+        const cidade = ordem.cidade || "—";
+        porCidade.set(cidade, (porCidade.get(cidade) ?? 0) + 1);
+
+        const primeiro = pedidos.find(p => p.data)?.data;
+        if (!primeiro || primeiro > df) continue;
+        horas.push((df - primeiro) / 3600000);
+        const dia = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const dias = Math.round((dia(df) - dia(primeiro)) / 86400000);
+        faixas[dias === 0 ? "No mesmo dia" : dias === 1 ? "No dia seguinte" : dias <= 3 ? "2 a 3 dias" : "Mais de 3 dias"]++;
+    }
+
+    const pct = (n, d) => d ? n / d * 100 : 0;
+    const fmtPct = v => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+    const subtitulo = document.getElementById("prioridadeSubtitulo");
+    if (subtitulo) subtitulo.textContent = total
+        ? `${fmtPct(pct(comPedido, total))} das OS finalizadas tiveram pedido de prioridade/urgência (${comPedido.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")})`
+        : "% das OS finalizadas com pedido de prioridade/urgência nas mensagens";
+
+    const meses = [...porMes.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-12)
+        .filter(([, m]) => m.comPedido > 0)
+        .map(([k, m]) => ({ rotulo: `${MESES_CURTOS_PRIORIDADE[+k.slice(5) - 1]}/${k.slice(2, 4)}`, valor: +pct(m.comPedido, m.total).toFixed(1) }));
+    renderizarGraficoBarras("prioridadeMensal", meses, { serie: "serie-2", limite: meses.length, formatoValor: fmtPct });
+
+    const comTempo = Object.values(faixas).reduce((a, b) => a + b, 0);
+    const tempoSub = document.getElementById("prioridadeTempoSubtitulo");
+    if (tempoSub && horas.length) {
+        const ord = [...horas].sort((a, b) => a - b);
+        const mediana = ord[Math.floor(ord.length / 2)];
+        tempoSub.textContent = `Mediana de ${formatarDuracaoHoras(mediana)} entre o 1º pedido e a finalização`;
+    }
+    renderizarGraficoBarras("prioridadeTempo",
+        Object.entries(faixas).map(([rotulo, n]) => ({ rotulo, valor: +pct(n, comTempo).toFixed(1) })),
+        { serie: "serie-1", limite: 4, formatoValor: fmtPct });
+
+    renderizarGraficoBarras("prioridadeCidades",
+        [...porCidade.entries()].map(([rotulo, valor]) => ({ rotulo, valor })).sort((a, b) => b.valor - a.valor),
+        { serie: "serie-2", limite: 5, titulo: "Cidades com mais pedidos de prioridade", formatoValor: v => v.toLocaleString("pt-BR") });
 }
 
 /** Tabela da produção do mês de quem é do(s) setor(es) do COP. */

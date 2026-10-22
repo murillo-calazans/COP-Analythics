@@ -10,6 +10,10 @@
  *
  * Tudo sai de UMA varredura da os_pendentes (eventos de OS em aberto) +
  * as finalizadas de hoje do relatório de ordens (APP.dados.ordens).
+ *
+ * "Pedidos de prioridade": OS de campo em aberto (mesmo recorte da aba Em
+ * aberto) cujo texto pede prioridade/urgência (PrioridadeEngine), quebradas
+ * pelo status atual, + as finalizadas hoje que tinham pedido.
  */
 
 let painelOpCache = null;
@@ -111,7 +115,58 @@ async function calcularPainelOperacao() {
         .sort((a, b) => b.oss.length - a.oss.length);
     const inicioOperacao = { desloc: equipesLista(deslocAgora), exec: equipesLista(execAgora), semMov };
 
-    return { grupos, fechamentos, eventosPorOs, osInfo, capturadoEm, inicioOperacao };
+    // Pedidos de prioridade: pesado (refaz o recorte de campo da aba Em aberto), por
+    // isso é calculado depois que o resto do painel aparece (ver renderizarPainelOperacao).
+    const calcularPrioridade = () => calcularPrioridadesPainel(linhas, hoje, amanha, norm);
+
+    return { grupos, fechamentos, eventosPorOs, osInfo, capturadoEm, inicioOperacao, calcularPrioridade, prioridade: null };
+}
+
+// Segmentos do bloco "Pedidos de prioridade", na ordem da barra.
+const PRIORIDADE_PAINEL_GRUPOS = [
+    { id: "semAgenda",   rotulo: "Sem agendamento",  cor: "#dc2626" },
+    { id: "agendada",    rotulo: "Agendadas",        cor: "#2563eb" },
+    { id: "assumida",    rotulo: "Assumidas",        cor: "#7c3aed" },
+    { id: "desloc",      rotulo: "Em deslocamento",  cor: "#0891b2" },
+    { id: "exec",        rotulo: "Em execução",      cor: "#d97706" },
+    { id: "finalizada",  rotulo: "Finalizadas hoje", cor: "#059669" }
+];
+
+/** OS com pedido de prioridade no texto, por status atual (ver PRIORIDADE_PAINEL_GRUPOS). */
+function calcularPrioridadesPainel(linhas, hoje, amanha, norm) {
+    const grupos = Object.fromEntries(PRIORIDADE_PAINEL_GRUPOS.map(g => [g.id, []]));
+    if (typeof PrioridadeEngine === "undefined") return { grupos, total: 0, insistentes: 0 };
+
+    // Mesmo recorte da aba Em aberto (só OS de campo); deixa pronto pra ela também.
+    let backlog = null;
+    if (typeof montarBacklog === "function") {
+        backlog = montarBacklog(linhas);
+        if (typeof agendaBacklogCache !== "undefined") agendaBacklogCache = backlog;
+    }
+    for (const o of backlog?.itens ?? []) {
+        const pedidos = PrioridadeEngine.pedidosDaOS(backlog.eventosPorOs[String(o.id)]);
+        if (!pedidos.length) continue;
+        const st = norm(o.status);
+        const item = { id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairroOriginal || o.bairro, assunto: o.assunto, statusUlt: o.status, agendamento: o.agendamento, pedidos };
+        if (st === "deslocamento") grupos.desloc.push(item);
+        else if (st.includes("execu")) grupos.exec.push(item);
+        else if (o.assumida) grupos.assumida.push(item);
+        else if (o.agendada) grupos.agendada.push(item);
+        else grupos.semAgenda.push(item);
+    }
+
+    // Finalizadas hoje que tinham pedido (relatório de ordens: OS já fechada sai da os_pendentes).
+    for (const ordem of APP?.dados?.ordens?.values?.() ?? []) {
+        const df = ordem.dataFechamento;
+        if (!df || df.getTime() < hoje.getTime() || df.getTime() >= amanha || norm(ordem.statusAtual) !== "finalizada") continue;
+        const pedidos = PrioridadeEngine.pedidosDaOS(ordem.movimentacoes);
+        if (pedidos.length) grupos.finalizada.push({ id: ordem.id, cliente: ordem.cliente, cidade: ordem.cidade, bairro: ordem.bairro, assunto: ordem.assunto, hora: df, pedidos, fechada: true });
+    }
+
+    const ultimo = i => i.pedidos[i.pedidos.length - 1].data?.getTime?.() ?? 0;
+    for (const lista of Object.values(grupos)) lista.sort((a, b) => b.pedidos.length - a.pedidos.length || ultimo(b) - ultimo(a));
+    const todos = Object.values(grupos).flat();
+    return { grupos, total: todos.length, insistentes: todos.filter(i => i.pedidos.length >= 2).length };
 }
 
 // Ícone (SVG) + cor por cartão — visual moderno (ver mock do usuário).
@@ -182,7 +237,22 @@ async function renderizarPainelOperacao() {
                 ${item("io-exec", COR_E, nE, "Em execução", `${osE} OS`)}
                 ${item("io-semmov", COR_S, nS, "Sem movimento", "ainda não saíram")}
             </div>
-        </div>`;
+        </div>
+        <div id="painelPrioridades"><div class="sec-titulo"><span>Pedidos de prioridade</span></div><p class="resumo-filtro">Lendo as mensagens das OS em aberto…</p></div>`;
+
+    // Depois de pintar o resto (não segura os cards do dia).
+    setTimeout(() => {
+        const caixa = document.getElementById("painelPrioridades");
+        if (!caixa || painelOpCache !== m) return;
+        try { m.prioridade = m.calcularPrioridade(); }
+        catch (e) { console.warn("Pedidos de prioridade:", e); caixa.innerHTML = ""; return; }
+        caixa.innerHTML = blocoPrioridadesPainel(m.prioridade);
+        caixa.querySelectorAll("[data-prio-grupo]").forEach(botao =>
+            botao.addEventListener("click", () => {
+                const g = PRIORIDADE_PAINEL_GRUPOS.find(x => x.id === botao.dataset.prioGrupo);
+                abrirPopupPrioridade(`Pedido de prioridade · ${g.rotulo}`, m.prioridade.grupos[g.id]);
+            }));
+    }, 50);
 
     alvo.querySelectorAll("[data-painel-cartao]").forEach(botao =>
         botao.addEventListener("click", () => abrirPopupPainel(PAINEL_OP_CARTOES.find(c => c.id === botao.dataset.painelCartao))));
@@ -192,6 +262,74 @@ async function renderizarPainelOperacao() {
         abrirPopupEquipes("Em execução agora", "Técnicos com OS em execução neste momento", io.exec, true));
     alvo.querySelector('[data-io="io-semmov"]')?.addEventListener("click", () =>
         abrirPopupEquipes("Sem movimento", "Técnicos da escala que ainda não saíram", io.semMov, false));
+}
+
+/** Bloco "Pedidos de prioridade": barra empilhada + % por status (cada item abre a lista). */
+function blocoPrioridadesPainel(p) {
+    if (!p) return "";
+    const icAlerta = '<path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/>';
+    const titulo = `<div class="sec-titulo"><svg viewBox="0 0 24 24" class="op-svg">${icAlerta}</svg><span>Pedidos de prioridade</span></div>`;
+    if (!p.total) return `${titulo}<div class="io-wrap"><p class="resumo-filtro">Nenhuma OS de campo em aberto com pedido de prioridade ou urgência nas mensagens.</p></div>`;
+
+    const pct = n => (n / p.total * 100);
+    const fmtPct = n => `${pct(n).toLocaleString("pt-BR", { maximumFractionDigits: pct(n) < 10 ? 1 : 0 })}%`;
+    const barra = PRIORIDADE_PAINEL_GRUPOS.map(g => `<i style="flex:${p.grupos[g.id].length || 0.001};background:${g.cor}" title="${g.rotulo}: ${p.grupos[g.id].length}"></i>`).join("");
+    const itens = PRIORIDADE_PAINEL_GRUPOS.map(g => {
+        const n = p.grupos[g.id].length;
+        return `
+        <button type="button" class="io-item" data-prio-grupo="${g.id}">
+            <span class="io-dot" style="background:${g.cor}"></span>
+            <span class="io-txt"><strong>${fmtPct(n)}</strong><small>${g.rotulo} · ${n.toLocaleString("pt-BR")} OS</small></span>
+        </button>`;
+    }).join("");
+    return `
+        ${titulo}
+        <div class="io-wrap">
+            <p class="resumo-filtro" style="margin:0 0 10px">${p.total.toLocaleString("pt-BR")} OS de campo com pedido de prioridade/urgência nas mensagens${p.insistentes ? ` · <strong>${p.insistentes.toLocaleString("pt-BR")} pediram 2 vezes ou mais</strong>` : ""}</p>
+            <div class="io-bar" role="img" aria-label="Pedidos de prioridade por status">${barra}</div>
+            <div class="io-legend">${itens}</div>
+        </div>`;
+}
+
+/** Lista das OS com pedido de prioridade: trecho do último pedido, quantas vezes pediu e o status. */
+function abrirPopupPrioridade(titulo, itens) {
+    fecharPopupPainel();
+    const lista = itens.slice(0, PAINEL_OP_TETO);
+    const linhas = lista.map(o => {
+        const ult = o.pedidos[o.pedidos.length - 1];
+        const tag = o.fechada && o.hora
+            ? `<span class="escala-tag ixc-feita-hora">✔ ${o.hora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>`
+            : o.agendamento
+            ? `<span class="escala-tag ixc-data">📅 ${o.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>`
+            : `<span class="escala-tag">${escaparHtml(String(o.statusUlt || ""))}</span>`;
+        const vezes = o.pedidos.length >= 2 ? `<span class="escala-tag ixc-data-vencida">pediu ${o.pedidos.length}x</span>` : "";
+        return `
+          <li class="ixc-os ixc-os-click" ${o.fechada ? `data-fech-os="${escaparHtml(String(o.id))}"` : `data-painel-os="${escaparHtml(String(o.id))}"`} title="Ver a ordem completa">
+            <div class="ixc-os-linha"><span class="ixc-os-cliente">#${escaparHtml(String(o.id))} · ${escaparHtml(o.cliente || "—")}</span>${vezes}${tag}</div>
+            <div class="ixc-os-sub">${escaparHtml(o.cidade || "—")}${o.bairro ? " · " + escaparHtml(o.bairro) : ""} · ${escaparHtml(ixcAssuntoCurto ? ixcAssuntoCurto(o.assunto) : (o.assunto || "—"))}</div>
+            <div class="ixc-os-sub">💬 ${ult.data ? ult.data.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " — " : ""}${escaparHtml(ult.trecho)}</div>
+          </li>`;
+    }).join("");
+
+    const fundo = document.createElement("div");
+    fundo.className = "ixc-popup-fundo painel-popup-fundo";
+    fundo.innerHTML = `
+      <div class="ixc-popup" role="dialog" aria-modal="true" aria-label="${escaparHtml(titulo)}">
+        <div class="ixc-popup-topo">
+          <div><h2>${escaparHtml(titulo)} <span class="escala-pilula">${itens.length.toLocaleString("pt-BR")} OS</span></h2><p>Pedido de prioridade/urgência escrito nas mensagens da OS — quem pediu mais vezes primeiro${itens.length > PAINEL_OP_TETO ? ` (mostrando ${PAINEL_OP_TETO})` : ""}</p></div>
+          <button type="button" class="ixc-popup-fechar" aria-label="Fechar">✕</button>
+        </div>
+        <div class="ixc-popup-corpo">${lista.length ? `<ul class="ixc-lista">${linhas}</ul>` : '<p class="alerta-vazio">Nenhuma OS aqui agora.</p>'}</div>
+      </div>`;
+    (document.getElementById("secao-inicio") || document.body).appendChild(fundo);
+    document.body.classList.add("ixc-popup-aberto");
+    fundo.addEventListener("click", e => { if (e.target === fundo) fecharPopupPainel(); });
+    fundo.querySelector(".ixc-popup-fechar").addEventListener("click", fecharPopupPainel);
+    fundo.querySelectorAll("[data-painel-os]").forEach(li =>
+        li.addEventListener("click", () => abrirTimelineIxc(li.dataset.painelOs, painelOpCache)));
+    fundo.querySelectorAll("[data-fech-os]").forEach(li =>
+        li.addEventListener("click", () => { if (typeof abrirModalOS === "function") abrirModalOS(li.dataset.fechOs); }));
+    fundo.querySelector(".ixc-popup-fechar").focus();
 }
 
 /** Popup de EQUIPES (técnicos), não de OS — usado pelo bloco "Início da operação". */
