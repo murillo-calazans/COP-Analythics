@@ -224,6 +224,74 @@ const TerceirasEngine = {
         return [...porTecnico.values()].sort((a, b) => b.os - a.os || a.tecnico.localeCompare(b.tecnico));
     },
 
+    /** Uma manutenção "sem reparo real" = fechamento com diagnóstico marcado como Improdutivo (Configurações). */
+    manutencaoSemReparo(info, improdutivos) {
+        if (!info?.ultimoFechamento) return false;   // sem fechamento: não dá pra afirmar que não houve reparo
+        if (!improdutivos?.size) return false;       // sem config de improdutivos: não sinaliza nada
+        const diag = this.nomeDiagnostico(info.ultimoFechamento);
+        return diag ? improdutivos.has(normalizarTexto(diag)) : false;
+    },
+
+    /**
+     * Alerta de qualidade / provável erro de abertura: INSTALAÇÃO fechada
+     * por uma TERCEIRA seguida, em até `dias` (15) dias, de uma MANUTENÇÃO
+     * aberta pro mesmo cliente, feita pela NOSSA equipe, que NÃO teve
+     * reparo real (diagnóstico de fechamento Improdutivo — ver
+     * Configurações > Diagnósticos Improdutivos). Varre TODAS as OS
+     * (APP.dados.ordens) pra a janela de 15 dias não ser cortada por mês;
+     * `analise` deve cobrir APP.dados.ordens (use analiseTerceiras()).
+     * Reutilizada no relatório de Terceiras e na Auditoria.
+     */
+    instalacoesComManutencaoSuspeita(analise, dias = 15) {
+        const ehInstalacao = a => normalizarTexto(a).includes("INSTALA");
+        const ehManutencao = a => normalizarTexto(a).includes("MANUTEN");
+        const improdutivos = APP.configuracoes?.diagnosticosImprodutivos ?? new Set();
+        const janelaMs = dias * 86400000;
+
+        const porLogin = new Map();
+        for (const ordem of APP.dados.ordens.values()) {
+            if (!ordem.login) continue;
+            const info = analise.get(ordem.id);
+            const efetivo = info?.fechamentoEfetivo;
+            const tecnico = efetivo ? IndicatorEngine.nomeResponsavelFechamento(efetivo) : null;
+            const chave = normalizarTexto(ordem.login);
+            if (!porLogin.has(chave)) porLogin.set(chave, []);
+            porLogin.get(chave).push({ ordem, info, efetivo, tecnico, terceiraId: tecnico ? this.terceiraDoNome(tecnico) : null });
+        }
+
+        const alertas = [];
+        for (const lista of porLogin.values()) {
+            const instalacoes = lista.filter(o => o.efetivo?.data && o.terceiraId && ehInstalacao(o.ordem.assunto));
+            if (!instalacoes.length) continue;
+
+            for (const inst of instalacoes) {
+                const fim = inst.efetivo.data.getTime();
+                const manut = lista
+                    .filter(o =>
+                        o.ordem.id !== inst.ordem.id &&
+                        ehManutencao(o.ordem.assunto) &&
+                        !o.terceiraId &&                                 // feita pela nossa equipe
+                        o.ordem.dataAbertura &&
+                        o.ordem.dataAbertura.getTime() >= fim &&
+                        o.ordem.dataAbertura.getTime() <= fim + janelaMs &&
+                        this.manutencaoSemReparo(o.info, improdutivos))
+                    .sort((a, b) => a.ordem.dataAbertura - b.ordem.dataAbertura)[0];
+                if (!manut) continue;
+
+                const diasEntre = Math.round((manut.ordem.dataAbertura.getTime() - fim) / 86400000);
+                const diagManut = this.nomeDiagnostico(manut.info.ultimoFechamento);
+                alertas.push({
+                    login: inst.ordem.login,
+                    cliente: inst.ordem.cliente,
+                    instalacao: { os: inst.ordem.id, fechamento: inst.efetivo.data, terceiraId: inst.terceiraId, terceira: this.nomeTerceira(inst.terceiraId), tecnico: inst.tecnico },
+                    manutencao: { os: manut.ordem.id, abertura: manut.ordem.dataAbertura, tecnico: manut.tecnico, dias: diasEntre, diagnostico: diagManut },
+                    motivo: `Manutenção da nossa equipe aberta ${diasEntre} dia(s) após a instalação da ${this.nomeTerceira(inst.terceiraId)}, sem reparo real (diagnóstico improdutivo: "${diagManut || "—"}") — provável erro de abertura.`
+                });
+            }
+        }
+        return alertas.sort((a, b) => b.instalacao.fechamento - a.instalacao.fechamento);
+    },
+
     /** Assuntos sem preço, diagnósticos sem classificação e sem categoria, com contagem. */
     pendencias(itens) {
         const assuntos = new Map();

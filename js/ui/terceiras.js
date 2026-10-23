@@ -267,6 +267,8 @@ async function renderizarTerceirasFechamento() {
     const filtros = { todas: () => true, pagas: i => i.situacao === "paga", nao_pagas: i => i.situacao === "improdutiva" || i.situacao === "nao_paga", pendentes: i => ["sem_preco", "diag_pendente", "cat_pendente"].includes(i.situacao) };
     const visiveis = itens.filter(filtros[terceirasFiltroSituacao] ?? filtros.todas);
     const tecnicos = TerceirasEngine.tecnicosDoMes(itens);
+    const alertasSuspeita = TerceirasEngine.instalacoesComManutencaoSuspeita(analiseTerceiras())
+        .filter(a => a.instalacao.terceiraId === terceira && TerceirasEngine.chaveMes(a.instalacao.fechamento) === mes);
 
     container.innerHTML = `
         ${htmlBarraMes(`
@@ -345,6 +347,11 @@ async function renderizarTerceirasFechamento() {
                 </table>
             </div>` : '<p class="alerta-vazio">Nenhuma OS nesse filtro.</p>'}
         </div>
+
+        <div class="grafico-card">
+            <div class="grafico-cabecalho"><div><div class="grafico-titulo">Instalação → manutenção suspeita</div><div class="grafico-subtitulo">Instalação da ${TerceirasEngine.nomeTerceira(terceira)} e, em até 15 dias, manutenção da nossa equipe sem reparo real (diagnóstico improdutivo)</div></div></div>
+            ${htmlTabelaInstalManutSuspeita(alertasSuspeita)}
+        </div>
     `;
 
     registrarBarraMes(container, renderizarTerceirasFechamento);
@@ -412,6 +419,34 @@ function baixarCsvFechamento(mes, terceira, itens) {
     a.download = `fechamento_${terceira.toLowerCase()}_${mes}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/**
+ * Tabela do alerta "instalação de terceira → manutenção suspeita"
+ * (TerceirasEngine.instalacoesComManutencaoSuspeita). Mesmo HTML usado no
+ * relatório de Terceiras e na Auditoria (cálculo único no engine).
+ */
+function htmlTabelaInstalManutSuspeita(alertas) {
+    if (!alertas.length) return '<p class="alerta-vazio">Nenhuma instalação de terceira com manutenção suspeita (até 15 dias, sem reparo real).</p>';
+    const dataBR = d => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+    return `<div class="tabela-scroll">
+        <table class="tabela-alertas">
+            <thead><tr><th>Login</th><th>Cliente</th><th>OS instalação</th><th>Fech. instalação</th><th>Terceira</th><th>Técnico instalação</th><th>OS manutenção</th><th>Abertura manut.</th><th>Técnico manut.</th><th class="num">Dias</th><th>Motivo</th></tr></thead>
+            <tbody>${alertas.map(a => `<tr>
+                <td>${escaparHtml(String(a.login ?? ""))}</td>
+                <td>${escaparHtml(a.cliente ?? "")}</td>
+                <td>${escaparHtml(String(a.instalacao.os))}</td>
+                <td>${dataBR(a.instalacao.fechamento)}</td>
+                <td>${escaparHtml(a.instalacao.terceira ?? "")}</td>
+                <td>${escaparHtml(a.instalacao.tecnico ?? "—")}</td>
+                <td>${escaparHtml(String(a.manutencao.os))}</td>
+                <td>${dataBR(a.manutencao.abertura)}</td>
+                <td>${escaparHtml(a.manutencao.tecnico ?? "—")}</td>
+                <td class="num">${a.manutencao.dias}</td>
+                <td>${escaparHtml(a.motivo ?? "")}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+    </div>`;
 }
 
 function imprimirFechamento(mes, terceira, itens, resumo, fechado) {

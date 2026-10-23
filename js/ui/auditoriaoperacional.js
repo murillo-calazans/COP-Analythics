@@ -154,6 +154,13 @@ function renderizarPainelAuditoriaOperacional() {
             </div>
             <div id="tabelaLoginsVariasOrdens"></div>
         </div>
+
+        <div class="grafico-card" id="cardInstalManutAuditoria">
+            <div class="grafico-cabecalho">
+                <div><div class="grafico-titulo">Instalação de terceira → manutenção suspeita</div><div class="grafico-subtitulo">Instalação fechada por terceira e, em até 15 dias, manutenção da nossa equipe sem reparo real (diagnóstico improdutivo)</div></div>
+            </div>
+            <div id="tabelaInstalManutAuditoria"></div>
+        </div>
     `;
 
     if (resultado.porTipoErro.length > 0) {
@@ -188,8 +195,21 @@ function renderizarPainelAuditoriaOperacional() {
     });
 
     prepararSecaoLoginsAuditoria();
+    renderizarSecaoInstalManutAuditoria();
 
     renderizarListaAchadosAuditoria("");
+}
+
+/**
+ * Seção (etapa 3): instalação de terceira seguida de manutenção da nossa
+ * equipe em até 15 dias, sem reparo real. Mesma função de cálculo e mesma
+ * tabela usadas no relatório de Terceiras (htmlTabelaInstalManutSuspeita).
+ */
+function renderizarSecaoInstalManutAuditoria() {
+    const alvo = document.getElementById("tabelaInstalManutAuditoria");
+    if (!alvo) return;
+    const alertas = TerceirasEngine.instalacoesComManutencaoSuspeita(analiseTerceiras());
+    alvo.innerHTML = htmlTabelaInstalManutSuspeita(alertas);
 }
 
 // ==========================================================
