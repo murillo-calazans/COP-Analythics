@@ -163,6 +163,8 @@ function mostrarSecao(nome) {
         renderizarAgendaHoje();   // deixa a Agenda IA pronta (aba hoje escondida por padrão)
         if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("aberto");   // abre já em "Em aberto"
     }
+    // Infográficos no topo da aba (js/ui/infograficos.js); o conteúdo de sempre continua embaixo.
+    if (typeof renderizarInfografico === "function") renderizarInfografico(nome);
     if (nome === "usuarios") renderizarAdminUsuarios();
     if (nome === "terceiras") renderizarTerceirasPainel();
     if (nome === "terceiras-fechamento") renderizarTerceirasFechamento();

@@ -845,18 +845,26 @@ function resultadoAuditoriaOS(ordem, info) {
     return { rotulo: ROTULO_RESULTADO_AUDITORIA[r.achado.tipo] ?? "Erro", esperado };
 }
 
+// Setores de quem vai ao cliente (técnico interno ou parceiro). Fechamento de
+// alguém de outro setor conhecido (COP, suporte, atendimento…) é administrativo.
+const SETORES_DE_CAMPO = new Set([
+    "TECNICO MANUTENCAO", "TECNICO INSTALACAO", "FTTH", "TECNICO INFRAESTRUTURA K2", "AZUL", "CONECT VELOZ",
+    "TECHNOMAIS", "RECOLHIMENTO TERCEIRIZADO", "CLICKPLAY", "INFINITE", "INFOVIAS", "INOVA - EXPANSAO TERCEIRIZADA", "PJ NETWORK"
+]);
+
+let _cacheLinhasDetalhe = { chave: null, linhas: null };
+
 /**
- * Botão "Baixar planilha (.csv)" (Dashboard) — detalhamento por OS, sem
- * passar pelo relatório em HTML. As 11 primeiras colunas são as de
- * sempre; as demais trazem o que um auditor de fora (ex.: Projeto do
- * Claude que gera a auditoria semanal) precisa e não tem como calcular só
- * com uma linha por OS: Próxima Tarefa e resultado da Auditoria do
- * fechamento efetivo, quem pôs em Deslocamento/Execução, reabertura,
- * TMS/TMA, recorrência do login dentro do filtro e o texto que o
- * técnico escreveu no fechamento (sem o esqueleto do modelo).
+ * Uma linha por OS com tudo o que o detalhamento sabe: o que vai no CSV do
+ * Dashboard (gerarPlanilhaDetalheOS) e o que os infográficos das abas usam
+ * (js/ui/infograficos.js). Datas como Date, tempos em minutos (null = sem
+ * dado), flags como boolean. `tipoDono` = "Campo" | "Administrativo" | "" pelo
+ * setor de quem fechou. Cacheado pelo recorte (base carregada + Filtro Global).
  */
-function gerarPlanilhaDetalheOS() {
-    const ordens = FiltroEngine.ordensFiltradas();
+function montarLinhasDetalheOS(ordens) {
+    const chave = `${APP?.dados?.ordens?.size ?? 0}|${ordens.size}|${JSON.stringify(APP?.filtrosGlobais ?? {})}|${APP?.status?.ultimaCarga ?? ""}`;
+    if (_cacheLinhasDetalhe.chave === chave) return _cacheLinhasDetalhe.linhas;
+
     const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
     const auditoria = AuditoriaOperacionalEngine.auditar(ordens);
     const idsComAchado = tipo => new Set(auditoria.achados.filter(a => a.tipo === tipo && !a.corrigido).map(a => a.ordemId));
@@ -884,16 +892,7 @@ function gerarPlanilhaDetalheOS() {
         const colSetor = encontrarColuna(linha, CONFIG_BASE.operadores.setor);
         if (colNome && colSetor && linha[colNome]) setorPorNome.set(normalizarTexto(linha[colNome]), linha[colSetor] ?? "");
     }
-    const minutos = horas => (horas === null || horas === undefined || Number.isNaN(horas)) ? "" : Math.round(horas * 60);
-
-    const cabecalho = [
-        "ID OS", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Colaborador Responsável", "Diagnóstico", "Abertura", "Fechamento", "Status",
-        "Equipe", "Técnico (fechamento auditado)", "Diagnóstico (fechamento auditado)", "Próxima Tarefa", "Resultado Auditoria", "Próxima Tarefa esperada",
-        "Duplicidade de equipamento", "Reaberta", "Motivo da reabertura", "Reaberta por", "Refechada por outro colaborador", "Reagendada",
-        "Deslocamento por", "Setor (deslocamento)", "Início deslocamento", "Execução por", "Setor (execução)", "Início execução",
-        "Deslocamentos abandonados", "TMS (min)", "TMA (min)", "OS do login no período",
-        "Resposta padrão", "Mensagem do fechamento", "Itens do checklist marcados", "Setor (técnico auditado)"
-    ];
+    const minutos = horas => (horas === null || horas === undefined || Number.isNaN(horas)) ? null : Math.round(horas * 60);
 
     const linhas = coletarLinhasDetalheOS(ordens).map(d => {
         const ordem = ordens.get(d.id);
@@ -902,6 +901,7 @@ function gerarPlanilhaDetalheOS() {
         const tecnicoAuditado = IndicatorEngine.nomeResponsavelFechamento(efetivo) ?? "";
         const nomeDono = tecnicoAuditado || d.tecnico || "";
         const setorDono = setorPorNome.get(normalizarTexto(nomeDono)) ?? "";
+        const terceira = nomeDono && equipeDoColaborador(nomeDono, setorDono) !== "Interna";
         const auditado = ordem ? resultadoAuditoriaOS(ordem, info) : { rotulo: "", esperado: "" };
         // Direto das movimentações (1ª com o status), não dos segmentos de
         // TMS/TMA — esses só existem quando o par fecha certinho, e o caso
@@ -911,51 +911,72 @@ function gerarPlanilhaDetalheOS() {
             .filter(m => m.data && normalizarTexto(m.status ?? "") === normalizarTexto(alvo))
             .sort((a, b) => a.data - b.data)[0];
         const desloc = primeiraComStatus(IndicatorEngine.STATUS_DESLOCAMENTO);
-        const mensagem = limparMensagemFechamento(efetivo?.mensagem);
         const exec = primeiraComStatus(IndicatorEngine.STATUS_EM_EXECUCAO);
+        const mensagem = limparMensagemFechamento(efetivo?.mensagem);
 
-        return [
-            d.id,
-            d.cliente ?? "",
-            d.login ?? "",
-            d.cidade ?? "",
-            d.bairro ?? "",
-            d.assunto ?? "",
-            d.tecnico ?? "",
-            d.diagnostico ?? "",
-            formatarDataHora(d.dataAbertura),
-            formatarDataHora(d.dataFechamento),
-            d.status ?? "",
-            nomeDono ? equipeDoColaborador(nomeDono, setorDono) : "",
+        return {
+            id: d.id, cliente: d.cliente ?? "", login: d.login ?? "", cidade: d.cidade ?? "", bairro: d.bairro ?? "", assunto: d.assunto ?? "",
+            tecnico: d.tecnico ?? "", diagnostico: d.diagnostico ?? "", abertura: d.dataAbertura ?? null, fechamento: d.dataFechamento ?? null, status: d.status ?? "",
+            equipe: nomeDono ? equipeDoColaborador(nomeDono, setorDono) : "",
             tecnicoAuditado,
-            efetivo?.diagnostico
+            diagnosticoAuditado: efetivo?.diagnostico
                 ? AuditEngine.resolverReferencia(APP.referencias.diagnosticos, efetivo.diagnostico, CONFIG_BASE.diagnosticos.nome) ?? ""
                 : "",
-            (efetivo?.proximaTarefa ?? "").toString().trim(),
-            auditado.rotulo,
-            auditado.esperado,
-            duplicidade.has(d.id) ? "Sim" : "",
-            info?.temReabertura ? "Sim" : "Não",
-            info?.motivoReabertura ? (ROTULO_MOTIVO_REABERTURA[info.motivoReabertura] ?? "Não classificado") : "",
-            nomeOperador(info?.operadorReabertura),
-            reaberturaOutro.has(d.id) ? "Sim" : "",
-            info?.temReagendamento ? "Sim" : "Não",
-            nomeOperador(desloc?.operador),
-            desloc ? setorOperador(desloc.operador) : "",
-            desloc ? formatarDataHora(desloc.data) : "",
-            nomeOperador(exec?.operador),
-            exec ? setorOperador(exec.operador) : "",
-            exec ? formatarDataHora(exec.data) : "",
-            info?.deslocamentosAbandonados?.length ?? 0,
-            info?.excluidoDoTempo ? "" : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosSolucao ?? [])),
-            info?.excluidoDoTempo ? "" : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosAtendimento ?? [])),
-            d.login ? (osPorLogin.get(d.login) ?? 1) : "",
-            (efetivo?.respostaPadrao ?? "").toString().trim(),
-            mensagem.texto,
-            efetivo ? mensagem.marcados : "",
-            setorDono
-        ];
+            proximaTarefa: (efetivo?.proximaTarefa ?? "").toString().trim(),
+            resultadoAuditoria: auditado.rotulo, esperado: auditado.esperado,
+            duplicidade: duplicidade.has(d.id),
+            reaberta: !!info?.temReabertura,
+            motivoReabertura: info?.motivoReabertura ? (ROTULO_MOTIVO_REABERTURA[info.motivoReabertura] ?? "Não classificado") : "",
+            reabertaPor: nomeOperador(info?.operadorReabertura),
+            refechadaOutro: reaberturaOutro.has(d.id),
+            reagendada: !!info?.temReagendamento,
+            deslocPor: nomeOperador(desloc?.operador), setorDesloc: desloc ? setorOperador(desloc.operador) : "", inicioDesloc: desloc?.data ?? null,
+            execPor: nomeOperador(exec?.operador), setorExec: exec ? setorOperador(exec.operador) : "", inicioExec: exec?.data ?? null,
+            abandonos: info?.deslocamentosAbandonados?.length ?? 0,
+            tmsMin: info?.excluidoDoTempo ? null : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosSolucao ?? [])),
+            tmaMin: info?.excluidoDoTempo ? null : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosAtendimento ?? [])),
+            osDoLogin: d.login ? (osPorLogin.get(d.login) ?? 1) : null,
+            respostaPadrao: (efetivo?.respostaPadrao ?? "").toString().trim(),
+            mensagem: mensagem.texto, checklist: efetivo ? mensagem.marcados : null,
+            setorDono,
+            tipoDono: !nomeDono ? "" : terceira || SETORES_DE_CAMPO.has(normalizarTexto(setorDono)) ? "Campo" : setorDono ? "Administrativo" : ""
+        };
     });
+
+    _cacheLinhasDetalhe = { chave, linhas };
+    return linhas;
+}
+
+/**
+ * Botão "Baixar planilha (.csv)" (Dashboard) — detalhamento por OS, sem
+ * passar pelo relatório em HTML. As 11 primeiras colunas são as de
+ * sempre; as demais trazem o que um auditor de fora (ex.: Projeto do
+ * Claude que gera a auditoria semanal) precisa e não tem como calcular só
+ * com uma linha por OS: Próxima Tarefa e resultado da Auditoria do
+ * fechamento efetivo, quem pôs em Deslocamento/Execução, reabertura,
+ * TMS/TMA, recorrência do login dentro do filtro e o texto que o
+ * técnico escreveu no fechamento (sem o esqueleto do modelo).
+ */
+function gerarPlanilhaDetalheOS() {
+    const ordens = FiltroEngine.ordensFiltradas();
+    const cabecalho = [
+        "ID OS", "Cliente", "Login", "Cidade", "Bairro", "Assunto", "Colaborador Responsável", "Diagnóstico", "Abertura", "Fechamento", "Status",
+        "Equipe", "Técnico (fechamento auditado)", "Diagnóstico (fechamento auditado)", "Próxima Tarefa", "Resultado Auditoria", "Próxima Tarefa esperada",
+        "Duplicidade de equipamento", "Reaberta", "Motivo da reabertura", "Reaberta por", "Refechada por outro colaborador", "Reagendada",
+        "Deslocamento por", "Setor (deslocamento)", "Início deslocamento", "Execução por", "Setor (execução)", "Início execução",
+        "Deslocamentos abandonados", "TMS (min)", "TMA (min)", "OS do login no período",
+        "Resposta padrão", "Mensagem do fechamento", "Itens do checklist marcados", "Setor (técnico auditado)"
+    ];
+    const dataHora = d => d ? formatarDataHora(d) : "";
+    const linhas = montarLinhasDetalheOS(ordens).map(l => [
+        l.id, l.cliente, l.login, l.cidade, l.bairro, l.assunto, l.tecnico, l.diagnostico,
+        formatarDataHora(l.abertura), formatarDataHora(l.fechamento), l.status,
+        l.equipe, l.tecnicoAuditado, l.diagnosticoAuditado, l.proximaTarefa, l.resultadoAuditoria, l.esperado,
+        l.duplicidade ? "Sim" : "", l.reaberta ? "Sim" : "Não", l.motivoReabertura, l.reabertaPor, l.refechadaOutro ? "Sim" : "", l.reagendada ? "Sim" : "Não",
+        l.deslocPor, l.setorDesloc, dataHora(l.inicioDesloc), l.execPor, l.setorExec, dataHora(l.inicioExec),
+        l.abandonos, l.tmsMin ?? "", l.tmaMin ?? "", l.osDoLogin ?? "",
+        l.respostaPadrao, l.mensagem, l.checklist ?? "", l.setorDono
+    ]);
 
     baixarCsv(`detalhamento-os-${carimboDataHora()}.csv`, [cabecalho, ...linhas]);
 }

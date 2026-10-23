@@ -324,4 +324,7 @@ function atualizarTodasAsTelas() {
     if (buscaAuditoria && buscaAuditoria.value.trim()) {
         executarBuscaAuditoria();
     }
+
+    // Infográficos do topo da aba aberta (js/ui/infograficos.js) também seguem o filtro.
+    if (typeof renderizarInfografico === "function" && typeof secaoAtiva === "function") renderizarInfografico(secaoAtiva());
 }
