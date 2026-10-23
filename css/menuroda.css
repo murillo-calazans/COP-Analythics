@@ -97,14 +97,20 @@ body.nao-autenticado .menu-subroda{ display:none !important; }
             mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
 }
 .menu-subroda[hidden]{ display:none; }
+/* trilho azul escuro opaco atrás das sub-abas (fade nas pontas pela máscara da .menu-subroda) */
+.menu-subroda::before{
+    content:""; position:absolute; left:0; right:0; top:14px; bottom:14px; z-index:-1;
+    background:linear-gradient(180deg,#15284f 0%,#0c1630 100%);
+    border-radius:18px; box-shadow:0 12px 30px rgba(8,16,40,.35);
+}
 .ro-sitem{
     position:absolute; left:50%; top:27px; display:inline-flex; align-items:center; justify-content:center; height:44px; padding:0 24px;
     border:0; background:transparent; cursor:pointer; white-space:nowrap; border-radius:999px;
-    color:var(--cor-texto-suave); font:600 15px/1 inherit;
+    color:#b6c4e3; font:600 15px/1 inherit;
     transform-origin:center center; will-change:transform,opacity;
     transition:transform .44s cubic-bezier(.3,.9,.25,1),opacity .44s,background .25s,color .2s;
 }
-.ro-sitem:hover{ color:var(--cor-texto); }
+.ro-sitem:hover{ color:#fff; }
 .ro-sitem.centro{ background:var(--ro-ouro); color:#0C1630; font-weight:800; box-shadow:0 14px 32px rgba(245,179,53,.30); cursor:default; }
 .ro-sitem.centro:hover{ color:#0C1630; }
 
