@@ -343,8 +343,11 @@ function blocoPrioridadesPainel(p) {
 }
 
 /** Lista das OS com pedido de prioridade: trecho do último pedido, quantas vezes pediu e o status. */
-function abrirPopupPrioridade(titulo, itens) {
+const PRESETS_ANOT = ["Área de risco", "Em tratativa", "Agendado", "Aguardando material", "Aguardando supervisão", "Reagendar"];
+
+async function abrirPopupPrioridade(titulo, itens) {
     fecharPopupPainel();
+    if (typeof carregarAnotacoesOs === "function") await carregarAnotacoesOs(true);
     const lista = itens.slice(0, PAINEL_OP_TETO);
     const linhas = lista.map(o => {
         const ult = o.pedidos[o.pedidos.length - 1];
@@ -354,11 +357,24 @@ function abrirPopupPrioridade(titulo, itens) {
             ? `<span class="escala-tag ixc-data">📅 ${o.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>`
             : `<span class="escala-tag">${escaparHtml(String(o.statusUlt || ""))}</span>`;
         const vezes = o.pedidos.length >= 2 ? `<span class="escala-tag ixc-data-vencida">pediu ${o.pedidos.length}x</span>` : "";
+        const anot = (typeof anotacaoOs === "function") ? anotacaoOs(o.id) : null;
         return `
           <li class="ixc-os ixc-os-click" ${o.fechada ? `data-fech-os="${escaparHtml(String(o.id))}"` : `data-painel-os="${escaparHtml(String(o.id))}"`} title="Ver a ordem completa">
             <div class="ixc-os-linha"><span class="ixc-os-cliente">#${escaparHtml(String(o.id))} · ${escaparHtml(o.cliente || "—")}</span>${vezes}${tag}</div>
             <div class="ixc-os-sub">${escaparHtml(o.cidade || "—")}${o.bairro ? " · " + escaparHtml(o.bairro) : ""} · ${escaparHtml(ixcAssuntoCurto ? ixcAssuntoCurto(o.assunto) : (o.assunto || "—"))}</div>
             <div class="ixc-os-sub">💬 ${ult.data ? ult.data.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " — " : ""}${escaparHtml(ult.trecho)}</div>
+            <div class="os-anot" data-anot-wrap="${escaparHtml(String(o.id))}">
+              ${anot ? `<span class="os-anot-balao" title="${escaparHtml((anot.autor ? anot.autor + " · " : "") + (anot.atualizado_em ? new Date(anot.atualizado_em).toLocaleString("pt-BR") : ""))}">🏷️ ${escaparHtml(anot.texto)}</span>` : ""}
+              <button type="button" class="os-anot-btn">${anot ? "✎ editar nota" : "+ anotar"}</button>
+              <div class="os-anot-edit" hidden>
+                <div class="os-anot-chips">${PRESETS_ANOT.map(p => `<button type="button" class="os-anot-chip">${escaparHtml(p)}</button>`).join("")}</div>
+                <div class="os-anot-row">
+                  <input type="text" class="os-anot-input" maxlength="80" placeholder="Ex.: área de risco, em tratativa…" value="${escaparHtml(anot?.texto || "")}">
+                  <button type="button" class="os-anot-salvar">Salvar</button>
+                  <button type="button" class="os-anot-remover"${anot ? "" : " hidden"}>Remover</button>
+                </div>
+              </div>
+            </div>
           </li>`;
     }).join("");
 
@@ -380,7 +396,47 @@ function abrirPopupPrioridade(titulo, itens) {
         li.addEventListener("click", () => abrirTimelineIxc(li.dataset.painelOs, painelOpCache)));
     fundo.querySelectorAll("[data-fech-os]").forEach(li =>
         li.addEventListener("click", () => { if (typeof abrirModalOS === "function") abrirModalOS(li.dataset.fechOs); }));
+
+    // Anotações por OS (área de risco, em tratativa…). stopPropagation pra
+    // mexer na nota não abrir a timeline/OS do <li>.
+    fundo.querySelectorAll(".os-anot").forEach(wrap => {
+        const osId = wrap.dataset.anotWrap;
+        const edit = wrap.querySelector(".os-anot-edit");
+        const input = wrap.querySelector(".os-anot-input");
+        wrap.addEventListener("click", e => e.stopPropagation());
+        wrap.querySelector(".os-anot-btn").addEventListener("click", () => {
+            edit.hidden = !edit.hidden;
+            if (!edit.hidden) input.focus();
+        });
+        wrap.querySelectorAll(".os-anot-chip").forEach(chip =>
+            chip.addEventListener("click", () => { input.value = chip.textContent; input.focus(); }));
+        wrap.querySelector(".os-anot-salvar").addEventListener("click", async () => {
+            try { await salvarAnotacaoOs(osId, input.value); atualizarBalaoAnot(wrap, osId); }
+            catch (e) { alert("Não deu pra salvar a nota: " + (e.message || e)); }
+        });
+        input.addEventListener("keydown", e => { if (e.key === "Enter") wrap.querySelector(".os-anot-salvar").click(); });
+        wrap.querySelector(".os-anot-remover").addEventListener("click", async () => {
+            try { await removerAnotacaoOs(osId); atualizarBalaoAnot(wrap, osId); }
+            catch (e) { alert("Não deu pra remover: " + (e.message || e)); }
+        });
+    });
+
     fundo.querySelector(".ixc-popup-fechar").focus();
+}
+
+/** Re-renderiza o balão/estado da anotação de uma OS no popup depois de salvar/remover. */
+function atualizarBalaoAnot(wrap, osId) {
+    const anot = (typeof anotacaoOs === "function") ? anotacaoOs(osId) : null;
+    wrap.querySelector(".os-anot-balao")?.remove();
+    if (anot) {
+        const balao = document.createElement("span");
+        balao.className = "os-anot-balao";
+        balao.textContent = "🏷️ " + anot.texto;
+        wrap.prepend(balao);
+    }
+    wrap.querySelector(".os-anot-btn").textContent = anot ? "✎ editar nota" : "+ anotar";
+    wrap.querySelector(".os-anot-remover").hidden = !anot;
+    wrap.querySelector(".os-anot-edit").hidden = true;
 }
 
 /** Popup de EQUIPES (técnicos), não de OS — usado pelo bloco "Início da operação". */

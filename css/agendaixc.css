@@ -490,6 +490,22 @@ html[data-tema="dark"] .ixc-data-vencida{ color: #FCA5A5; }
 .inicio-hero-resumo b{color:#fff}
 .inicio-hero-link{all:unset;cursor:pointer;color:#fff;font-weight:800;border-bottom:2px solid #f5b335}
 .inicio-hero-link:hover{background:#ffffff1a}
+
+/* Anotações por OS (balão + editor) no popup de prioridade */
+.os-anot{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px }
+.os-anot-balao{ display:inline-flex; align-items:center; gap:4px; background:color-mix(in srgb,var(--cor-primaria) 14%,transparent); color:var(--cor-texto); border:1px solid color-mix(in srgb,var(--cor-primaria) 35%,transparent); border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600 }
+.os-anot-btn{ border:1px dashed var(--cor-borda); background:transparent; color:var(--cor-texto-suave); border-radius:999px; padding:3px 10px; font-size:12px; cursor:pointer }
+.os-anot-btn:hover{ color:var(--cor-texto); border-color:var(--cor-primaria) }
+.os-anot-edit{ flex:1 1 100%; margin-top:6px; display:flex; flex-direction:column; gap:8px }
+.os-anot-chips{ display:flex; flex-wrap:wrap; gap:6px }
+.os-anot-chip{ border:1px solid var(--cor-borda); background:var(--cor-fundo-elevado); color:var(--cor-texto); border-radius:999px; padding:3px 10px; font-size:12px; cursor:pointer }
+.os-anot-chip:hover{ border-color:var(--cor-primaria) }
+.os-anot-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+.os-anot-input{ flex:1 1 180px; border:1px solid var(--cor-borda); border-radius:8px; padding:7px 10px; font-size:13px; background:var(--cor-fundo-card); color:var(--cor-texto) }
+.os-anot-salvar,.os-anot-remover{ border:0; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:600; cursor:pointer }
+.os-anot-salvar{ background:var(--cor-primaria); color:#fff }
+.os-anot-remover{ background:var(--cor-fundo-elevado); color:var(--cor-erro) }
+.os-anot-remover[hidden]{ display:none }
 .op-card-estatico{cursor:default}
 .op-card-estatico:hover{transform:none;box-shadow:0 1px 3px var(--cor-sombra);border-color:var(--cor-borda)}
 .inicio-alert{display:flex;align-items:center;gap:13px;width:100%;margin-top:26px;background:color-mix(in srgb,#dc2626 11%,var(--cor-fundo-card));border:1px solid color-mix(in srgb,#dc2626 32%,transparent);border-radius:14px;padding:14px 18px;cursor:pointer;text-align:left}
