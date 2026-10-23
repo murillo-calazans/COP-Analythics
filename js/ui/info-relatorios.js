@@ -398,24 +398,17 @@ function igrListaOS(titulo, descricao, linhas) {
         if (!fin.length) return vazio();
 
         const todas = porCidade(fin, Infinity);
-        const destaque = todas.slice(0, 7);
-        const resto = todas.slice(7).reduce((s, c) => s + c.n, 0);
-        const grupos = destaque.map((c, i) => ({ rotulo: c.rotulo, n: c.n, cor: IG_PALETA[i % (IG_PALETA.length - 1)] }));
-        if (resto) grupos.push({ rotulo: "Outras cidades", n: resto, cor: "cinza" });
-        const brutoEscala = fin.length / 100;
-        const escala = brutoEscala <= 1 ? 1 : [2, 5, 10, 20, 25, 50, 100, 200, 500, 1000].find(e => e >= brutoEscala) ?? Math.ceil(brutoEscala);
 
         return [{
             titulo: "Concentração por cidade", sub: "OS finalizadas no recorte · o mapa interativo continua embaixo", cor: "vermelho", icone: "mapa", span: 3,
             blocos: [
-                { t: "waffle", grupos, escala },
                 {
                     t: "linhas", itens: todas.slice(0, 12).map((c, i) => ({
                         rotulo: c.rotulo, n: c.n, cor: i < 7 ? IG_PALETA[i % (IG_PALETA.length - 1)] : "cinza",
                         extra: IG.pctDe(c.n, fin.length), acao: filtrar("cidades", c.rotulo === "Sem cidade" ? "" : c.rotulo)
                     }))
                 },
-                { t: "nota", html: `Cada quadrado = ${escala === 1 ? "1 OS" : `${IG.fmt(escala)} OS`}. ${IG.fmt(todas.length)} cidade${todas.length === 1 ? "" : "s"} no recorte; clique numa cidade para filtrar.` }
+                { t: "nota", html: `${IG.fmt(todas.length)} cidade${todas.length === 1 ? "" : "s"} no recorte; clique numa cidade para filtrar.` }
             ]
         }];
     });
