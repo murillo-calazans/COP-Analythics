@@ -135,3 +135,15 @@
     .pi-destaque, .ig-destaque { gap: 12px; }
     .pi-rosca, .ig-rosca { width: 100px; height: 100px; }
 }
+
+/* ---------- App instalável (js/core/pwa.js) ---------- */
+.botao-instalar-app { color: #F5B335; }
+.botao-instalar-app:hover { color: #FFD27A; }
+.pwa-passos { margin: 4px 0 6px; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; color: var(--cor-texto); font-size: 14px; line-height: 1.5; }
+.pwa-passos b { color: var(--cor-texto); }
+.pwa-passos span { color: var(--cor-texto-suave); font-size: 12.5px; }
+
+/* Aberto como app (tela cheia): respeita o entalhe/barra do celular. */
+@media (display-mode: standalone) {
+    header { padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+}
