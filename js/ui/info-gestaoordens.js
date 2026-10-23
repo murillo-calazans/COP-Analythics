@@ -33,10 +33,11 @@ function igoDiasAberta(abertura, hoje) {
 
 const IGO_FAIXAS_IDADE = [
     { rotulo: "Hoje", cor: "azul", de: 0, ate: 0 },
-    { rotulo: "1–3 dias", cor: "azul", de: 1, ate: 3 },
-    { rotulo: "4–7 dias", cor: "laranja", de: 4, ate: 7 },
-    { rotulo: "8–15 dias", cor: "laranja", de: 8, ate: 15 },
-    { rotulo: "+15 dias", cor: "vermelho", de: 16, ate: Infinity }
+    { rotulo: "1 dia", cor: "azul", de: 1, ate: 1 },
+    { rotulo: "2 dias", cor: "azul", de: 2, ate: 2 },
+    { rotulo: "3 dias", cor: "laranja", de: 3, ate: 3 },
+    { rotulo: "4–10 dias", cor: "laranja", de: 4, ate: 10 },
+    { rotulo: "+10 dias", cor: "vermelho", de: 11, ate: Infinity }
 ];
 
 const IGO_PRIO_GRUPOS = [
@@ -187,7 +188,7 @@ registrarInfografico("agenda-hoje", async () => {
         titulo: "Há quanto tempo estão abertas", sub: "Idade das OS de campo (pela abertura)", cor: "laranja", icone: "relogio",
         blocos: [
             { t: "colunas", itens: faixas.map(f => ({ rotulo: f.rotulo, n: f.oss.length, cor: f.cor, acao: f.oss.length ? pop(`Abertas: ${f.rotulo}`, f.oss) : null })) },
-            { t: "nota", html: (velhas ? `<b>${IG.fmt(velhas)} OS</b> abertas há mais de 15 dias.` : "Nenhuma OS aberta há mais de 15 dias.")
+            { t: "nota", html: (velhas ? `<b>${IG.fmt(velhas)} OS</b> abertas há mais de 10 dias.` : "Nenhuma OS aberta há mais de 10 dias.")
                 + (semData ? ` ${IG.fmt(semData)} sem data de abertura.` : "") }
         ]
     });

@@ -14,10 +14,11 @@
 
 const IG_COP_FAIXAS_IDADE = [
     { rotulo: "Hoje", ate: 0, cor: "ciano" },
-    { rotulo: "1–3 dias", ate: 3, cor: "ciano" },
-    { rotulo: "4–7 dias", ate: 7, cor: "ciano" },
-    { rotulo: "8–15 dias", ate: 15, cor: "laranja" },
-    { rotulo: "+15 dias", ate: Infinity, cor: "vermelho" }
+    { rotulo: "1 dia", ate: 1, cor: "ciano" },
+    { rotulo: "2 dias", ate: 2, cor: "ciano" },
+    { rotulo: "3 dias", ate: 3, cor: "laranja" },
+    { rotulo: "4–10 dias", ate: 10, cor: "laranja" },
+    { rotulo: "+10 dias", ate: Infinity, cor: "vermelho" }
 ];
 
 /** Dias desde a abertura (mesma conta de copHaDias); null sem data. */
@@ -57,8 +58,8 @@ registrarInfografico("cop-abertas", async () => {
             contagem[IG_COP_FAIXAS_IDADE.findIndex(f => dias <= f.ate)]++;
         }
     }
-    const mais15 = contagem[contagem.length - 1];
-    const ate15 = model.total - mais15 - semData;
+    const maisDe10 = contagem[contagem.length - 1];
+    const ate10 = model.total - maisDe10 - semData;
     const carimbo = igCopCarimbo(model.capturadoEm);
 
     return [
@@ -69,17 +70,17 @@ registrarInfografico("cop-abertas", async () => {
                 {
                     t: "destaque",
                     fatias: [
-                        { rotulo: "+15 dias", n: mais15, cor: "vermelho" },
-                        { rotulo: "até 15 dias", n: ate15, cor: "ciano" },
+                        { rotulo: "+10 dias", n: maisDe10, cor: "vermelho" },
+                        { rotulo: "até 10 dias", n: ate10, cor: "ciano" },
                         { rotulo: "sem data de abertura", n: semData, cor: "cinza" }
                     ],
-                    centro: IG.fmt(model.total), sub: "em aberto", valor: IG.pctDe(mais15, model.total), corValor: mais15 ? "vermelho" : "verde",
-                    texto: "estão abertas <b>há mais de 15 dias</b>"
+                    centro: IG.fmt(model.total), sub: "em aberto", valor: IG.pctDe(maisDe10, model.total), corValor: maisDe10 ? "vermelho" : "verde",
+                    texto: "estão abertas <b>há mais de 10 dias</b>"
                 },
                 {
                     t: "kpis", itens: [
                         { rotulo: "Assuntos", valor: IG.fmt(model.grupos.length) },
-                        { rotulo: "Mais antiga", valor: maisAntiga === null ? "—" : maisAntiga === 0 ? "hoje" : `${IG.fmt(maisAntiga)} dias`, cor: maisAntiga > 15 ? "vermelho" : null }
+                        { rotulo: "Mais antiga", valor: maisAntiga === null ? "—" : maisAntiga === 0 ? "hoje" : `${IG.fmt(maisAntiga)} dias`, cor: maisAntiga > 10 ? "vermelho" : null }
                     ]
                 }
             ]
