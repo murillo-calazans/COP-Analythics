@@ -69,6 +69,10 @@ function renderizarPainelAuditoriaOperacional() {
     const resultado = AuditoriaOperacionalEngine.auditar(ordensFiltradas);
     _achadosAuditoriaOperacionalCache = resultado.achados;
 
+    // Seções informativas (etapas 2 e 3) — calculadas 1x sobre o mesmo recorte.
+    const analiseAuditoria = IndicatorEngine.analisarEventosDeTodas(ordensFiltradas);
+    _gruposLoginAuditoria = AuditoriaOperacionalEngine.loginsEmVariasOrdens(ordensFiltradas, analiseAuditoria);
+
     const { resumo } = resultado;
 
     container.innerHTML = `
@@ -142,6 +146,14 @@ function renderizarPainelAuditoriaOperacional() {
             </form>
             <div id="listaAchadosAuditoria"></div>
         </div>
+
+        <div class="grafico-card" id="cardLoginsVariasOrdens">
+            <div class="grafico-cabecalho">
+                <div><div class="grafico-titulo">Logins em várias OS no período</div><div class="grafico-subtitulo">Mesmo cliente (login) com 2+ ordens no recorte do Filtro Global</div></div>
+                <select id="filtroTerceiraLoginsAuditoria" aria-label="Filtrar por empresa"></select>
+            </div>
+            <div id="tabelaLoginsVariasOrdens"></div>
+        </div>
     `;
 
     if (resultado.porTipoErro.length > 0) {
@@ -175,7 +187,65 @@ function renderizarPainelAuditoriaOperacional() {
         tile.addEventListener("click", () => abrirCategoriaAuditoria(tile.dataset.categoriaAuditoria));
     });
 
+    prepararSecaoLoginsAuditoria();
+
     renderizarListaAchadosAuditoria("");
+}
+
+// ==========================================================
+// Seção: Logins em várias OS no período (etapa 2) — grupo por login,
+// filtro local por empresa (terceira / nossa equipe). Período = o do
+// Filtro Global (já aplicado em ordensFiltradas).
+// ==========================================================
+let _gruposLoginAuditoria = [];
+let _filtroEmpresaLoginsAuditoria = "__todas__";
+
+function prepararSecaoLoginsAuditoria() {
+    const select = document.getElementById("filtroTerceiraLoginsAuditoria");
+    if (select) {
+        const empresas = [...new Set(_gruposLoginAuditoria.flatMap(g => g.ordens.map(o => o.empresa)))].sort();
+        if (!empresas.includes(_filtroEmpresaLoginsAuditoria)) _filtroEmpresaLoginsAuditoria = "__todas__";
+        select.innerHTML = `<option value="__todas__">Todas as empresas</option>` +
+            empresas.map(e => `<option value="${escaparHtml(e)}"${e === _filtroEmpresaLoginsAuditoria ? " selected" : ""}>${escaparHtml(e)}</option>`).join("");
+        select.onchange = () => { _filtroEmpresaLoginsAuditoria = select.value; renderizarSecaoLoginsAuditoria(); };
+    }
+    renderizarSecaoLoginsAuditoria();
+}
+
+function renderizarSecaoLoginsAuditoria() {
+    const alvo = document.getElementById("tabelaLoginsVariasOrdens");
+    if (!alvo) return;
+
+    const empresa = _filtroEmpresaLoginsAuditoria;
+    const grupos = empresa === "__todas__"
+        ? _gruposLoginAuditoria
+        : _gruposLoginAuditoria.filter(g => g.ordens.some(o => o.empresa === empresa));
+
+    if (!grupos.length) {
+        alvo.innerHTML = '<p class="alerta-vazio">Nenhum login com 2+ OS nesse recorte.</p>';
+        return;
+    }
+
+    const dataBR = d => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+    alvo.innerHTML = grupos.map(g => `
+        <div class="auditoria-login-grupo">
+            <div class="auditoria-login-cab"><strong>${escaparHtml(g.login)}</strong> · ${escaparHtml(g.cliente ?? "")} <span class="escala-tag">${g.ordens.length} OS</span></div>
+            <div class="tabela-scroll">
+                <table class="tabela-alertas">
+                    <thead><tr><th>OS</th><th>Tipo (assunto)</th><th>Abertura</th><th>Fechamento</th><th>Técnico</th><th>Empresa</th></tr></thead>
+                    <tbody>${g.ordens.map(o => `
+                        <tr>
+                            <td>${escaparHtml(String(o.id))}</td>
+                            <td>${escaparHtml(o.assunto ?? "—")}</td>
+                            <td>${dataBR(o.abertura)}</td>
+                            <td>${dataBR(o.fechamento)}</td>
+                            <td>${escaparHtml(o.tecnico ?? "—")}</td>
+                            <td>${escaparHtml(o.empresa)}</td>
+                        </tr>`).join("")}
+                    </tbody>
+                </table>
+            </div>
+        </div>`).join("");
 }
 
 /**

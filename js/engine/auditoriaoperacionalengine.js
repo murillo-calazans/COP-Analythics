@@ -394,6 +394,47 @@ const AuditoriaOperacionalEngine = {
     },
 
     /**
+     * Mesmo login do cliente aparecendo em 2+ OS distintas do recorte,
+     * agrupado por login. SEÇÃO INFORMATIVA (não entra na contagem de
+     * erros): serve pra ver clientes com várias ordens no período, com a
+     * empresa (terceira pelo sufixo do técnico de fechamento, ou "Nossa
+     * equipe" quando interno). Login normalizado (sem acento/caixa) pra
+     * não perder duplicidade. OS sem fechamento usam o responsável atual.
+     */
+    loginsEmVariasOrdens(ordens, analise) {
+        const porLogin = new Map();
+
+        for (const ordem of ordens.values()) {
+            if (!ordem.login) continue;
+            const chave = normalizarTexto(ordem.login);
+
+            const info = analise.get(ordem.id);
+            const efetivo = info?.fechamentoEfetivo;
+            const tecnico = efetivo
+                ? IndicatorEngine.nomeResponsavelFechamento(efetivo)
+                : AuditEngine.resolverReferencia(APP.referencias.operadores, ordem.tecnicoResponsavel, CONFIG_BASE.operadores.nome);
+            const terceiraId = tecnico ? TerceirasEngine.terceiraDoNome(tecnico) : null;
+
+            const grupo = porLogin.get(chave) ?? { login: ordem.login, cliente: ordem.cliente, ordens: [] };
+            grupo.ordens.push({
+                id: ordem.id,
+                assunto: ordem.assunto ?? null,
+                abertura: ordem.dataAbertura ?? null,
+                fechamento: efetivo?.data ?? null,
+                tecnico: tecnico || null,
+                terceiraId,
+                empresa: terceiraId ? TerceirasEngine.nomeTerceira(terceiraId) : "Nossa equipe"
+            });
+            porLogin.set(chave, grupo);
+        }
+
+        return [...porLogin.values()]
+            .filter(g => g.ordens.length >= 2)
+            .map(g => ({ ...g, ordens: g.ordens.sort((a, b) => (a.abertura?.getTime() ?? 0) - (b.abertura?.getTime() ?? 0)) }))
+            .sort((a, b) => b.ordens.length - a.ordens.length || String(a.login).localeCompare(String(b.login)));
+    },
+
+    /**
      * Ponto de entrada: audita um conjunto de OS (normalmente
      * FiltroEngine.ordensFiltradas()) e devolve o resumo agregado +
      * a lista de achados, pra Auditoria desenhar os indicadores e a
