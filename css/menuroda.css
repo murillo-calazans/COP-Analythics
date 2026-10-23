@@ -97,11 +97,13 @@ body.nao-autenticado .menu-subroda{ display:none !important; }
             mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
 }
 .menu-subroda[hidden]{ display:none; }
-/* trilho azul escuro opaco atrás das sub-abas (fade nas pontas pela máscara da .menu-subroda) */
+/* meia-lua azul escuro opaca atrás das sub-abas (lado reto embaixo, curva por cima) */
 .menu-subroda::before{
-    content:""; position:absolute; left:0; right:0; top:14px; bottom:14px; z-index:-1;
+    content:""; position:absolute; left:50%; bottom:0; transform:translateX(-50%); z-index:-1;
+    width:min(660px,95%); height:92px;
     background:linear-gradient(180deg,#15284f 0%,#0c1630 100%);
-    border-radius:18px; box-shadow:0 12px 30px rgba(8,16,40,.35);
+    border-radius:50% 50% 0 0 / 100% 100% 0 0;
+    box-shadow:0 10px 30px rgba(8,16,40,.30);
 }
 .ro-sitem{
     position:absolute; left:50%; top:27px; display:inline-flex; align-items:center; justify-content:center; height:44px; padding:0 24px;
