@@ -319,7 +319,7 @@ async function puxarRecentes(pagina, molde, janela) {
 
     for (let i = 0; i < MAX_PAGINAS; i++) {
         const body = montarPayload(molde, i * TAM_PAGINA, TAM_PAGINA, i + 1, janela);
-        // Uma página lenta do IXC estoura o AbortController (90s). Isso NÃO é a
+        // Uma página lenta do IXC estoura o AbortController (180s). Isso NÃO é a
         // sessão caindo — é só o IXC demorando. Tenta de novo até 3x na MESMA
         // página; só então desiste (PULL_TIMEOUT) — sem reiniciar o navegador.
         let txt;
@@ -338,11 +338,11 @@ async function puxarRecentes(pagina, molde, janela) {
                         });
                         return { status: r.status, texto: await r.text() };
                     } finally { clearTimeout(t); }
-                }, { url: URL_DADOS, body, timeoutMs: 90000 });
+                }, { url: URL_DADOS, body, timeoutMs: 180000 });
                 break;
             } catch (e) {
                 const timeout = /aborted|AbortError|timed? ?out/i.test(e && e.message || "");
-                if (timeout && tent < 3) { log(`  visão ${molde.viewId} pág ${i}: IXC demorou >90s (tentativa ${tent}/3), repetindo...`); continue; }
+                if (timeout && tent < 3) { log(`  visão ${molde.viewId} pág ${i}: IXC demorou >180s (tentativa ${tent}/3), repetindo...`); continue; }
                 if (timeout) throw new Error("PULL_TIMEOUT");   // 3 falhas seguidas = sessão travada → rodar() reinicia pra relogar
                 throw e;
             }
@@ -1162,8 +1162,10 @@ async function principal() {
     const rodar = async () => {
         if (emExecucao) return false;
         emExecucao = true;
+        let ok = true;   // só TRUE quando a passada completou; senão a hora NÃO é marcada e é retentada
         try { await garantirNavegador(); await umaPassada(pagina, moldes, simular); await publicarAgendaSeNaHora(); }
         catch (e) {
+            ok = false;
             if (fechouNavegador(e)) log("Navegador/aba fechou durante a rodada — reabro na próxima.");
             else if (e.message === "SESSAO_CAIU" || e.message === "PULL_TIMEOUT" || ehFalhaDeRede(e)) {
                 // puxada não completou (sessão caiu / Failed to fetch): fecha o
@@ -1174,7 +1176,7 @@ async function principal() {
             }
             else { logErro("rodada", e); log("ERRO: " + e.message); }
         } finally { emExecucao = false; }
-        return true;
+        return ok;
     };
 
     const abertoEm = new Date();   // antes da 1ª rodada: ela pode terminar já na hora seguinte
