@@ -1,0 +1,137 @@
+/*
+ * ==========================================================
+ * Celular e telas estreitas (carregado por último no index.html)
+ * ==========================================================
+ * No computador o menu é a engrenagem da borda esquerda (css/menuroda.css),
+ * que reserva 104 px fixos pro conteúdo + a roda de sub-abas no rodapé.
+ * Num celular isso come metade da tela. Aqui, até 760 px de largura:
+ * - some a engrenagem e a roda do rodapé; volta o botão ☰ (menu lateral
+ *   com os módulos, js/ui/menulateral.js);
+ * - as abas do módulo (nav.menu, mantida em sincronia por navegacao.js)
+ *   viram uma faixa rolável logo abaixo do cabeçalho;
+ * - conteúdo sem a margem da engrenagem, margens de celular, títulos e
+ *   cartões compactos, tabelas rolando dentro do próprio cartão.
+ */
+
+@media (max-width: 760px) {
+
+    /* ---------- nada de rolagem lateral da página ---------- */
+    html, body { max-width: 100%; overflow-x: hidden; }
+
+    /* ---------- menu: engrenagem some, volta o ☰ e a faixa de abas ---------- */
+    body.menu-roda-ativa .gear-rail,
+    body.menu-roda-ativa .menu-subroda { display: none !important; }
+    body.menu-roda-ativa .menu-hamburguer { display: inline-flex !important; }
+
+    header {
+        flex-wrap: wrap;
+        gap: 8px 10px;
+        padding: 10px 12px;
+        position: sticky;
+        top: env(safe-area-inset-top, 0px);
+        z-index: 50;
+    }
+    .logo { gap: 8px; min-width: 0; }
+    .logo-img { width: 30px; height: 30px; }
+    .logo-texto h1 { font-size: 16px; white-space: nowrap; }
+    .logo-texto span { display: none; }
+    .header-utilitarios { margin-left: auto; gap: 0; padding-left: 6px; border-left: 0; }
+    .header-utilitarios .botao-icone { width: 32px; height: 32px; font-size: 15px; }
+    .header-utilitarios .botao-icone svg { width: 17px; height: 17px; }
+
+    /* abas do módulo aberto: linha própria, rolando de lado */
+    body.menu-roda-ativa nav.menu,
+    nav.menu {
+        display: flex !important;
+        order: 3;
+        flex: 1 1 100%;
+        width: 100%;
+        gap: 6px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+        -webkit-overflow-scrolling: touch;
+    }
+    nav.menu::-webkit-scrollbar { display: none; }
+    /* módulo de uma tela só (ex.: Início) não tem abas: a faixa some */
+    nav.menu:not(:has([data-secao]:not([hidden]))) { display: none !important; }
+    .menu button, .menu a.menu-link {
+        flex: none;
+        padding: 7px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .menu button .icone { width: 15px; height: 15px; }
+
+    /* ---------- área de conteúdo ---------- */
+    body.menu-roda-ativa:not(.nao-autenticado) main,
+    main {
+        margin-left: 0 !important;
+        padding: 14px 12px 88px;
+        min-width: 0;
+    }
+
+    /* cabeçalho de cada aba: título em cima, botões embaixo */
+    .dashboard-cabecalho {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .dashboard-cabecalho h2 { font-size: 19px; line-height: 1.25; text-wrap: balance; }
+    .dashboard-cabecalho p { font-size: 12.5px; }
+    .dashboard-cabecalho-acoes { flex-wrap: wrap; gap: 8px; }
+    .dashboard-cabecalho-acoes > * { flex: 1 1 auto; justify-content: center; }
+    .botao-primario, .botao-secundario { padding: 9px 12px; font-size: 13px; }
+
+    /* cartões genéricos */
+    .placeholder-card {
+        max-width: none;
+        margin: 10px 0;
+        padding: 16px 14px;
+    }
+    .kpi-row { gap: 10px; }
+    .op-card { padding: 14px; gap: 12px; }
+    .op-ic { width: 40px; height: 40px; }
+    .op-txt strong { font-size: 26px; }
+
+    /* tela inicial */
+    .inicio-hero { padding: 18px 16px; border-radius: 16px; }
+    .inicio-hero h1 { font-size: 21px; }
+    .inicio-hero-live { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; }
+    .inicio-hero-live div { min-width: 0; padding: 8px 10px; }
+    .inicio-hero-live b { font-size: 19px; }
+    .pi-colunas { gap: 14px; margin-top: 16px; }
+    .pi-coluna { padding: 14px 14px 12px; }
+    .pi-rosca { width: 112px; height: 112px; }
+    .pi-leitura strong { font-size: 26px; }
+
+    /* infográficos das abas */
+    .ig-grade { gap: 14px; }
+    .ig-cartao { padding: 14px 14px 12px; gap: 14px; }
+    .ig-rosca { width: 112px; height: 112px; }
+    .ig-leitura strong { font-size: 26px; }
+    .ig-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .ig-kpi strong { font-size: 19px; }
+    .ig-colunas svg { min-width: 0; }
+
+    /* tabelas: rolam dentro do cartão, nunca a página */
+    .tabela-scroll, .table-scroll, .ig-tabela { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+    table { font-size: 12.5px; }
+
+    /* filtros e campos ocupam a largura toda */
+    .ordens-filtros, .mapa-calor-filtros, .backlog-filtro { flex-wrap: wrap; gap: 8px; }
+    .ordens-filtros > *, .mapa-calor-filtros > * { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+    input, select, textarea { max-width: 100%; }
+
+    /* popups de lista (painel, backlog, prioridade): tela cheia */
+    .ixc-popup { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 16px 16px 0 0; }
+    .ixc-popup-fundo { align-items: flex-end; padding: 0; }
+}
+
+@media (max-width: 420px) {
+    /* só o símbolo: o nome não cabe ao lado dos 6 ícones */
+    .logo-texto { display: none; }
+    .pi-destaque, .ig-destaque { gap: 12px; }
+    .pi-rosca, .ig-rosca { width: 100px; height: 100px; }
+}
