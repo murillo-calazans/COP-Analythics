@@ -208,6 +208,22 @@ const TerceirasEngine = {
         };
     },
 
+    /**
+     * Técnicos ativos no mês (ativo = fechou ao menos 1 OS). Agrega os itens
+     * de itensDoMes por técnico: nº de OS, OS pagas e valor pago.
+     */
+    tecnicosDoMes(itens) {
+        const porTecnico = new Map();
+        for (const item of itens) {
+            const nome = item.tecnico || "—";
+            const atual = porTecnico.get(nome) ?? { tecnico: nome, os: 0, pagas: 0, valor: 0 };
+            atual.os++;
+            if (item.situacao === SITUACAO_PAGAMENTO.PAGA) { atual.pagas++; atual.valor += item.valor || 0; }
+            porTecnico.set(nome, atual);
+        }
+        return [...porTecnico.values()].sort((a, b) => b.os - a.os || a.tecnico.localeCompare(b.tecnico));
+    },
+
     /** Assuntos sem preço, diagnósticos sem classificação e sem categoria, com contagem. */
     pendencias(itens) {
         const assuntos = new Map();

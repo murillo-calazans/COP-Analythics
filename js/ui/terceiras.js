@@ -266,6 +266,7 @@ async function renderizarTerceirasFechamento() {
 
     const filtros = { todas: () => true, pagas: i => i.situacao === "paga", nao_pagas: i => i.situacao === "improdutiva" || i.situacao === "nao_paga", pendentes: i => ["sem_preco", "diag_pendente", "cat_pendente"].includes(i.situacao) };
     const visiveis = itens.filter(filtros[terceirasFiltroSituacao] ?? filtros.todas);
+    const tecnicos = TerceirasEngine.tecnicosDoMes(itens);
 
     container.innerHTML = `
         ${htmlBarraMes(`
@@ -301,6 +302,18 @@ async function renderizarTerceirasFechamento() {
                     <tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${resumo.pagas}</strong></td><td></td><td class="num"><strong>${moeda(resumo.total)}</strong></td></tr></tfoot>
                 </table>
             </div>` : '<p class="alerta-vazio">Nenhuma OS paga.</p>'}
+        </div>
+
+        <div class="grafico-card">
+            <div class="grafico-cabecalho"><div><div class="grafico-titulo">Técnicos ativos no mês</div><div class="grafico-subtitulo">${tecnicos.length} técnico(s) com OS fechada</div></div></div>
+            ${tecnicos.length ? `
+            <div class="tabela-scroll">
+                <table class="tabela-alertas terceiras-tabela">
+                    <thead><tr><th>Técnico</th><th class="num">OS no mês</th><th class="num">Pagas</th><th class="num">Valor</th></tr></thead>
+                    <tbody>${tecnicos.map(t => `<tr><td>${escaparHtml(t.tecnico)}</td><td class="num">${t.os}</td><td class="num">${t.pagas}</td><td class="num">${t.valor ? moeda(t.valor) : "—"}</td></tr>`).join("")}</tbody>
+                    <tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${itens.length}</strong></td><td class="num"><strong>${resumo.pagas}</strong></td><td class="num"><strong>${moeda(resumo.total)}</strong></td></tr></tfoot>
+                </table>
+            </div>` : '<p class="alerta-vazio">Nenhum técnico com OS no mês.</p>'}
         </div>
 
         <div class="grafico-card">
@@ -404,6 +417,7 @@ function baixarCsvFechamento(mes, terceira, itens) {
 function imprimirFechamento(mes, terceira, itens, resumo, fechado) {
     const nome = TerceirasEngine.nomeTerceira(terceira);
     const pagas = itens.filter(i => i.situacao === "paga");
+    const tecnicos = TerceirasEngine.tecnicosDoMes(itens);
     const status = fechado
         ? `Fechado em ${new Date(fechado.aprovado_em).toLocaleDateString("pt-BR")}${fechado.aprovado_por ? ` por ${escaparHtml(fechado.aprovado_por)}` : ""}`
         : "PRÉVIA — mês ainda não fechado";
@@ -431,6 +445,9 @@ function imprimirFechamento(mes, terceira, itens, resumo, fechado) {
         <table><thead><tr><th>Assunto</th><th class="num">OS</th><th class="num">Valor LPU</th><th class="num">Subtotal</th></tr></thead>
         <tbody>${resumo.porAssunto.map(a => `<tr><td>${escaparHtml(a.assunto)}</td><td class="num">${a.quantidade}</td><td class="num">${moeda(a.valorUnitario)}</td><td class="num">${moeda(a.subtotal)}</td></tr>`).join("")}</tbody>
         <tfoot><tr><td>Total</td><td class="num">${resumo.pagas}</td><td></td><td class="num">${moeda(resumo.total)}</td></tr></tfoot></table>
+        <h2>Técnicos ativos no mês (${tecnicos.length})</h2>
+        <table><thead><tr><th>Técnico</th><th class="num">OS no mês</th><th class="num">Pagas</th><th class="num">Valor</th></tr></thead>
+        <tbody>${tecnicos.map(t => `<tr><td>${escaparHtml(t.tecnico)}</td><td class="num">${t.os}</td><td class="num">${t.pagas}</td><td class="num">${t.valor ? moeda(t.valor) : "—"}</td></tr>`).join("")}</tbody></table>
         <h2>OS pagas (${pagas.length})</h2>
         <table><thead><tr><th>OS</th><th>Data</th><th>Técnico</th><th>Cidade</th><th>Assunto</th><th class="num">Valor</th></tr></thead>
         <tbody>${pagas.map(i => `<tr><td>${escaparHtml(String(i.os))}</td><td>${new Date(i.data).toLocaleDateString("pt-BR")}</td><td>${escaparHtml(i.tecnico ?? "")}</td><td>${escaparHtml(i.cidade ?? "")}</td><td>${escaparHtml(i.assunto ?? "")}${i.categoria ? ` · ${TerceirasEngine.nomeCategoria(i.categoria)}` : ""}</td><td class="num">${moeda(i.valor)}</td></tr>`).join("")}</tbody></table>
