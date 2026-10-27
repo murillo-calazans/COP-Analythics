@@ -19,7 +19,14 @@ let rompCache = null;
 const ROMP_LIMIAR = 4;
 // Janela (min) que agrupa quedas "ao mesmo tempo" (bucket da última conexão).
 const ROMP_JANELA_MIN = 30;
+// Só queda RECENTE conta como rompimento — offline há dias é crônico/abandonado.
+const ROMP_RECENCIA_H = 24;
 const ROMP_TETO_MEMBROS = 200;   // membros listados por grupo no pop-up
+
+// status_acesso vem como código do IXC: A=Ativo, CA=Bloqueio Automático,
+// CM=Bloqueio Manual, FA=Financeiro. Só o Ativo conta como queda (os outros
+// estão offline porque foram bloqueados, não por rompimento).
+const rompEhAtivo = s => { const v = String(s || "").trim(); return v === "A" || /^ativo/i.test(v); };
 
 const ROMP_CSS = `
 #btnRompimentos{
@@ -128,17 +135,19 @@ async function calcularRompimentos() {
 
     const comOs = await rompLoginsComOs();
     const janelaMs = ROMP_JANELA_MIN * 60000;
+    const limiteRecente = Date.now() - ROMP_RECENCIA_H * 3600000;
 
-    // só Ativos (tira bloqueio/financeiro) e com OLT + hora de queda conhecidos
+    // só Ativos (tira bloqueio/financeiro), queda RECENTE e com OLT + hora
     const grupos = new Map();
     let ativos = 0;
     for (const r of linhas) {
-        if (!/^ativo/i.test(String(r.status_acesso || "").trim())) continue;
+        if (!rompEhAtivo(r.status_acesso)) continue;
         ativos++;
         const olt = (r.olt || "").trim();
         if (!olt) continue;
         const t = ixcDataBR(r.ultima_conexao);
         if (!t) continue;                       // sem hora não dá pra confirmar coincidência
+        if (t.getTime() < limiteRecente) continue;   // offline há muito = crônico, não rompimento
         const pon = (r.interface_pon || "").trim();
         const bucket = Math.floor(t.getTime() / janelaMs);
         const chave = `${olt}¦${pon}¦${bucket}`;
