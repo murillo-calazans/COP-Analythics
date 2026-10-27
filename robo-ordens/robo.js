@@ -55,6 +55,14 @@ const COL_DATA = 14;          // índice da coluna su_oss_chamado_mensagem_data 
 // Puxada extra = botão "Atualizar banco".
 const HORARIOS_RODADA = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 const MINUTO_RODADA = 30;   // roda nos :30 de cada hora (7h30, 8h30…19h30), não na hora cheia
+// Logins offline (rompimentos) mudam rápido — atualizam a CADA 30 min, das
+// 7h30 às 18h30. Os :30 já vêm da rodada completa; uma mini-rodada só da
+// offline cobre os :00. Fora dessa janela a offline não roda (mantém o último
+// retrato), menos quando é pedido pelo botão "Atualizar banco".
+const OFFLINE_INI_MIN = 7 * 60 + 30;    // 7h30
+const OFFLINE_FIM_MIN = 18 * 60 + 30;   // 18h30
+const minutosDoDia = d => d.getHours() * 60 + d.getMinutes();
+const dentroJanelaOffline = d => { const m = minutosDoDia(d); return m >= OFFLINE_INI_MIN && m <= OFFLINE_FIM_MIN; };
 const FOLGA_MIN = 10;   // cada janela começa 10 min antes do fim da anterior (o repetido é ignorado)
 const ARQ_ESTADO = path.join(__dirname, "estado-puxadas.json");
 const PULSO_MS = 5 * 60 * 1000;   // mantém a sessão viva a cada 5 min (auto-refresh interno)
@@ -1058,6 +1066,8 @@ function numeroOffline(v) {
  */
 async function sincronizarClientesOffline(pagina, moldes, simular, { inicio }) {
     if (!VISAO_OFFLINE) return;
+    // só dentro da janela (7h30–18h30); fora dela mantém o último retrato
+    if (!simular && !dentroJanelaOffline(inicio)) return;
     const alvo = VISAO_OFFLINE.trim().toUpperCase();
     const molde = moldes.find(m => m.viewId === VISAO_OFFLINE || String(m.viewName ?? "").trim().toUpperCase() === alvo);
     if (!molde) { log(`molde da visão ${VISAO_OFFLINE} (logins offline) não encontrado em templates.json — rode o capturar-dados.js`); return; }
@@ -1296,6 +1306,26 @@ async function principal() {
         return ok;
     };
 
+    // Mini-rodada SÓ da offline (rompimentos), pros :00 entre as rodadas
+    // completas — assim a offline atualiza a cada 30 min na janela dela.
+    const rodarOffline = async () => {
+        if (emExecucao) return false;
+        emExecucao = true;
+        let ok = true;
+        try {
+            await garantirNavegador();
+            await sincronizarClientesOffline(pagina, moldes, simular, { estado: lerEstado(), inicio: new Date() });
+        } catch (e) {
+            ok = false;
+            if (fechouNavegador(e)) log("Navegador/aba fechou na offline — reabro na próxima.");
+            else if (e.message === "SESSAO_CAIU" || e.message === "PULL_TIMEOUT" || ehFalhaDeRede(e)) {
+                logErro("offline (puxada falhou: sessão/rede)", e);
+                await reiniciarNavegador().catch(x => log("Reinício do navegador não concluiu: " + x.message));
+            } else { logErro("offline", e); log("ERRO offline: " + e.message); }
+        } finally { emExecucao = false; }
+        return ok;
+    };
+
     const abertoEm = new Date();   // antes da 1ª rodada: ela pode terminar já na hora seguinte
     await rodar();
 
@@ -1376,9 +1406,22 @@ async function principal() {
         if (await rodar()) rodadasFeitas.add(chave);
     };
 
-    log(`Pronto. Rodadas de hora em hora, das ${HORARIOS_RODADA[0]}h${MINUTO_RODADA} às ${HORARIOS_RODADA.at(-1)}h${MINUTO_RODADA} (extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
+    // mini-rodada só da offline nos :00 (os :30 já vêm da rodada completa), só
+    // na janela 7h30–18h30. Uma vez por :00.
+    const offlineFeitas = new Set();
+    const agendaOffline = async () => {
+        const agora = new Date();
+        if (agora.getMinutes() >= MINUTO_RODADA) return;   // :30 é da rodada completa
+        if (!dentroJanelaOffline(agora)) return;
+        const chave = `${ymd(agora)} ${agora.getHours()}h00`;
+        if (offlineFeitas.has(chave)) return;
+        if (await rodarOffline()) offlineFeitas.add(chave);
+    };
+
+    log(`Pronto. Rodadas de hora em hora, das ${HORARIOS_RODADA[0]}h${MINUTO_RODADA} às ${HORARIOS_RODADA.at(-1)}h${MINUTO_RODADA} (offline a cada 30 min, 7h30–18h30; extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
     setInterval(pulso, PULSO_MS);
     setInterval(agenda, 60 * 1000);
+    setInterval(agendaOffline, 60 * 1000);
     setInterval(verificarComandos, 30 * 1000);
 }
 
