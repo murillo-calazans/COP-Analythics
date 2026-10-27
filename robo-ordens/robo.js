@@ -28,6 +28,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
+const { configurarDownloads } = require("./downloads");
 
 const PERFIL = path.join(__dirname, "perfil");
 // usa só o domínio do IXC_URL (ignora /adm.php, /app/login ou qualquer caminho no fim)
@@ -79,6 +80,28 @@ const VISAO_PENDENTES = "529";
 // clientes_cto. Retrato completo 1x por dia (1ª rodada). "" desliga: preencha
 // o id ou o nome da visão no .env (VISAO_CLIENTES_CTO=CTOs de Clientes).
 const VISAO_CLIENTES_CTO = process.env.VISAO_CLIENTES_CTO || "";
+
+// Logins OFFLINE (visão 551 "Login - Off": online=N) -> tabela clientes_offline.
+// Retrato COMPLETO a CADA rodada (os offline mudam de hora em hora) — o site
+// cruza com as OS em aberto pra detectar rompimento/queda de energia em massa.
+// "" desliga. id OU nome da visão.
+const VISAO_OFFLINE = process.env.VISAO_OFFLINE || "551";
+// Coluna da visão (pelo alias do IXC) -> campo da tabela. 1ª regra que casa,
+// sem repetir coluna. O log da rodada mostra o que escolheu.
+const COLUNAS_OFFLINE = [
+    ["login", [/_radusuarios_login$/i, /(^|_)login$/i]],
+    ["cliente", [/razao/i, /fantasia/i]],
+    ["bairro", [/(^|_)bairro$/i]],
+    ["olt", [/radpop_radio_descricao$/i, /radpop_radio.*descricao/i, /(^|_)olt(_|$)/i]],
+    ["cto", [/caixa_ftth_descricao$/i, /(^|_)cto(_|$)/i, /caixa/i]],
+    ["interface", [/porta_fibra_interface$/i, /(^|_)interface$/i]],
+    ["sinal_rx", [/sinal_rx$/i, /sinal.*rx/i]],
+    ["causa", [/causa_ultima_queda$/i, /causa/i]],
+    ["status_acesso", [/status_internet$/i, /(^|_)status$/i]],
+    ["ultima_conexao", [/ultima_conexao_final$/i, /ultima_conexao/i]],
+    ["latitude", [/(^|_)latitude$/i]],
+    ["longitude", [/(^|_)longitude$/i]]
+];
 // Coluna da visão -> campo, pelo nome do alias (a 1ª regra que casa, sem
 // repetir coluna). Se errar, o log da rodada mostra o que escolheu.
 // Visão "CTOs de Clientes" (539): radusuarios_ativo, radusuarios_login,
@@ -1004,6 +1027,92 @@ async function sincronizarClientesCto(pagina, moldes, simular, { estado, inicio 
     estado.clientesCtoMolde = assinatura;
 }
 
+function mapearColunasOffline(chaves) {
+    const usadas = new Set(), mapa = {};
+    for (const [campo, regras] of COLUNAS_OFFLINE) {
+        for (const regra of regras) {
+            const chave = chaves.find(c => !usadas.has(c) && regra.test(c));
+            if (chave) { mapa[campo] = chave; usadas.add(chave); break; }
+        }
+    }
+    return mapa;
+}
+
+/** "", "0", "-", "null" => null; senão o texto limpo. */
+function valorOffline(v) {
+    const s = v === null || v === undefined ? "" : String(v).trim();
+    return /^(|-+|null|n\/a)$/i.test(s) ? null : s;
+}
+function numeroOffline(v) {
+    const s = valorOffline(v);
+    if (s === null) return null;
+    const n = Number(s.replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Logins OFFLINE (visão VISAO_OFFLINE "Login - Off": online=N) -> tabela
+ * clientes_offline. Retrato COMPLETO a cada rodada (upsert por login + apaga
+ * quem voltou/saiu). O site cruza com as OS em aberto pra flagar rompimento /
+ * queda de energia em massa (muitos logins da mesma OLT/PON/CTO caindo juntos).
+ */
+async function sincronizarClientesOffline(pagina, moldes, simular, { inicio }) {
+    if (!VISAO_OFFLINE) return;
+    const alvo = VISAO_OFFLINE.trim().toUpperCase();
+    const molde = moldes.find(m => m.viewId === VISAO_OFFLINE || String(m.viewName ?? "").trim().toUpperCase() === alvo);
+    if (!molde) { log(`molde da visão ${VISAO_OFFLINE} (logins offline) não encontrado em templates.json — rode o capturar-dados.js`); return; }
+
+    log(`Logins offline: visão ${molde.viewId} "${molde.viewName}" — retrato completo...`);
+    const linhas = await puxarRecentes(pagina, molde, null);
+    if (linhas.length === 0) { log("  a visão voltou vazia — tabela clientes_offline mantida como estava."); return; }
+
+    const mapa = mapearColunasOffline(Object.keys(linhas[0]));
+    log(`  colunas: ${COLUNAS_OFFLINE.map(([c]) => `${c}=${mapa[c] ?? "(não achei)"}`).join(" | ")}`);
+    if (!mapa.login) { log("  ⚠ não achei a coluna de login na visão — não gravou. Ajuste COLUNAS_OFFLINE."); return; }
+
+    const sincronizadoEm = inicio.toISOString();
+    const porLogin = new Map();
+    for (const r of linhas) {
+        const login = valorOffline(r[mapa.login]);
+        if (!login) continue;
+        porLogin.set(login, {
+            login,
+            cliente: valorOffline(mapa.cliente && r[mapa.cliente]),
+            bairro: valorOffline(mapa.bairro && r[mapa.bairro]),
+            olt: valorOffline(mapa.olt && r[mapa.olt]),
+            cto: valorOffline(mapa.cto && r[mapa.cto]),
+            interface_pon: valorOffline(mapa.interface && r[mapa.interface]),
+            sinal_rx: numeroOffline(mapa.sinal_rx && r[mapa.sinal_rx]),
+            causa: valorOffline(mapa.causa && r[mapa.causa]),
+            status_acesso: valorOffline(mapa.status_acesso && r[mapa.status_acesso]),
+            ultima_conexao: valorOffline(mapa.ultima_conexao && r[mapa.ultima_conexao]),
+            latitude: numeroOffline(mapa.latitude && r[mapa.latitude]),
+            longitude: numeroOffline(mapa.longitude && r[mapa.longitude]),
+            sincronizado_em: sincronizadoEm
+        });
+    }
+    const dados = [...porLogin.values()];
+
+    if (simular) {
+        log(`  (simulação) ${linhas.length} linhas -> ${dados.length} logins offline — não gravou.`);
+        dados.slice(0, 5).forEach(r => log(`    ${JSON.stringify(r)}`));
+        return;
+    }
+
+    let passo = "início";
+    try {
+        passo = `upsert (${dados.length})`;
+        for (const lote of emLotes(dados, TAM_LOTE_SUPA))
+            await supabase("POST", "clientes_offline?on_conflict=login", lote, "resolution=merge-duplicates,return=minimal");
+        passo = "apagar quem voltou/saiu";
+        await supabase("DELETE", `clientes_offline?sincronizado_em=lt.${encodeURIComponent(sincronizadoEm)}`, undefined, "return=minimal");
+    } catch (e) {
+        logErro(`gravar clientes_offline [passo: ${passo}]`, e);
+        throw e;
+    }
+    log(`  clientes_offline atualizada: ${dados.length} logins offline.`);
+}
+
 /** Baixa os módulos do agendador do site e carrega num objeto (IIFEs: this=ctx). */
 async function carregarModulosAgenda() {
     const ctx = {};
@@ -1080,6 +1189,12 @@ async function umaPassada(pagina, moldes, simular) {
         if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
         log("Clientes x CTO falhou: " + e.message);
     }
+    // à parte: logins offline (detecção de rompimento) — falha não derruba a rodada
+    try { await sincronizarClientesOffline(pagina, moldes, simular, { estado, inicio }); }
+    catch (e) {
+        if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
+        log("Logins offline falhou: " + e.message);
+    }
     // só grava o estado com a rodada inteira OK: se o pré-agendamento falhar, a
     // próxima repete a janela das ordens (o repetido é ignorado) e não perde finalizadas
     if (!simular) { estado.ordensDesde = inicio.toISOString(); salvarEstado(estado); }
@@ -1121,10 +1236,12 @@ async function principal() {
             if (ctx) log("Navegador foi fechado — reabrindo...");
             ctx = await chromium.launchPersistentContext(PERFIL, {
                 headless: false, viewport: null,   // usa o tamanho real da janela (maximizada)
+                acceptDownloads: true,
                 args: ["--start-maximized", "--no-first-run", "--no-default-browser-check", "--hide-crash-restore-bubble"]
             });
             ctxFechado = false;
             ctx.on("close", () => { ctxFechado = true; });
+            configurarDownloads(ctx, log);
             // dá um tempo pro navegador restaurar abas antigas (ex.: a raiz "/"), mantém UMA
             // e fecha as extras (não dá pra fechar todas: fecha o navegador junto).
             await new Promise(r => setTimeout(r, 1500));
