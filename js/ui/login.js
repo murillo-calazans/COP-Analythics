@@ -90,6 +90,7 @@ function mostrarAppAutenticado() {
     if (typeof renderizarNotificacoes === "function") {
         const adiar = window.requestIdleCallback || (fn => setTimeout(fn, 3500));
         adiar(() => renderizarNotificacoes());
+        if (typeof renderizarRompimentos === "function") adiar(() => renderizarRompimentos());
     }
 
     // Saudação já aparece; os números do mês entram quando os dados chegarem.
