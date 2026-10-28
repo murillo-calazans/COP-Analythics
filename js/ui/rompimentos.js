@@ -8,8 +8,9 @@
  *   dying-gasp / lost-carrier  -> falta de ENERGIA (⚡)
  *   LOS / LOB / LOF / SF…       -> ROMPIMENTO de fibra / conector (✂)
  *
- * Cruza com as OS em aberto (os_pendentes) pra mostrar quantos do grupo já
- * têm OS e quantos ainda não. O chip no cabeçalho só aparece quando há
+ * Cruza com as OS em aberto (os_pendentes): pra cada cliente caído mostra o
+ * número da OS e se ela está agendada (📅 data), sem agenda, ou sem OS; e o
+ * grupo resume quantos ainda não têm OS. O chip no cabeçalho só aparece quando há
  * cluster; clicar abre o pop-up com os grupos. Visível a todo usuário logado.
  */
 
@@ -62,8 +63,16 @@ html[data-tema="dark"] .romp-pill.comos{ background:#14321f; color:#bbf7d0; }
 .romp-membros{ list-style: none; margin: 8px 0 0; padding: 0; border-top: 1px dashed var(--cor-borda); }
 .romp-membros li{ display: flex; align-items: baseline; gap: 8px; padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--cor-borda); }
 .romp-membros .romp-m-nome{ font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.romp-membros .romp-m-os{ flex: none; display: inline-flex; align-items: baseline; gap: 5px; font-size: 11.5px; white-space: nowrap; }
 .romp-membros .romp-m-tag{ margin-left: auto; flex: none; font-size: 11px; color: var(--cor-texto-suave); }
 .romp-membros .romp-m-semos{ color: #b91c1c; font-weight: 700; }
+.romp-os-id{ font-weight: 700; color: var(--cor-texto); }
+.romp-os-ag{ color: #166534; font-weight: 700; }
+.romp-os-nag{ color: #b45309; font-weight: 600; }
+.romp-os-sem{ color: #b91c1c; font-weight: 700; }
+html[data-tema="dark"] .romp-os-ag{ color: #bbf7d0; }
+html[data-tema="dark"] .romp-os-nag{ color: #fcd34d; }
+html[data-tema="dark"] .romp-os-sem{ color: #fecaca; }
 .romp-resumo{ font-size: 13px; color: var(--cor-texto-suave); margin: 0 0 12px; }
 `;
 
@@ -100,17 +109,44 @@ async function buscarClientesOffline() {
     return linhas;
 }
 
-/** Logins que já têm OS no backlog (os_pendentes). */
-async function rompLoginsComOs() {
-    const set = new Set();
+/**
+ * Logins que já têm OS em aberto (os_pendentes) -> dados da OS: número e se
+ * está agendada. A os_pendentes tem uma linha por evento (a OS se repete), então
+ * agrego por OS: pego o AGENDAMENTO e o último STATUS. "Agendada" segue a mesma
+ * regra do backlog (js/ui/agendabacklog.js): tem data de agendamento E não foi
+ * assumida (quem assumiu está indo, não é mais "agendada"). Se o mesmo login tem
+ * mais de uma OS, fica com a mais recente (desempate: a agendada).
+ */
+async function rompOsPorLogin() {
+    const mapa = new Map();   // loginNorm -> { id, agendada, agendamento }
     try {
         const linhas = typeof buscarOsPendentesCacheado === "function" ? await buscarOsPendentesCacheado() : [];
+        const porOs = new Map();   // id -> { login, agDate, assumida, ultimaData }
         for (const l of linhas) {
-            const login = (l.dados && l.dados.LOGIN) || "";
-            if (login) set.add(ixcNorm(login));
+            const d = l.dados || {};
+            const id = String(d["ID OS"] || "").trim();
+            if (!id) continue;
+            const login = ixcNorm(d.LOGIN || "");
+            let o = porOs.get(id);
+            if (!o) { o = { id, login, agDate: null, assumida: false, ultimaData: null }; porOs.set(id, o); }
+            if (login && !o.login) o.login = login;
+            const ag = ixcDataBR(d.AGENDAMENTO); if (ag) o.agDate = ag;
+            const dt = ixcDataBR(d.DATA);
+            if (dt && (!o.ultimaData || dt >= o.ultimaData)) { o.ultimaData = dt; o.assumida = ixcNorm(d.STATUS) === "assumida"; }
+        }
+        for (const o of porOs.values()) {
+            if (!o.login) continue;
+            const agendada = !o.assumida && !!o.agDate;
+            const info = { id: o.id, agendada, agendamento: o.assumida ? null : o.agDate, quando: o.ultimaData };
+            const atual = mapa.get(o.login);
+            // fica com a OS mais recente; na dúvida, prioriza a agendada
+            if (!atual || (info.agendada && !atual.agendada) ||
+                (info.agendada === atual.agendada && info.quando && (!atual.quando || info.quando > atual.quando))) {
+                mapa.set(o.login, info);
+            }
         }
     } catch (e) { /* sem cruzamento se os_pendentes falhar */ }
-    return set;
+    return mapa;
 }
 
 /** Nome do cliente por login (clientes_cto), só pros logins dos clusters. */
@@ -133,7 +169,7 @@ async function calcularRompimentos() {
     const linhas = await buscarClientesOffline();
     if (!linhas.length) return { clusters: [], total: 0, totalOffline: 0 };
 
-    const comOs = await rompLoginsComOs();
+    const osPorLogin = await rompOsPorLogin();
     const janelaMs = ROMP_JANELA_MIN * 60000;
     const limiteRecente = Date.now() - ROMP_RECENCIA_H * 3600000;
 
@@ -153,10 +189,11 @@ async function calcularRompimentos() {
         const chave = `${olt}¦${pon}¦${bucket}`;
         let g = grupos.get(chave);
         if (!g) { g = { olt, pon, membros: [] }; grupos.set(chave, g); }
+        const os = osPorLogin.get(ixcNorm(r.login)) || null;
         g.membros.push({
             login: r.login, cliente: r.cliente, cto: r.cto,
             causa: r.causa, cat: rompCategoriaCausa(r.causa),
-            quando: t, temOs: comOs.has(ixcNorm(r.login))
+            quando: t, os, temOs: !!os
         });
     }
 
@@ -164,10 +201,11 @@ async function calcularRompimentos() {
     for (const g of grupos.values()) {
         if (g.membros.length < ROMP_LIMIAR) continue;
         const cats = {};
-        let semOs = 0, minT = Infinity, maxT = -Infinity;
+        let semOs = 0, agendadas = 0, minT = Infinity, maxT = -Infinity;
         for (const m of g.membros) {
             cats[m.cat] = (cats[m.cat] || 0) + 1;
             if (!m.temOs) semOs++;
+            else if (m.os && m.os.agendada) agendadas++;
             minT = Math.min(minT, m.quando.getTime());
             maxT = Math.max(maxT, m.quando.getTime());
         }
@@ -178,10 +216,12 @@ async function calcularRompimentos() {
         let cat;
         if ((cats.rompimento || 0) && (cats.energia || 0) && Math.min(cats.rompimento, cats.energia) >= rel * 0.25) cat = "misto";
         else cat = (cats.rompimento || 0) >= (cats.energia || 0) ? "rompimento" : "energia";
-        g.membros.sort((a, b) => (a.temOs - b.temOs) || (a.quando - b.quando));
+        // urgência do membro: sem OS (0) < OS sem agenda (1) < OS agendada (2)
+        const rank = m => !m.temOs ? 0 : (m.os && m.os.agendada ? 2 : 1);
+        g.membros.sort((a, b) => (rank(a) - rank(b)) || (a.quando - b.quando));
         clusters.push({
             olt: g.olt, pon: g.pon, cat,
-            total: g.membros.length, semOs, comOs: g.membros.length - semOs,
+            total: g.membros.length, semOs, agendadas, comOs: g.membros.length - semOs,
             inicio: new Date(minT), fim: new Date(maxT), membros: g.membros
         });
     }
@@ -227,14 +267,26 @@ function rompJanelaTexto(c) {
     return ini === fim ? `${dia} ${ini}` : `${dia} ${ini}–${fim}`;
 }
 
+/** Selo da OS do cliente: nº da OS + se está agendada (📅 data) ou sem OS. */
+function rompOsBadge(m) {
+    if (!m.os) return '<span class="romp-os-sem">sem OS</span>';
+    const dt = m.os.agendamento;
+    const sel = m.os.agendada && dt
+        ? `<span class="romp-os-ag">📅 ${dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>`
+        : '<span class="romp-os-nag">sem agenda</span>';
+    return `<span class="romp-os-id">OS ${escaparHtml(m.os.id)}</span> ${sel}`;
+}
+
 function rompCardHtml(c, i) {
     const rot = ROMP_ROTULO_CAT[c.cat] || ROMP_ROTULO_CAT.outro;
     const alvo = c.pon ? `${escaparHtml(c.olt)} · PON ${escaparHtml(c.pon)}` : escaparHtml(c.olt);
     const membros = c.membros.slice(0, ROMP_TETO_MEMBROS).map(m => `
         <li>
           <span class="romp-m-nome">${escaparHtml(m.cliente || m.login || "—")}</span>
-          <span class="romp-m-tag">${m.temOs ? "" : '<span class="romp-m-semos">sem OS</span> · '}${escaparHtml(m.login || "")}${m.cto ? " · " + escaparHtml(m.cto) : ""} · ${rompHora(m.quando)}</span>
+          <span class="romp-m-os">${rompOsBadge(m)}</span>
+          <span class="romp-m-tag">${escaparHtml(m.login || "")}${m.cto ? " · " + escaparHtml(m.cto) : ""} · ${rompHora(m.quando)}</span>
         </li>`).join("");
+    const resumoVer = [c.semOs ? `${c.semOs} sem OS` : "", c.agendadas ? `${c.agendadas} agendada(s)` : ""].filter(Boolean).join(" · ");
     return `
       <div class="romp-card">
         <div class="romp-card-topo">
@@ -248,7 +300,7 @@ function rompCardHtml(c, i) {
             ${c.semOs ? `<span class="romp-pill semos">${c.semOs} sem OS</span>` : `<span class="romp-pill comos">todas com OS</span>`}
           </div>
         </div>
-        <button type="button" class="romp-ver" data-romp-ver="${i}">ver os ${c.total} clientes ${c.semOs ? `(${c.semOs} ainda sem OS)` : ""} ▾</button>
+        <button type="button" class="romp-ver" data-romp-ver="${i}">ver os ${c.total} clientes ${resumoVer ? `(${resumoVer})` : ""} ▾</button>
         <ul class="romp-membros" id="rompMembros${i}" hidden>${membros}${c.total > ROMP_TETO_MEMBROS ? `<li><span class="romp-m-tag">… e mais ${c.total - ROMP_TETO_MEMBROS}</span></li>` : ""}</ul>
       </div>`;
 }
