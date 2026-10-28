@@ -59,6 +59,10 @@
   // Faturar débitos contratuais (faturamento) e Tratativa de IP fixo (CGR) também não contam pra agendamento.
   const NAO_CAMPO = /auditoria|exclusao de acesso|instalacao nao concluida|mudanca de tecnologia nao concluida|nova tentativa de instalacao|configurar conexao|configuracao telefonia|verificar troca de plano|chip|orcamento|remocao telefonia|area de manutencao|expansao de rede|rearranjo|cto sem potencia|ajuste de potencia|melhoria de rede|cto sem vaga|verificar viabilidade|pos terceirizada|esim|licitacao|inviabilidade|construcao de rede|reagendamento suporte|cliente indisponivel|faturar debitos|ip fixo/;
 
+  // OS "de rua" (reparo/instalação em campo) x trabalho de escritório/COP
+  // (auditoria, chip, configuração, expansão…). Fonte única da regra NAO_CAMPO.
+  const assuntoEhDeCampo = assunto => !NAO_CAMPO.test(norm(assunto));
+
   const RE_VISITANTE = /Usu[aá]rio\s+(.+?)\s*,\s*(?:iniciou o deslocamento|executou)/i;
 
   // O nome do IXC ("LUCIO DO NASCIMENTO - VELOZ") contém as palavras do nome da escala ("Lucio (Veloz)")?
@@ -942,7 +946,7 @@
     e.stops = ordem;
   }
 
-  const api = { nomeBate, norm, parseDataBR, lerMapaRegioes, indiceMapa, localizarNoMapa, montarOS, aplicarHistorico, planejar, lerPreferencia, tipoServico, distKm, hhmm, PADRAO_PARAMS };
+  const api = { nomeBate, norm, parseDataBR, assuntoEhDeCampo, lerMapaRegioes, indiceMapa, localizarNoMapa, montarOS, aplicarHistorico, planejar, lerPreferencia, tipoServico, distKm, hhmm, PADRAO_PARAMS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.Motor = api;
 })(this);

@@ -117,6 +117,18 @@ async function buscarClientesOffline() {
  * assumida (quem assumiu está indo, não é mais "agendada"). Se o mesmo login tem
  * mais de uma OS, fica com a mais recente (desempate: a agendada).
  */
+/**
+ * A OS é "de rua" (reparo/instalação em campo) ou trabalho de escritório/COP
+ * (auditoria, chip, configuração…)? Rompimento só se importa com OS de campo —
+ * uma auditoria aberta no cliente não é a OS que vai resolver a queda. Fonte da
+ * regra: Motor.assuntoEhDeCampo (js/agendador/motor.js); fallback pelo COP.
+ */
+function rompOsEhDeCampo(assunto) {
+    if (typeof Motor !== "undefined" && typeof Motor.assuntoEhDeCampo === "function") return Motor.assuntoEhDeCampo(assunto);
+    if (typeof assuntoEhDoCop === "function") return !assuntoEhDoCop(assunto);
+    return true;   // sem como classificar: não filtra
+}
+
 async function rompOsPorLogin() {
     const mapa = new Map();   // loginNorm -> { id, agendada, agendamento }
     try {
@@ -126,6 +138,7 @@ async function rompOsPorLogin() {
             const d = l.dados || {};
             const id = String(d["ID OS"] || "").trim();
             if (!id) continue;
+            if (!rompOsEhDeCampo(d.ASSUNTO)) continue;   // auditoria/COP não é ordem de rua
             const login = ixcNorm(d.LOGIN || "");
             let o = porOs.get(id);
             if (!o) { o = { id, login, agDate: null, assumida: false, ultimaData: null }; porOs.set(id, o); }
