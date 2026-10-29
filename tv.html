@@ -33,6 +33,11 @@
   .tv-login-card input{ width:100%; padding:11px 13px; margin:0 0 14px; border-radius:10px;
     border:1px solid var(--borda); background:var(--bg2); color:var(--txt); font-size:15px; }
   .tv-login-card input:focus{ outline:none; border-color:var(--azul); }
+  .tv-senha-wrap{ position:relative; }
+  .tv-senha-wrap input{ padding-right:46px; }
+  #tvVerSenha{ position:absolute; top:6px; right:6px; width:auto; margin:0; padding:6px 9px;
+    background:transparent; color:var(--txt2); font-size:17px; border:none; cursor:pointer; }
+  #tvVerSenha:hover{ color:var(--txt); }
   .tv-login-card button{ width:100%; padding:12px; border:none; border-radius:10px; cursor:pointer;
     background:var(--azul); color:#06122a; font-weight:800; font-size:15px; }
   #tvLoginErro{ color:var(--vermelho); font-size:13px; margin:0 0 12px; }
@@ -119,7 +124,10 @@
       <label for="tvEmail">E-mail</label>
       <input type="email" id="tvEmail" autocomplete="username" required>
       <label for="tvSenha">Senha</label>
-      <input type="password" id="tvSenha" autocomplete="current-password" required>
+      <div class="tv-senha-wrap">
+        <input type="password" id="tvSenha" autocomplete="current-password" required>
+        <button type="button" id="tvVerSenha" aria-label="Mostrar senha" title="Mostrar/ocultar senha">👁</button>
+      </div>
       <button type="submit">Entrar</button>
     </form>
   </div>
@@ -152,7 +160,7 @@
   <script src="js/config/supabase.js"></script>
   <script src="js/agendador/motor.js?v=36"></script>
   <script src="js/engine/prioridadeengine.js?v=1"></script>
-  <script src="js/ui/tv.js?v=1"></script>
+  <script src="js/ui/tv.js?v=2"></script>
   <script src="js/ui/rompimentos.js?v=1"></script>
 </body>
 </html>

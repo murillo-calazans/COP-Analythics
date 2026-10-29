@@ -394,7 +394,13 @@ const TV = (() => {
         const form = $("tvLoginForm");
         form.addEventListener("submit", e => {
             e.preventDefault();
-            entrar($("tvEmail").value.trim(), $("tvSenha").value);
+            entrar($("tvEmail").value.trim().toLowerCase(), $("tvSenha").value);
+        });
+        // Olhinho: mostra/oculta a senha (pega autofill/Caps Lock errado).
+        $("tvVerSenha")?.addEventListener("click", () => {
+            const inp = $("tvSenha");
+            inp.type = inp.type === "password" ? "text" : "password";
+            inp.focus();
         });
     }
 
