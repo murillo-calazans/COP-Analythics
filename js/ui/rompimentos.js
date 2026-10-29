@@ -223,11 +223,18 @@ async function calcularRompimentos() {
             maxT = Math.max(maxT, m.quando.getTime());
         }
         const rel = (cats.energia || 0) + (cats.rompimento || 0);
-        // Só é "possível rompimento" se a causa de verdade (energia/rompimento)
-        // for MAIORIA — co-queda de causa vazia/desconhecida não entra (vira ruído).
-        if (rel <= g.membros.length / 2) continue;
+        const spreadMin = (maxT - minT) / 60000;
+        // Queda em massa de verdade: ou já tem causa real suficiente (energia/rompimento),
+        // OU os logins caíram praticamente juntos (mesma janela apertada). Numa queda real
+        // muitas ONUs somem SEM reportar causa (causa vazia) — então NÃO dá pra exigir que a
+        // MAIORIA tenha causa: isso perdia rompimento (ex. real: 18 logins caídos no mesmo
+        // segundo numa PON, só 4 com causa). O recorte por OLT+PON + recência de 24h já segura
+        // o ruído crônico; a simultaneidade confirma o resto.
+        const simultaneo = spreadMin <= 8 && g.membros.length >= ROMP_LIMIAR;
+        if (rel < 2 && !simultaneo) continue;
         let cat;
-        if ((cats.rompimento || 0) && (cats.energia || 0) && Math.min(cats.rompimento, cats.energia) >= rel * 0.25) cat = "misto";
+        if (!rel) cat = "outro";   // caíram juntos, mas nenhuma ONU reportou a causa
+        else if ((cats.rompimento || 0) && (cats.energia || 0) && Math.min(cats.rompimento, cats.energia) >= rel * 0.25) cat = "misto";
         else cat = (cats.rompimento || 0) >= (cats.energia || 0) ? "rompimento" : "energia";
         // urgência do membro: sem OS (0) < OS sem agenda (1) < OS agendada (2)
         const rank = m => !m.temOs ? 0 : (m.os && m.os.agendada ? 2 : 1);
