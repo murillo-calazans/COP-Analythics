@@ -531,6 +531,25 @@ const TV = (() => {
         rotTimer = setInterval(() => { if (!pausado) irPara(slideIx + 1); }, ROTACAO_MS);
     }
 
+    // Zoom da TV (cada navegador lembra o seu; pode vir no link ?zoom=1.2).
+    const ZOOM_CHAVE = "cop_tv_zoom";
+    let zoom = 1;
+    function carregarZoom() {
+        const p = new URLSearchParams(location.search).get("zoom");
+        let z = p ? parseFloat(p) : NaN;
+        if (!(z > 0)) { try { z = parseFloat(localStorage.getItem(ZOOM_CHAVE)); } catch (e) { } }
+        return (z > 0) ? Math.min(2, Math.max(0.6, z)) : 1;
+    }
+    function aplicarZoom() {
+        const p = $("tvPainel"); if (p) p.style.zoom = zoom;
+        const v = $("tvZoomVal"); if (v) v.textContent = Math.round(zoom * 100) + "%";
+        try { localStorage.setItem(ZOOM_CHAVE, String(zoom)); } catch (e) { }
+    }
+    function mudarZoom(delta) {
+        zoom = Math.min(2, Math.max(0.6, Math.round((zoom + delta) * 10) / 10));
+        aplicarZoom();
+    }
+
     /** Liga/desliga o giro automático das telas (botão do rodapé e barra de espaço). */
     function alternarGiro() {
         pausado = !pausado;
@@ -645,18 +664,24 @@ const TV = (() => {
 
         montarDots();
         atualizarBotaoGiro();
+        zoom = carregarZoom();
+        aplicarZoom();
         pintar();                 // mostra "Carregando…" até o 1º tick
         reiniciarRotacao();       // começa a girar as telas (respeita `pausado`)
         tick();
         timer = setInterval(tick, CICLO_MS);
 
         $("tvGira")?.addEventListener("click", alternarGiro);
+        $("tvZoomMais")?.addEventListener("click", () => mudarZoom(0.1));
+        $("tvZoomMenos")?.addEventListener("click", () => mudarZoom(-0.1));
 
-        // Controles de teclado: ← → troca de tela; espaço gira/para.
+        // Controles de teclado: ← → troca de tela; espaço gira/para; + / − zoom.
         document.addEventListener("keydown", e => {
             if (e.key === "ArrowRight") irPara(slideIx + 1);
             else if (e.key === "ArrowLeft") irPara(slideIx - 1);
             else if (e.key === " ") { e.preventDefault(); alternarGiro(); }
+            else if (e.key === "+" || e.key === "=") mudarZoom(0.1);
+            else if (e.key === "-" || e.key === "_") mudarZoom(-0.1);
         });
     }
 

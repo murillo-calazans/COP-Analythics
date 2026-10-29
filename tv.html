@@ -172,6 +172,9 @@
   .tv-rodape button:not(.tv-dot){ background:none; border:1px solid var(--borda); color:var(--txt2); border-radius:8px; padding:5px 11px; font-size:13px; cursor:pointer; }
   .tv-rodape button:not(.tv-dot):hover{ color:var(--txt); border-color:var(--txt3); }
   #tvGira.parado{ color:var(--amarelo); border-color:var(--amarelo); font-weight:700; }
+  .tv-zoom{ display:flex; align-items:center; gap:6px; }
+  .tv-zoom button{ font-weight:800; min-width:34px; }
+  #tvZoomVal{ font-size:12px; min-width:40px; text-align:center; font-variant-numeric:tabular-nums; }
   .tv-rodape .dir{ margin-left:auto; display:flex; gap:8px; }
 
   @media (max-width:1100px){
@@ -223,6 +226,11 @@
       <span id="tvAtualizado">conectando…</span>
       <span id="tvDots" class="tv-dots"></span>
       <span class="dir">
+        <span class="tv-zoom">
+          <button type="button" id="tvZoomMenos" title="Diminuir (tecla −)">A−</button>
+          <span id="tvZoomVal">100%</span>
+          <button type="button" id="tvZoomMais" title="Aumentar (tecla +)">A+</button>
+        </span>
         <button type="button" id="tvGira">⏸ Parar nesta tela</button>
         <button type="button" id="tvFull">⛶ Tela cheia</button>
         <button type="button" id="tvSair">Sair</button>
@@ -234,7 +242,7 @@
   <script src="js/config/supabase.js"></script>
   <script src="js/agendador/motor.js?v=36"></script>
   <script src="js/engine/prioridadeengine.js?v=1"></script>
-  <script src="js/ui/tv.js?v=6"></script>
+  <script src="js/ui/tv.js?v=7"></script>
   <script src="js/ui/rompimentos.js?v=1"></script>
 </body>
 </html>
