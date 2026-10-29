@@ -57,62 +57,83 @@
     border-radius:10px; font-size:13px; margin-bottom:10px; }
 
   /* ---------- KPIs ---------- */
-  .tv-kpis{ display:grid; grid-template-columns:repeat(7,1fr); gap:12px; margin-bottom:14px; }
-  .tv-kpi{ background:var(--card); border:1px solid var(--borda); border-radius:14px; padding:14px 16px; }
+  .tv-slide-titulo{ flex:1; text-align:center; font-size:18px; font-weight:800; color:var(--txt2); letter-spacing:.02em; }
+
+  /* ---------- palco (telas girando) ---------- */
+  .tv-palco{ flex:1; min-height:0; display:flex; }
+  .tv-palco > *{ flex:1; min-height:0; animation:tvFade .45s ease; }
+  @keyframes tvFade{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+
+  /* tela Panorama (KPIs grandes) */
+  .tv-kpis{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:1fr; gap:16px; }
+  .tv-kpi{ background:var(--card); border:1px solid var(--borda); border-radius:18px;
+    padding:22px 26px; display:flex; flex-direction:column; justify-content:center; }
   .tv-kpi.perigo{ border-color:#7f2d35; background:linear-gradient(180deg,#2a1420,#13203a); }
-  .tv-kpi-n{ font-size:40px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .tv-kpi-n{ font-size:64px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
   .tv-kpi.perigo .tv-kpi-n{ color:var(--vermelho); }
-  .tv-kpi-rot{ font-size:13.5px; font-weight:700; margin-top:7px; }
-  .tv-kpi-sub{ font-size:11.5px; color:var(--txt2); margin-top:2px; }
+  .tv-kpi-rot{ font-size:20px; font-weight:700; margin-top:10px; }
+  .tv-kpi-sub{ font-size:14px; color:var(--txt2); margin-top:3px; }
 
-  /* ---------- grade de painéis ---------- */
-  .tv-grid{ flex:1; display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:1fr; gap:14px; min-height:0; }
-  .tv-painel{ background:var(--card); border:1px solid var(--borda); border-radius:16px;
-    padding:14px 16px; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
-  .tv-painel h2{ font-size:15px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
-  .tv-painel-extra{ margin-left:auto; font-size:12px; font-weight:700; color:var(--txt3);
-    background:var(--bg2); padding:2px 9px; border-radius:999px; }
-  .tv-painel-corpo{ flex:1; min-height:0; overflow:hidden; }
+  /* telas de lista (1 ou 2 colunas) */
+  .tv-um{ background:var(--card); border:1px solid var(--borda); border-radius:18px; padding:12px 26px; overflow:hidden; }
+  .tv-duas{ display:grid; grid-template-columns:1fr 1fr; gap:16px; min-height:0; }
+  .tv-col{ background:var(--card); border:1px solid var(--borda); border-radius:18px; padding:12px 22px; overflow:hidden; }
 
-  .tv-item{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--borda); }
+  .tv-item{ display:flex; align-items:center; gap:14px; padding:11px 0; border-bottom:1px solid var(--borda); }
   .tv-item:last-child{ border-bottom:none; }
-  .tv-item-ico{ font-size:19px; flex:none; }
+  .tv-item-ico{ font-size:26px; flex:none; }
   .tv-item-txt{ min-width:0; flex:1; }
-  .tv-item-tit{ font-size:14.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tv-item-sub{ font-size:12px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tv-mini{ font-size:11px; font-weight:800; }
-  .tv-pill{ flex:none; font-size:12px; font-weight:800; padding:3px 11px; border-radius:999px;
-    color:var(--c,#cdd9ef); background:color-mix(in srgb, var(--c,#60a5fa) 18%, transparent);
-    border:1px solid color-mix(in srgb, var(--c,#60a5fa) 40%, transparent); }
-  .tv-sub-rot{ font-size:11.5px; font-weight:800; color:var(--txt3); text-transform:uppercase;
-    letter-spacing:.06em; margin:8px 0 2px; }
+  .tv-item-tit{ font-size:21px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tv-item-sub{ font-size:15px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tv-mini{ font-size:14px; font-weight:800; }
+  .tv-pill{ flex:none; font-size:15px; font-weight:800; padding:5px 14px; border-radius:999px;
+    color:var(--c,#cdd9ef); background:color-mix(in srgb, var(--c,#60a5fa) 20%, transparent);
+    border:1px solid color-mix(in srgb, var(--c,#60a5fa) 42%, transparent); }
+  .tv-pill.off{ --c:#9fb0ca; }
+  .tv-sub-rot{ font-size:15px; font-weight:800; color:var(--txt3); text-transform:uppercase; letter-spacing:.06em; margin:10px 0 4px; }
   .tv-sub-rot:first-child{ margin-top:0; }
-  .tv-vazio{ color:var(--txt3); font-size:13.5px; text-align:center; padding:18px 6px; }
+  .tv-sub-rot b{ color:var(--txt); }
+  .tv-vazio{ color:var(--txt3); font-size:20px; text-align:center; padding:40px 6px; line-height:1.5; }
+  .tv-vazio small{ font-size:15px; }
+
+  /* tela Rompimentos: cards com os logins caídos */
+  .tv-rm-grade{ display:grid; grid-template-columns:1fr 1fr; gap:16px; min-height:0; }
+  .tv-rm-card{ background:var(--card); border:1px solid var(--borda); border-radius:18px; padding:12px 20px; overflow:hidden; }
+  .tv-rm-topo{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+  .tv-rm-alvo{ font-size:19px; font-weight:800; }
+  .tv-rm-hora{ margin-left:auto; color:var(--txt3); font-size:14px; }
+  .tv-rm-lista{ list-style:none; margin:0; padding:0; }
+  .tv-rm-lista li{ display:flex; align-items:baseline; gap:12px; padding:6px 0; border-bottom:1px solid var(--borda); font-size:16px; }
+  .tv-rm-lista li:last-child{ border-bottom:none; }
+  .tv-rm-cli{ font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+  .tv-rm-log{ color:var(--txt2); font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; flex:none; }
+  .tv-os-sem{ color:var(--vermelho); font-weight:800; flex:none; }
+  .tv-os-nag{ color:var(--amarelo); font-weight:700; flex:none; }
+  .tv-os-ag{ color:var(--verde); font-weight:700; flex:none; }
+  .tv-rm-mais{ color:var(--txt3); justify-content:center; }
 
   /* barras (por assunto / cidade) */
-  .tv-barras{ display:flex; flex-direction:column; gap:9px; }
-  .tv-barra{ display:grid; grid-template-columns:40% 1fr auto; align-items:center; gap:10px; }
-  .tv-barra-rot{ font-size:13px; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tv-barra-trilho{ height:12px; background:var(--bg2); border-radius:999px; overflow:hidden; }
-  .tv-barra-trilho i{ display:block; height:100%; border-radius:999px;
-    background:linear-gradient(90deg,#2563eb,#60a5fa); }
-  .tv-barra-n{ font-size:13.5px; font-weight:800; font-variant-numeric:tabular-nums; min-width:2ch; text-align:right; }
+  .tv-barras{ display:flex; flex-direction:column; gap:14px; }
+  .tv-barra{ display:grid; grid-template-columns:34% 1fr auto; align-items:center; gap:16px; }
+  .tv-barra-rot{ font-size:19px; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tv-barra-trilho{ height:20px; background:var(--bg2); border-radius:999px; overflow:hidden; }
+  .tv-barra-trilho i{ display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#2563eb,#60a5fa); }
+  .tv-barra-n{ font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; min-width:3ch; text-align:right; }
 
-  /* ---------- rodapé ---------- */
-  .tv-rodape{ display:flex; align-items:center; gap:14px; padding:9px 2px 2px; color:var(--txt3); font-size:12px; }
+  /* ---------- rodapé + dots ---------- */
+  .tv-rodape{ display:flex; align-items:center; gap:14px; padding:10px 2px 2px; color:var(--txt3); font-size:13px; }
   .tv-ponto{ width:9px; height:9px; border-radius:999px; background:var(--verde); box-shadow:0 0 0 4px rgba(52,211,153,.18); }
-  .tv-rodape button{ background:none; border:1px solid var(--borda); color:var(--txt2); border-radius:8px;
-    padding:4px 10px; font-size:12px; cursor:pointer; }
-  .tv-rodape button:hover{ color:var(--txt); border-color:var(--txt3); }
+  .tv-dots{ display:flex; gap:7px; }
+  .tv-dot{ width:9px; height:9px; border-radius:999px; border:none; background:var(--borda); cursor:pointer; padding:0; transition:width .2s; }
+  .tv-dot.ativo{ background:var(--azul); width:22px; }
+  .tv-pausa{ color:var(--amarelo); font-weight:700; }
+  .tv-rodape button:not(.tv-dot){ background:none; border:1px solid var(--borda); color:var(--txt2); border-radius:8px; padding:5px 11px; font-size:13px; cursor:pointer; }
+  .tv-rodape button:not(.tv-dot):hover{ color:var(--txt); border-color:var(--txt3); }
   .tv-rodape .dir{ margin-left:auto; display:flex; gap:8px; }
 
   @media (max-width:1100px){
-    .tv-kpis{ grid-template-columns:repeat(4,1fr); }
-    .tv-grid{ grid-template-columns:repeat(2,1fr); }
-  }
-  @media (max-width:680px){
     .tv-kpis{ grid-template-columns:repeat(2,1fr); }
-    .tv-grid{ grid-template-columns:1fr; }
+    .tv-duas,.tv-rm-grade{ grid-template-columns:1fr; }
   }
 </style>
 </head>
@@ -139,6 +160,7 @@
   <div id="tvPainel" hidden>
     <div class="tv-topo">
       <div class="tv-marca">COP <small>Operação ao vivo</small></div>
+      <div id="tvSlideTitulo" class="tv-slide-titulo">—</div>
       <div class="tv-topo-dir">
         <div id="tvRelogio">--:--</div>
         <div id="tvData">—</div>
@@ -146,12 +168,13 @@
     </div>
 
     <div id="tvErro" hidden></div>
-    <div class="tv-kpis" id="tvKpis"></div>
-    <div class="tv-grid" id="tvGrid"></div>
+    <div id="tvPalco" class="tv-palco"></div>
 
     <div class="tv-rodape">
       <span class="tv-ponto"></span>
       <span id="tvAtualizado">conectando…</span>
+      <span id="tvDots" class="tv-dots"></span>
+      <span id="tvPausa" class="tv-pausa" hidden>⏸ pausado</span>
       <span class="dir">
         <button type="button" id="tvFull">⛶ Tela cheia</button>
         <button type="button" id="tvSair">Sair</button>
@@ -163,7 +186,7 @@
   <script src="js/config/supabase.js"></script>
   <script src="js/agendador/motor.js?v=36"></script>
   <script src="js/engine/prioridadeengine.js?v=1"></script>
-  <script src="js/ui/tv.js?v=2"></script>
+  <script src="js/ui/tv.js?v=3"></script>
   <script src="js/ui/rompimentos.js?v=1"></script>
 </body>
 </html>

@@ -82,12 +82,12 @@ function invalidarCacheOsPendentes() { _osCache = null; }
 
 // -------- app da TV --------
 const TV = (() => {
-    const CICLO_MS = 90 * 1000;        // recalcula a cada 90s
-    const TETO_LISTA = 7;              // itens mostrados por painel
+    const CICLO_MS = 90 * 1000;        // recalcula os dados a cada 90s
+    const ROTACAO_MS = 15 * 1000;      // troca de tela (slide) a cada 15s
     const TETO_BARRAS = 9;             // barras por gráfico (assunto/cidade)
 
     let capturadoOs = null;            // último capturado_em visto (os_pendentes)
-    let timer = null, relogioTimer = null;
+    let timer = null, relogioTimer = null, rotTimer = null;
 
     const $ = id => document.getElementById(id);
     const fmt = n => Number(n || 0).toLocaleString("pt-BR");
@@ -100,6 +100,12 @@ const TV = (() => {
     }
     const ehCampo = assunto => (typeof Motor !== "undefined" && Motor.assuntoEhDeCampo)
         ? Motor.assuntoEhDeCampo(assunto) : true;
+
+    // Tipos de ordem que o COP NÃO quer ver na TV (trabalho de escritório/logística,
+    // não é reparo/instalação de rua): auditoria, exclusão de acesso, pós-terceirizada,
+    // retirada, recolhimento. Casado no assunto normalizado (sem acento, minúsculo).
+    const TV_EXCLUIR = /auditoria|exclusao de acesso|pos.?terceiriz|retirada|recolhimento/;
+    const tvOsAparece = assunto => !TV_EXCLUIR.test(ixcNorm(assunto));
 
     // --- 1 passada na os_pendentes -> OS agregadas por id ---
     function agregarOs(linhas) {
@@ -138,9 +144,9 @@ const TV = (() => {
     }
 
     // --- equipes em campo agora (deslocamento / execução) ---
-    function equipesEmCampo(os) {
+    function equipesEmCampo(lista) {
         const desloc = new Map(), exec = new Map();   // técnico -> [OS]
-        for (const o of os.values()) {
+        for (const o of lista) {
             const st = ixcNorm(o.statusUlt);
             const isDesloc = st === "deslocamento";
             const isExec = st.includes("execu");
@@ -152,18 +158,18 @@ const TV = (() => {
             if (!alvo.has(tec)) alvo.set(tec, []);
             alvo.get(tec).push(o);
         }
-        const lista = mp => [...mp.entries()]
+        const resumo = mp => [...mp.entries()]
             .map(([nome, oss]) => ({ nome, n: oss.length }))
             .sort((a, b) => b.n - a.n);
         const somaOs = mp => [...mp.values()].reduce((s, a) => s + a.length, 0);
-        return { desloc: lista(desloc), exec: lista(exec), osDesloc: somaOs(desloc), osExec: somaOs(exec) };
+        return { desloc: resumo(desloc), exec: resumo(exec), osDesloc: somaOs(desloc), osExec: somaOs(exec) };
     }
 
     // --- pedidos de prioridade (urgência no texto), por situação ---
-    function prioridades(os) {
+    function prioridades(lista) {
         const itens = [];
         if (typeof PrioridadeEngine === "undefined") return { itens, semAgenda: 0, insistentes: 0 };
-        for (const o of os.values()) {
+        for (const o of lista) {
             if (ixcNorm(o.statusUlt) === "finalizada") continue;
             const pedidos = PrioridadeEngine.pedidosDaOS(o.eventos);
             if (!pedidos.length) continue;
@@ -189,10 +195,9 @@ const TV = (() => {
     }
 
     // --- contagens por chave (assunto/cidade) ---
-    function contarPor(os, chaveFn) {
+    function contarPor(lista, chaveFn) {
         const m = new Map();
-        for (const o of os.values()) {
-            if (ixcNorm(o.statusUlt) === "finalizada") continue;
+        for (const o of lista) {
             const k = chaveFn(o) || "—";
             m.set(k, (m.get(k) || 0) + 1);
         }
@@ -222,8 +227,8 @@ const TV = (() => {
 
     function listaVazia(txt) { return `<p class="tv-vazio">${escaparHtml(txt)}</p>`; }
 
-    function barras(dados) {
-        const top = dados.slice(0, TETO_BARRAS);
+    function barras(dados, cap = TETO_BARRAS) {
+        const top = dados.slice(0, cap);
         if (!top.length) return listaVazia("Nenhuma OS em aberto.");
         const max = Math.max(1, ...top.map(d => d.n));
         return `<div class="tv-barras">${top.map(d => `
@@ -234,84 +239,140 @@ const TV = (() => {
             </div>`).join("")}</div>`;
     }
 
-    function render(m) {
-        const r = m.romp;                       // { clusters, total, totalOffline, temRompimento }
-        const eq = m.equipes;
-        const pr = m.prio;
+    // ===== telas (slides) em tela cheia, girando sozinhas =====
+    const ROMP_ICO = { energia: "⚡", rompimento: "✂️", misto: "⚠️", reset: "↻", outro: "⚠️" };
 
-        // ---- faixa de KPIs ----
-        $("tvKpis").innerHTML = [
-            tile(fmt(r.totalOffline), "Clientes fora", "logins ativos offline", r.totalOffline > 0),
-            tile(fmt(r.total), "Possíveis rompimentos", r.temRompimento ? "⚠ rompimento de fibra" : "grupos caídos juntos", r.temRompimento),
-            tile(fmt(eq.desloc.length), "Em deslocamento", `${fmt(eq.osDesloc)} OS · equipes`, false),
-            tile(fmt(eq.exec.length), "Em execução", `${fmt(eq.osExec)} OS · equipes`, false),
-            tile(fmt(m.reagendadas.length), "Reagendadas hoje", "técnicos remarcaram", false),
-            tile(fmt(m.comerciais.length), "Comerciais em aberto", "clientes PJ", m.comerciais.length > 0),
-            tile(fmt(pr.semAgenda), "Prioridade s/ agenda", `${fmt(pr.itens.length)} pedidos no total`, pr.semAgenda > 0)
-        ].join("");
+    /** Tela 1: panorama — os números grandes. */
+    function slidePanorama(m) {
+        const r = m.romp, eq = m.equipes, pr = m.prio;
+        return `<div class="tv-kpis">
+            ${tile(fmt(r.totalOffline), "Clientes fora", "logins ativos offline", r.totalOffline > 0)}
+            ${tile(fmt(r.total), "Possíveis rompimentos", r.temRompimento ? "⚠ rompimento de fibra" : "grupos caídos juntos", r.temRompimento)}
+            ${tile(fmt(eq.desloc.length), "Em deslocamento", `${fmt(eq.osDesloc)} OS`, false)}
+            ${tile(fmt(eq.exec.length), "Em execução", `${fmt(eq.osExec)} OS`, false)}
+            ${tile(fmt(m.reagendadas.length), "Reagendadas hoje", "técnicos remarcaram", false)}
+            ${tile(fmt(m.comerciais.length), "Comerciais em aberto", "clientes PJ", m.comerciais.length > 0)}
+            ${tile(fmt(pr.semAgenda), "Prioridade s/ agenda", `${fmt(pr.itens.length)} pedidos no total`, pr.semAgenda > 0)}
+        </div>`;
+    }
 
-        // ---- painel: rompimentos ----
-        const ICO = { energia: "⚡", rompimento: "✂️", misto: "⚠️", reset: "↻", outro: "⚠️" };
-        const romps = r.clusters.slice(0, TETO_LISTA).map(c => {
+    /** Tela 2: possíveis rompimentos — grupo + os logins caídos (cliente · login · OS). */
+    function slideRompimentos(m) {
+        const r = m.romp;
+        if (!r.clusters.length)
+            return `<div class="tv-um"><p class="tv-vazio">Nenhum grupo caído junto agora. 🎉<br><small>${fmt(r.totalOffline)} logins ativos offline no total.</small></p></div>`;
+        const cards = r.clusters.slice(0, 4).map(c => {
             const alvo = c.pon ? `${escaparHtml(c.olt)} · PON ${escaparHtml(c.pon)}` : escaparHtml(c.olt);
-            return `<div class="tv-item">
-                <span class="tv-item-ico">${ICO[c.cat] || "⚠️"}</span>
-                <div class="tv-item-txt">
-                    <div class="tv-item-tit">${alvo}</div>
-                    <div class="tv-item-sub">${fmt(c.total)} offline${c.semOs ? ` · <b class="danger">${fmt(c.semOs)} sem OS</b>` : " · todas com OS"} · ${escaparHtml(horaDe(c.inicio))}</div>
+            const membros = c.membros.slice(0, 12).map(mb => {
+                const os = mb.os
+                    ? (mb.os.agendada && mb.os.agendamento
+                        ? `<span class="tv-os-ag">OS ${escaparHtml(mb.os.id)} · 📅 ${escaparHtml(mb.os.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }))}</span>`
+                        : `<span class="tv-os-nag">OS ${escaparHtml(mb.os.id)} · sem agenda</span>`)
+                    : `<span class="tv-os-sem">sem OS</span>`;
+                return `<li>
+                    <span class="tv-rm-cli">${escaparHtml(mb.cliente || mb.login || "—")}</span>
+                    <span class="tv-rm-log">${escaparHtml(mb.login || "")}</span>
+                    ${os}</li>`;
+            }).join("");
+            const resto = c.total > 12 ? `<li class="tv-rm-mais">… e mais ${fmt(c.total - 12)}</li>` : "";
+            return `<div class="tv-rm-card">
+                <div class="tv-rm-topo">
+                    <span class="tv-item-ico">${ROMP_ICO[c.cat] || "⚠️"}</span>
+                    <span class="tv-rm-alvo">${alvo}</span>
+                    <span class="tv-pill off">${fmt(c.total)} offline</span>
+                    ${c.semOs ? `<span class="tv-pill" style="--c:#f87171">${fmt(c.semOs)} sem OS</span>` : `<span class="tv-pill" style="--c:#34d399">todas com OS</span>`}
+                    <span class="tv-rm-hora">${escaparHtml(horaDe(c.inicio))}</span>
                 </div>
+                <ul class="tv-rm-lista">${membros}${resto}</ul>
             </div>`;
         }).join("");
-        const painelRomp = painel("Possíveis rompimentos",
-            r.clusters.length ? romps : listaVazia("Nenhum grupo caído junto agora. 🎉"),
-            r.clusters.length > TETO_LISTA ? `+${r.clusters.length - TETO_LISTA}` : "");
+        return `<div class="tv-rm-grade">${cards}</div>`;
+    }
 
-        // ---- painel: equipes em campo ----
-        const linhaEq = (e) => `<div class="tv-item">
+    /** Tela 3: equipes em campo (deslocamento / execução). */
+    function slideEquipes(m) {
+        const eq = m.equipes;
+        if (!eq.desloc.length && !eq.exec.length)
+            return `<div class="tv-um"><p class="tv-vazio">Nenhuma equipe em campo agora.</p></div>`;
+        const linha = e => `<div class="tv-item">
             <div class="tv-item-txt"><div class="tv-item-tit">${escaparHtml(e.nome)}</div></div>
             <span class="tv-pill">${fmt(e.n)} OS</span></div>`;
-        const corpoEq = (eq.desloc.length || eq.exec.length) ? `
-            ${eq.desloc.length ? `<div class="tv-sub-rot">🚚 Deslocamento</div>${eq.desloc.slice(0, 5).map(linhaEq).join("")}` : ""}
-            ${eq.exec.length ? `<div class="tv-sub-rot">🔧 Execução</div>${eq.exec.slice(0, 5).map(linhaEq).join("")}` : ""}
-        ` : listaVazia("Nenhuma equipe em campo agora.");
-        const painelEq = painel("Equipes em campo", corpoEq);
+        const col = (ico, rot, arr) => `<div class="tv-col">
+            <div class="tv-sub-rot">${ico} ${rot} <b>(${fmt(arr.length)})</b></div>
+            ${arr.length ? arr.slice(0, 12).map(linha).join("") : listaVazia("—")}</div>`;
+        return `<div class="tv-duas">${col("🚚", "Deslocamento", eq.desloc)}${col("🔧", "Execução", eq.exec)}</div>`;
+    }
 
-        // ---- painel: prioridade ----
-        const prioItens = pr.itens.slice(0, TETO_LISTA).map(i => `
+    /** Tela 4: pedidos de prioridade. */
+    function slidePrioridade(m) {
+        const pr = m.prio;
+        if (!pr.itens.length)
+            return `<div class="tv-um"><p class="tv-vazio">Nenhum pedido de urgência nas mensagens das OS.</p></div>`;
+        const itens = pr.itens.slice(0, 12).map(i => `
             <div class="tv-item">
                 <div class="tv-item-txt">
                     <div class="tv-item-tit">${escaparHtml(i.cliente || "—")}${i.vezes >= 2 ? ` <span class="tv-mini danger">pediu ${i.vezes}×</span>` : ""}</div>
-                    <div class="tv-item-sub">${escaparHtml(i.cidade || "—")} · ${escaparHtml(ixcAssuntoCurto(i.assunto))}</div>
+                    <div class="tv-item-sub">${escaparHtml(i.cidade || "—")} · ${escaparHtml(ixcAssuntoCurto(i.assunto))}${i.trecho ? ` — “${escaparHtml(i.trecho.slice(0, 90))}”` : ""}</div>
                 </div>
                 <span class="tv-pill" style="--c:${SIT_COR[i.sit] || "#94a3b8"}">${escaparHtml(i.sit)}</span>
             </div>`).join("");
-        const painelPrio = painel("Pedidos de prioridade",
-            pr.itens.length ? prioItens : listaVazia("Nenhum pedido de urgência nas mensagens."),
-            pr.itens.length > TETO_LISTA ? `+${pr.itens.length - TETO_LISTA}` : "");
+        return `<div class="tv-um">${itens}</div>`;
+    }
 
-        // ---- painel: comerciais ----
-        const comItens = m.comerciais.slice(0, TETO_LISTA).map(o => `
-            <div class="tv-item">
-                <div class="tv-item-txt">
-                    <div class="tv-item-tit">#${escaparHtml(o.id)} · ${escaparHtml(o.cliente || "—")}</div>
-                    <div class="tv-item-sub">${escaparHtml(o.cidade || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))}</div>
-                </div>
-                ${o.agendamento ? `<span class="tv-pill">📅 ${escaparHtml(o.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }))}</span>` : `<span class="tv-pill" style="--c:#f87171">sem agenda</span>`}
-            </div>`).join("");
-        const painelCom = painel("Comerciais em aberto",
-            m.comerciais.length ? comItens : listaVazia("Nenhuma OS comercial em aberto."),
-            m.comerciais.length > TETO_LISTA ? `+${m.comerciais.length - TETO_LISTA}` : "");
+    /** Tela 5: comerciais + reagendadas hoje. */
+    function slideComReag(m) {
+        const comLinha = o => `<div class="tv-item">
+            <div class="tv-item-txt">
+                <div class="tv-item-tit">#${escaparHtml(o.id)} · ${escaparHtml(o.cliente || "—")}</div>
+                <div class="tv-item-sub">${escaparHtml(o.cidade || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))}</div>
+            </div>
+            ${o.agendamento ? `<span class="tv-pill">📅 ${escaparHtml(o.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }))}</span>` : `<span class="tv-pill" style="--c:#f87171">sem agenda</span>`}</div>`;
+        const col = (rot, arr) => `<div class="tv-col">
+            <div class="tv-sub-rot">${rot} <b>(${fmt(arr.length)})</b></div>
+            ${arr.length ? arr.slice(0, 12).map(comLinha).join("") : listaVazia("Nada aqui agora.")}</div>`;
+        return `<div class="tv-duas">${col("🏢 Comerciais em aberto", m.comerciais)}${col("↻ Reagendadas hoje", m.reagendadas)}</div>`;
+    }
 
-        // ---- painéis: por assunto / por cidade ----
-        const painelAssunto = painel("Em aberto por assunto", barras(m.porAssunto));
-        const painelCidade = painel("Em aberto por cidade", barras(m.porCidade));
+    const SLIDES = [
+        { titulo: "Panorama da operação", html: slidePanorama },
+        { titulo: "Possíveis rompimentos", html: slideRompimentos },
+        { titulo: "Equipes em campo", html: slideEquipes },
+        { titulo: "Pedidos de prioridade", html: slidePrioridade },
+        { titulo: "Comerciais e reagendadas", html: slideComReag },
+        { titulo: "Em aberto por assunto", html: m => `<div class="tv-um">${barras(m.porAssunto, 12)}</div>` },
+        { titulo: "Em aberto por cidade", html: m => `<div class="tv-um">${barras(m.porCidade, 12)}</div>` }
+    ];
 
-        $("tvGrid").innerHTML = painelRomp + painelEq + painelPrio + painelCom + painelAssunto + painelCidade;
+    let dados = null, slideIx = 0, pausado = false;
 
-        // rodapé: atualização
-        $("tvAtualizado").textContent = m.capturado
-            ? `dados do robô · importados ${horaDe(new Date(m.capturado))}`
+    function montarDots() {
+        const box = $("tvDots");
+        if (!box) return;
+        box.innerHTML = SLIDES.map((s, i) => `<button type="button" class="tv-dot" data-i="${i}" title="${escaparHtml(s.titulo)}"></button>`).join("");
+        box.querySelectorAll(".tv-dot").forEach(b => b.addEventListener("click", () => irPara(+b.dataset.i)));
+    }
+
+    function pintar() {
+        const palco = $("tvPalco");
+        if (!palco) return;
+        if (!dados) { palco.innerHTML = `<div class="tv-um"><p class="tv-vazio">Carregando…</p></div>`; return; }
+        const s = SLIDES[slideIx];
+        $("tvSlideTitulo").textContent = s.titulo;
+        palco.innerHTML = s.html(dados);
+        $("tvDots")?.querySelectorAll(".tv-dot").forEach((d, i) => d.classList.toggle("ativo", i === slideIx));
+        $("tvAtualizado").textContent = dados.capturado
+            ? `atualizado ${horaDe(new Date(dados.capturado))} · gira sozinho`
             : "dados do robô";
+    }
+
+    function irPara(i) {
+        slideIx = (i % SLIDES.length + SLIDES.length) % SLIDES.length;
+        pintar();
+        reiniciarRotacao();
+    }
+    function reiniciarRotacao() {
+        clearInterval(rotTimer);
+        rotTimer = setInterval(() => { if (!pausado) irPara(slideIx + 1); }, ROTACAO_MS);
     }
 
     // ---------------- ciclo ----------------
@@ -332,28 +393,33 @@ const TV = (() => {
         ]);
         const { os, capturado } = agregarOs(linhas);
 
+        // OS em aberto que a TV mostra: tira finalizadas e os tipos de escritório
+        // (auditoria, exclusão de acesso, pós-terceirizada, retirada, recolhimento).
+        const visiveis = [...os.values()].filter(o =>
+            ixcNorm(o.statusUlt) !== "finalizada" && tvOsAparece(o.assunto));
+
         const reagendadas = [], comerciais = [];
-        for (const o of os.values()) {
-            if (ixcNorm(o.statusUlt) === "finalizada") continue;
+        for (const o of visiveis) {
             if (o.reagHoje) reagendadas.push(o);
             if (/comercial/.test(ixcNorm(o.assunto))) comerciais.push(o);
         }
+        reagendadas.sort((a, b) => (b.statusData || 0) - (a.statusData || 0));
         comerciais.sort((a, b) => (a.cliente || "").localeCompare(b.cliente || "", "pt-BR"));
 
         return {
             romp, capturado,
-            equipes: equipesEmCampo(os),
-            prio: prioridades(os),
+            equipes: equipesEmCampo(visiveis),
+            prio: prioridades(visiveis),
             reagendadas, comerciais,
-            porAssunto: contarPor(os, o => ixcAssuntoCurto(o.assunto)),
-            porCidade: contarPor(os, o => (o.cidade || "—"))
+            porAssunto: contarPor(visiveis, o => ixcAssuntoCurto(o.assunto)),
+            porCidade: contarPor(visiveis, o => (o.cidade || "—"))
         };
     }
 
     async function tick() {
         try {
-            const m = await recalcular();
-            render(m);
+            dados = await recalcular();
+            pintar();                              // repinta a tela atual com os dados novos
             $("tvErro").hidden = true;
         } catch (e) {
             console.warn("TV:", e);
@@ -373,8 +439,22 @@ const TV = (() => {
         $("tvPainel").hidden = false;
         relogio();
         relogioTimer = setInterval(relogio, 20000);
+        montarDots();
+        pintar();                 // mostra "Carregando…" até o 1º tick
+        reiniciarRotacao();       // começa a girar as telas
         tick();
         timer = setInterval(tick, CICLO_MS);
+
+        // Controles: ← → troca de tela; espaço pausa/retoma o giro.
+        document.addEventListener("keydown", e => {
+            if (e.key === "ArrowRight") irPara(slideIx + 1);
+            else if (e.key === "ArrowLeft") irPara(slideIx - 1);
+            else if (e.key === " ") {
+                e.preventDefault();
+                pausado = !pausado;
+                $("tvPausa").hidden = !pausado;
+            }
+        });
     }
 
     // ---------------- login (gate) ----------------
