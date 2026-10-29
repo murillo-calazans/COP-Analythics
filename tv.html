@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COP · Operação ao vivo</title>
+<!-- Mesmo projeto/sessão de login do COP Analytics (index.html) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.js"
+    integrity="sha384-OUpie84zd1LdwNlK9uJJQRwab0BLqo3eKYKFh7hSVL58FSk7wPp2l0kfUMIIoaQd"
+    crossorigin="anonymous"></script>
+<style>
+  :root{
+    --bg:#0b1120; --bg2:#0f1a30; --card:#13203a; --borda:#223052;
+    --txt:#e8eef9; --txt2:#9fb0ca; --txt3:#6b7c9c;
+    --azul:#60a5fa; --verde:#34d399; --amarelo:#fbbf24; --vermelho:#f87171; --roxo:#c084fc; --ciano:#38bdf8;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
+    color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .danger{ color:var(--vermelho); }
+
+  /* ---------- login ---------- */
+  #tvLogin{ min-height:100vh; display:grid; place-items:center; padding:24px; }
+  .tv-login-card{ width:100%; max-width:380px; background:var(--card); border:1px solid var(--borda);
+    border-radius:18px; padding:30px 26px; box-shadow:0 24px 60px rgba(0,0,0,.4); }
+  .tv-login-card h1{ font-size:21px; margin:0 0 4px; }
+  .tv-login-card p{ color:var(--txt2); font-size:13.5px; margin:0 0 20px; }
+  .tv-login-card label{ display:block; font-size:12.5px; color:var(--txt2); margin:0 0 5px; }
+  .tv-login-card input{ width:100%; padding:11px 13px; margin:0 0 14px; border-radius:10px;
+    border:1px solid var(--borda); background:var(--bg2); color:var(--txt); font-size:15px; }
+  .tv-login-card input:focus{ outline:none; border-color:var(--azul); }
+  .tv-login-card button{ width:100%; padding:12px; border:none; border-radius:10px; cursor:pointer;
+    background:var(--azul); color:#06122a; font-weight:800; font-size:15px; }
+  #tvLoginErro{ color:var(--vermelho); font-size:13px; margin:0 0 12px; }
+
+  /* ---------- cabeçalho ---------- */
+  #tvPainel{ min-height:100vh; display:flex; flex-direction:column; padding:18px 22px 10px; }
+  .tv-topo{ display:flex; align-items:center; gap:16px; margin-bottom:14px; }
+  .tv-marca{ font-size:22px; font-weight:800; letter-spacing:.3px; }
+  .tv-marca small{ display:block; font-size:12px; font-weight:600; color:var(--txt2); letter-spacing:.08em; text-transform:uppercase; }
+  .tv-topo-dir{ margin-left:auto; text-align:right; }
+  #tvRelogio{ font-size:30px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  #tvData{ font-size:12.5px; color:var(--txt2); text-transform:capitalize; }
+  #tvErro{ background:#3a1620; color:#fecaca; border:1px solid #7f1d1d; padding:7px 14px;
+    border-radius:10px; font-size:13px; margin-bottom:10px; }
+
+  /* ---------- KPIs ---------- */
+  .tv-kpis{ display:grid; grid-template-columns:repeat(7,1fr); gap:12px; margin-bottom:14px; }
+  .tv-kpi{ background:var(--card); border:1px solid var(--borda); border-radius:14px; padding:14px 16px; }
+  .tv-kpi.perigo{ border-color:#7f2d35; background:linear-gradient(180deg,#2a1420,#13203a); }
+  .tv-kpi-n{ font-size:40px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .tv-kpi.perigo .tv-kpi-n{ color:var(--vermelho); }
+  .tv-kpi-rot{ font-size:13.5px; font-weight:700; margin-top:7px; }
+  .tv-kpi-sub{ font-size:11.5px; color:var(--txt2); margin-top:2px; }
+
+  /* ---------- grade de painéis ---------- */
+  .tv-grid{ flex:1; display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:1fr; gap:14px; min-height:0; }
+  .tv-painel{ background:var(--card); border:1px solid var(--borda); border-radius:16px;
+    padding:14px 16px; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .tv-painel h2{ font-size:15px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+  .tv-painel-extra{ margin-left:auto; font-size:12px; font-weight:700; color:var(--txt3);
+    background:var(--bg2); padding:2px 9px; border-radius:999px; }
+  .tv-painel-corpo{ flex:1; min-height:0; overflow:hidden; }
+
+  .tv-item{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--borda); }
+  .tv-item:last-child{ border-bottom:none; }
+  .tv-item-ico{ font-size:19px; flex:none; }
+  .tv-item-txt{ min-width:0; flex:1; }
+  .tv-item-tit{ font-size:14.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tv-item-sub{ font-size:12px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tv-mini{ font-size:11px; font-weight:800; }
+  .tv-pill{ flex:none; font-size:12px; font-weight:800; padding:3px 11px; border-radius:999px;
+    color:var(--c,#cdd9ef); background:color-mix(in srgb, var(--c,#60a5fa) 18%, transparent);
+    border:1px solid color-mix(in srgb, var(--c,#60a5fa) 40%, transparent); }
+  .tv-sub-rot{ font-size:11.5px; font-weight:800; color:var(--txt3); text-transform:uppercase;
+    letter-spacing:.06em; margin:8px 0 2px; }
+  .tv-sub-rot:first-child{ margin-top:0; }
+  .tv-vazio{ color:var(--txt3); font-size:13.5px; text-align:center; padding:18px 6px; }
+
+  /* barras (por assunto / cidade) */
+  .tv-barras{ display:flex; flex-direction:column; gap:9px; }
+  .tv-barra{ display:grid; grid-template-columns:40% 1fr auto; align-items:center; gap:10px; }
+  .tv-barra-rot{ font-size:13px; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tv-barra-trilho{ height:12px; background:var(--bg2); border-radius:999px; overflow:hidden; }
+  .tv-barra-trilho i{ display:block; height:100%; border-radius:999px;
+    background:linear-gradient(90deg,#2563eb,#60a5fa); }
+  .tv-barra-n{ font-size:13.5px; font-weight:800; font-variant-numeric:tabular-nums; min-width:2ch; text-align:right; }
+
+  /* ---------- rodapé ---------- */
+  .tv-rodape{ display:flex; align-items:center; gap:14px; padding:9px 2px 2px; color:var(--txt3); font-size:12px; }
+  .tv-ponto{ width:9px; height:9px; border-radius:999px; background:var(--verde); box-shadow:0 0 0 4px rgba(52,211,153,.18); }
+  .tv-rodape button{ background:none; border:1px solid var(--borda); color:var(--txt2); border-radius:8px;
+    padding:4px 10px; font-size:12px; cursor:pointer; }
+  .tv-rodape button:hover{ color:var(--txt); border-color:var(--txt3); }
+  .tv-rodape .dir{ margin-left:auto; display:flex; gap:8px; }
+
+  @media (max-width:1100px){
+    .tv-kpis{ grid-template-columns:repeat(4,1fr); }
+    .tv-grid{ grid-template-columns:repeat(2,1fr); }
+  }
+  @media (max-width:680px){
+    .tv-kpis{ grid-template-columns:repeat(2,1fr); }
+    .tv-grid{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Gate de login (uma vez por TV; a sessão fica salva no navegador) -->
+  <div id="tvLogin" hidden>
+    <form class="tv-login-card" id="tvLoginForm">
+      <h1>COP · Operação ao vivo</h1>
+      <p>Entre uma vez nesta TV. A sessão fica salva no navegador.</p>
+      <div id="tvLoginErro" hidden></div>
+      <label for="tvEmail">E-mail</label>
+      <input type="email" id="tvEmail" autocomplete="username" required>
+      <label for="tvSenha">Senha</label>
+      <input type="password" id="tvSenha" autocomplete="current-password" required>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <!-- Painel -->
+  <div id="tvPainel" hidden>
+    <div class="tv-topo">
+      <div class="tv-marca">COP <small>Operação ao vivo</small></div>
+      <div class="tv-topo-dir">
+        <div id="tvRelogio">--:--</div>
+        <div id="tvData">—</div>
+      </div>
+    </div>
+
+    <div id="tvErro" hidden></div>
+    <div class="tv-kpis" id="tvKpis"></div>
+    <div class="tv-grid" id="tvGrid"></div>
+
+    <div class="tv-rodape">
+      <span class="tv-ponto"></span>
+      <span id="tvAtualizado">conectando…</span>
+      <span class="dir">
+        <button type="button" id="tvFull">⛶ Tela cheia</button>
+        <button type="button" id="tvSair">Sair</button>
+      </span>
+    </div>
+  </div>
+
+  <!-- Supabase + motores reaproveitados do app + lógica da TV -->
+  <script src="js/config/supabase.js"></script>
+  <script src="js/agendador/motor.js?v=36"></script>
+  <script src="js/engine/prioridadeengine.js?v=1"></script>
+  <script src="js/ui/tv.js?v=1"></script>
+  <script src="js/ui/rompimentos.js?v=1"></script>
+</body>
+</html>
