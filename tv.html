@@ -15,6 +15,9 @@
     --azul:#60a5fa; --verde:#34d399; --amarelo:#fbbf24; --vermelho:#f87171; --roxo:#c084fc; --ciano:#38bdf8;
   }
   *{ box-sizing:border-box; }
+  /* o atributo hidden precisa vencer os display:grid/flex abaixo (senão a tela
+     de login nunca some e tampa o painel mesmo depois de logar). */
+  [hidden]{ display:none !important; }
   html,body{ height:100%; }
   body{
     margin:0; background:radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
