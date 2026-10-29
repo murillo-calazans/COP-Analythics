@@ -120,6 +120,47 @@
   .tv-barra-trilho i{ display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#2563eb,#60a5fa); }
   .tv-barra-n{ font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; min-width:3ch; text-align:right; }
 
+  /* ---------- tela Panorama (infográfico estilo COP) ---------- */
+  .tv-panorama{ display:grid; grid-template-columns:320px 1fr; gap:24px; align-items:stretch; }
+  .tv-pan-donut{ background:var(--card); border:1px solid var(--borda); border-radius:18px; padding:22px; text-align:center; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+  .tv-donut{ width:230px; height:230px; }
+  .tv-donut-n{ font-size:46px; font-weight:800; fill:var(--txt); }
+  .tv-donut-s{ font-size:16px; fill:var(--txt2); }
+  .tv-pan-leg{ margin-top:12px; }
+  .tv-pan-leg strong{ display:block; font-size:30px; font-weight:800; color:var(--verde); }
+  .tv-pan-leg span{ font-size:14px; color:var(--txt2); }
+  .tv-pan-linhas{ background:var(--card); border:1px solid var(--borda); border-radius:18px; padding:18px 26px; display:flex; flex-direction:column; justify-content:center; gap:13px; }
+  .tv-line{ display:grid; grid-template-columns:auto 240px auto 1fr; align-items:center; gap:14px; }
+  .tv-line-dot{ width:13px; height:13px; border-radius:999px; flex:none; }
+  .tv-line-rot{ font-size:18px; font-weight:600; }
+  .tv-line-val{ font-size:23px; font-weight:800; font-variant-numeric:tabular-nums; text-align:right; min-width:3ch; }
+  .tv-line-bar{ height:14px; background:var(--bg2); border-radius:999px; overflow:hidden; }
+  .tv-line-bar i{ display:block; height:100%; border-radius:999px; }
+
+  /* ---------- tela Painel geral (tudo numa tela só) ---------- */
+  .tv-geral{ display:flex; flex-direction:column; gap:14px; min-height:0; }
+  .tvg-kpis{ display:grid; grid-template-columns:repeat(8,1fr); gap:10px; }
+  .tvg-kpi{ background:var(--card); border:1px solid var(--borda); border-radius:12px; padding:10px 13px; }
+  .tvg-kpi.perigo{ border-color:#f0b4b4; background:linear-gradient(180deg,#fdeaea,#fff); }
+  .tvg-kpi .n{ font-size:30px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .tvg-kpi.perigo .n{ color:var(--vermelho); }
+  .tvg-kpi .r{ font-size:12px; color:var(--txt2); margin-top:4px; }
+  .tvg-grade{ flex:1; display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:1fr; gap:14px; min-height:0; }
+  .tvg-card{ background:var(--card); border:1px solid var(--borda); border-radius:14px; padding:10px 16px; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .tvg-card h3{ font-size:14px; margin:0 0 6px; display:flex; align-items:center; gap:6px; }
+  .tvg-ext{ margin-left:auto; font-size:11px; color:var(--txt3); font-weight:700; }
+  .tvg-corpo{ flex:1; min-height:0; overflow:hidden; }
+  .tvg-li{ display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--borda); font-size:14px; }
+  .tvg-li:last-child{ border-bottom:none; }
+  .tvg-li .nome{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .tvg-li .tag{ flex:none; font-size:12.5px; font-weight:800; }
+  .tvg-corpo .tv-barras{ gap:7px; }
+  .tvg-corpo .tv-barra{ grid-template-columns:38% 1fr auto; gap:10px; }
+  .tvg-corpo .tv-barra-rot{ font-size:13px; }
+  .tvg-corpo .tv-barra-trilho{ height:12px; }
+  .tvg-corpo .tv-barra-n{ font-size:14px; min-width:2ch; }
+  .tvg-corpo .tv-vazio{ font-size:14px; padding:14px 6px; }
+
   /* ---------- rodapé + dots ---------- */
   .tv-rodape{ display:flex; align-items:center; gap:14px; padding:10px 2px 2px; color:var(--txt3); font-size:13px; }
   .tv-ponto{ width:9px; height:9px; border-radius:999px; background:var(--verde); box-shadow:0 0 0 4px rgba(52,211,153,.18); }
@@ -135,6 +176,11 @@
   @media (max-width:1100px){
     .tv-kpis{ grid-template-columns:repeat(2,1fr); }
     .tv-duas,.tv-rm-grade{ grid-template-columns:1fr; }
+    .tv-panorama{ grid-template-columns:1fr; }
+    .tv-line{ grid-template-columns:auto 1fr auto; }
+    .tv-line-bar{ display:none; }
+    .tvg-kpis{ grid-template-columns:repeat(4,1fr); }
+    .tvg-grade{ grid-template-columns:repeat(2,1fr); }
   }
 </style>
 </head>
@@ -187,7 +233,7 @@
   <script src="js/config/supabase.js"></script>
   <script src="js/agendador/motor.js?v=36"></script>
   <script src="js/engine/prioridadeengine.js?v=1"></script>
-  <script src="js/ui/tv.js?v=4"></script>
+  <script src="js/ui/tv.js?v=5"></script>
   <script src="js/ui/rompimentos.js?v=1"></script>
 </body>
 </html>

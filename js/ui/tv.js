@@ -242,18 +242,78 @@ const TV = (() => {
     // ===== telas (slides) em tela cheia, girando sozinhas =====
     const ROMP_ICO = { energia: "⚡", rompimento: "✂️", misto: "⚠️", reset: "↻", outro: "⚠️" };
 
-    /** Tela 1: panorama — os números grandes. */
+    /** Rosca/anel em SVG (igual ao infográfico do COP): fatias = [{n,cor}]. */
+    function donut(fatias, centro, sub) {
+        const cx = 90, cy = 90, r = 68, larg = 22, circ = 2 * Math.PI * r;
+        const total = fatias.reduce((s, f) => s + f.n, 0);
+        const vao = fatias.filter(f => f.n > 0).length > 1 ? 3 : 0;
+        let acum = 0;
+        const arcos = total ? fatias.filter(f => f.n > 0).map(f => {
+            const comp = f.n / total * circ;
+            const a = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${f.cor}" stroke-width="${larg}" stroke-linecap="${vao ? "butt" : "round"}" stroke-dasharray="${Math.max(comp - vao, 0.01).toFixed(2)} ${circ.toFixed(2)}" stroke-dashoffset="${(-acum).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+            acum += comp; return a;
+        }).join("") : "";
+        return `<svg class="tv-donut" viewBox="0 0 180 180" role="img" aria-label="${escaparHtml(centro + " " + sub)}">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg2)" stroke-width="${larg}"/>
+            ${arcos}
+            <text x="${cx}" y="${cy - 2}" text-anchor="middle" class="tv-donut-n">${escaparHtml(String(centro))}</text>
+            <text x="${cx}" y="${cy + 26}" text-anchor="middle" class="tv-donut-s">${escaparHtml(String(sub))}</text>
+        </svg>`;
+    }
+
+    /** Linha com bolinha colorida + rótulo + valor + barra proporcional (igual ao COP). */
+    function barLine(rot, n, max, cor) {
+        const w = max ? Math.min(100, n / max * 100) : 0;
+        return `<div class="tv-line">
+            <span class="tv-line-dot" style="background:${cor}"></span>
+            <span class="tv-line-rot">${escaparHtml(rot)}</span>
+            <span class="tv-line-val">${fmt(n)}</span>
+            <span class="tv-line-bar"><i style="width:${w.toFixed(1)}%;background:${cor}"></i></span>
+        </div>`;
+    }
+
+    /** Tela 1: Panorama — infográfico estilo COP (rosca de fechamentos + barras coloridas). */
     function slidePanorama(m) {
         const r = m.romp, eq = m.equipes, pr = m.prio;
-        return `<div class="tv-kpis">
-            ${tile(fmt(r.totalOffline), "Clientes fora", "logins ativos offline", r.totalOffline > 0)}
-            ${tile(fmt(r.total), "Possíveis rompimentos", r.temRompimento ? "⚠ rompimento de fibra" : "grupos caídos juntos", r.temRompimento)}
-            ${tile(fmt(eq.desloc.length), "Em deslocamento", `${fmt(eq.osDesloc)} OS`, false)}
-            ${tile(fmt(eq.exec.length), "Em execução", `${fmt(eq.osExec)} OS`, false)}
-            ${tile(fmt(m.reagendadas.length), "Reagendadas hoje", "técnicos remarcaram", false)}
-            ${tile(fmt(m.comerciais.length), "Comerciais em aberto", "clientes PJ", m.comerciais.length > 0)}
-            ${tile(fmt(pr.semAgenda), "Prioridade s/ agenda", `${fmt(pr.itens.length)} pedidos no total`, pr.semAgenda > 0)}
+        const nFe = m.finalizadas.length, nAg = m.agendadasHoje, feitas = Math.min(nFe, nAg);
+        const pct = nAg ? Math.round(nFe / nAg * 100) : null;
+        const metricas = [
+            { rot: "Finalizadas hoje", n: nFe, cor: "#15a06a" },
+            { rot: "Agendadas hoje", n: nAg, cor: "#2563eb" },
+            { rot: "Em deslocamento", n: eq.desloc.length, cor: "#0891b2" },
+            { rot: "Em execução", n: eq.exec.length, cor: "#b7791f" },
+            { rot: "Reagendadas hoje", n: m.reagendadas.length, cor: "#7c3aed" },
+            { rot: "Comerciais em aberto", n: m.comerciais.length, cor: "#db2777" },
+            { rot: "Prioridade s/ agenda", n: pr.semAgenda, cor: "#dc2626" },
+            { rot: "Clientes fora", n: r.totalOffline, cor: "#ea580c" },
+            { rot: "Possíveis rompimentos", n: r.total, cor: "#e11d48" }
+        ];
+        const max = Math.max(1, ...metricas.map(x => x.n));
+        const rosca = donut(
+            [{ n: feitas, cor: "#15a06a" }, { n: Math.max(nAg - feitas, 0), cor: "var(--borda)" }],
+            fmt(nFe), nAg ? `de ${fmt(nAg)}` : "fechadas");
+        return `<div class="tv-panorama">
+            <div class="tv-pan-donut">
+                ${rosca}
+                <div class="tv-pan-leg"><strong>${pct != null ? pct + "%" : "—"}</strong><span>fechamentos sobre a agenda de hoje</span></div>
+            </div>
+            <div class="tv-pan-linhas">${metricas.map(x => barLine(x.rot, x.n, max, x.cor)).join("")}</div>
         </div>`;
+    }
+
+    /** Tela: finalizadas hoje (OS fechadas no dia). */
+    function slideFinalizadas(m) {
+        const fin = m.finalizadas;
+        if (!fin.length) return `<div class="tv-um"><p class="tv-vazio">Nenhuma OS finalizada hoje ainda.</p></div>`;
+        const itens = fin.slice(0, 12).map(o => `
+            <div class="tv-item">
+                <div class="tv-item-txt">
+                    <div class="tv-item-tit">#${escaparHtml(o.id)} · ${escaparHtml(o.cliente || "—")}</div>
+                    <div class="tv-item-sub">${escaparHtml(o.cidade || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))}${o.tecnico_responsavel ? " · " + escaparHtml(o.tecnico_responsavel) : ""}</div>
+                </div>
+                <span class="tv-pill" style="--c:#15a06a">✔ ${o.hora ? escaparHtml(o.hora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })) : ""}</span>
+            </div>`).join("");
+        return `<div class="tv-um">${itens}</div>`;
     }
 
     /** Tela 2: possíveis rompimentos — grupo + os logins caídos (cliente · login · OS). */
@@ -333,14 +393,69 @@ const TV = (() => {
         return `<div class="tv-duas">${col("🏢 Comerciais em aberto", m.comerciais)}${col("↻ Reagendadas hoje", m.reagendadas)}</div>`;
     }
 
+    /** Tela "Painel geral": tudo numa tela só (bom pra deixar fixo numa TV). */
+    function miniKpiG(n, rot, perigo) {
+        return `<div class="tvg-kpi${perigo ? " perigo" : ""}"><div class="n">${n}</div><div class="r">${escaparHtml(rot)}</div></div>`;
+    }
+    function cardG(titulo, corpo, extra = "") {
+        return `<section class="tvg-card"><h3>${titulo}${extra ? `<span class="tvg-ext">${extra}</span>` : ""}</h3><div class="tvg-corpo">${corpo}</div></section>`;
+    }
+    function slidePainelGeral(m) {
+        const r = m.romp, eq = m.equipes, pr = m.prio;
+        const kpis = `<div class="tvg-kpis">
+            ${miniKpiG(fmt(m.finalizadas.length), "Finalizadas hoje")}
+            ${miniKpiG(fmt(r.totalOffline), "Clientes fora", r.totalOffline > 0)}
+            ${miniKpiG(fmt(r.total), "Rompimentos", r.temRompimento)}
+            ${miniKpiG(fmt(eq.desloc.length), "Deslocamento")}
+            ${miniKpiG(fmt(eq.exec.length), "Execução")}
+            ${miniKpiG(fmt(m.reagendadas.length), "Reagendadas")}
+            ${miniKpiG(fmt(m.comerciais.length), "Comerciais", m.comerciais.length > 0)}
+            ${miniKpiG(fmt(pr.semAgenda), "Prioridade s/ ag.", pr.semAgenda > 0)}
+        </div>`;
+
+        const romp = r.clusters.length ? r.clusters.slice(0, 5).map(c => {
+            const alvo = c.pon ? `${escaparHtml(c.olt)} · PON ${escaparHtml(c.pon)}` : escaparHtml(c.olt);
+            return `<div class="tvg-li"><span>${ROMP_ICO[c.cat] || "⚠️"}</span><span class="nome">${alvo}</span><span class="tag">${fmt(c.total)} off${c.semOs ? ` · <b class="danger">${fmt(c.semOs)} s/OS</b>` : ""}</span></div>`;
+        }).join("") : listaVazia("Nenhum grupo caído junto. 🎉");
+
+        const eqRows = [];
+        eq.desloc.slice(0, 4).forEach(e => eqRows.push(`<div class="tvg-li"><span>🚚</span><span class="nome">${escaparHtml(e.nome)}</span><span class="tag">${fmt(e.n)} OS</span></div>`));
+        eq.exec.slice(0, 4).forEach(e => eqRows.push(`<div class="tvg-li"><span>🔧</span><span class="nome">${escaparHtml(e.nome)}</span><span class="tag">${fmt(e.n)} OS</span></div>`));
+        const equipes = eqRows.length ? eqRows.join("") : listaVazia("Ninguém em campo agora.");
+
+        const prio = pr.itens.length ? pr.itens.slice(0, 6).map(i =>
+            `<div class="tvg-li"><span class="nome">${escaparHtml(i.cliente || "—")}</span><span class="tag" style="color:${SIT_COR[i.sit] || "#5a6b86"}">${escaparHtml(i.sit)}</span></div>`).join("") : listaVazia("Sem pedidos de urgência.");
+
+        const fin = m.finalizadas.length ? m.finalizadas.slice(0, 6).map(o =>
+            `<div class="tvg-li"><span class="nome">${escaparHtml(o.cliente || "#" + o.id)}</span><span class="tag" style="color:#15a06a">✔ ${o.hora ? escaparHtml(o.hora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })) : ""}</span></div>`).join("")
+            : listaVazia("Nada finalizado ainda hoje.");
+
+        const comReag = `<div class="tvg-li"><span class="nome">🏢 Comerciais em aberto</span><span class="tag">${fmt(m.comerciais.length)}</span></div>
+            <div class="tvg-li"><span class="nome">↻ Reagendadas hoje</span><span class="tag">${fmt(m.reagendadas.length)}</span></div>`;
+
+        const grade = `<div class="tvg-grade">
+            ${cardG("⚠️ Possíveis rompimentos", romp, r.clusters.length > 5 ? `+${r.clusters.length - 5}` : "")}
+            ${cardG("👷 Equipes em campo", equipes)}
+            ${cardG("🔴 Pedidos de prioridade", prio, pr.itens.length > 6 ? `+${pr.itens.length - 6}` : "")}
+            ${cardG("✅ Finalizadas hoje", fin, m.finalizadas.length > 6 ? `+${m.finalizadas.length - 6}` : "")}
+            ${cardG("📋 Em aberto por assunto", barras(m.porAssunto, 6))}
+            ${cardG("📍 Em aberto por cidade", barras(m.porCidade, 6))}
+            ${cardG("🏢 Comerciais e reagendadas", comReag)}
+        </div>`;
+
+        return `<div class="tv-geral">${kpis}${grade}</div>`;
+    }
+
     const SLIDES = [
-        { titulo: "Panorama da operação", html: slidePanorama },
-        { titulo: "Possíveis rompimentos", html: slideRompimentos },
-        { titulo: "Equipes em campo", html: slideEquipes },
-        { titulo: "Pedidos de prioridade", html: slidePrioridade },
-        { titulo: "Comerciais e reagendadas", html: slideComReag },
-        { titulo: "Em aberto por assunto", html: m => `<div class="tv-um">${barras(m.porAssunto, 12)}</div>` },
-        { titulo: "Em aberto por cidade", html: m => `<div class="tv-um">${barras(m.porCidade, 12)}</div>` }
+        { id: "geral", titulo: "Painel geral", html: slidePainelGeral },
+        { id: "panorama", titulo: "Panorama da operação", html: slidePanorama },
+        { id: "rompimentos", titulo: "Possíveis rompimentos", html: slideRompimentos },
+        { id: "equipes", titulo: "Equipes em campo", html: slideEquipes },
+        { id: "prioridade", titulo: "Pedidos de prioridade", html: slidePrioridade },
+        { id: "finalizadas", titulo: "Finalizadas hoje", html: slideFinalizadas },
+        { id: "comerciais", titulo: "Comerciais e reagendadas", html: slideComReag },
+        { id: "assunto", titulo: "Em aberto por assunto", html: m => `<div class="tv-um">${barras(m.porAssunto, 12)}</div>` },
+        { id: "cidade", titulo: "Em aberto por cidade", html: m => `<div class="tv-um">${barras(m.porCidade, 12)}</div>` }
     ];
 
     let dados = null, slideIx = 0, pausado = false;
@@ -401,11 +516,29 @@ const TV = (() => {
         } catch (e) { /* silencioso */ }
     }
 
+    // Finalizadas HOJE — saem da os_pendentes quando fecham, então vêm da tabela
+    // `ordens` (já reconstruída). Filtro no servidor por data_fechamento >= meia-noite
+    // de hoje (barato: só os fechamentos do dia, não a tabela toda).
+    async function buscarFinalizadasHoje() {
+        try {
+            const hoje = hojeMeiaNoite().toISOString();
+            const { data, error } = await supabaseClient.from("ordens")
+                .select("id, cliente, cidade, assunto, data_fechamento, tecnico_responsavel, status_atual")
+                .gte("data_fechamento", hoje).limit(3000);
+            if (error || !data) return [];
+            return data
+                .filter(o => ixcNorm(o.status_atual) === "finalizada" && tvOsAparece(o.assunto))
+                .map(o => ({ ...o, hora: o.data_fechamento ? new Date(o.data_fechamento) : null }))
+                .sort((a, b) => (b.hora || 0) - (a.hora || 0));
+        } catch (e) { return []; }
+    }
+
     async function recalcular() {
         await checarNovidadeOs();                               // invalida o cache se o robô rodou
-        const [linhas, romp] = await Promise.all([
+        const [linhas, romp, finalizadas] = await Promise.all([
             buscarOsPendentesCacheado(),                        // tudo (1x por hora, via cache)
-            (typeof calcularRompimentos === "function" ? calcularRompimentos() : Promise.resolve({ clusters: [], total: 0, totalOffline: 0 }))
+            (typeof calcularRompimentos === "function" ? calcularRompimentos() : Promise.resolve({ clusters: [], total: 0, totalOffline: 0 })),
+            buscarFinalizadasHoje()
         ]);
         const { os, capturado } = agregarOs(linhas);
 
@@ -414,8 +547,12 @@ const TV = (() => {
         const visiveis = [...os.values()].filter(o =>
             ixcNorm(o.statusUlt) !== "finalizada" && tvOsAparece(o.assunto));
 
+        const hoje = hojeMeiaNoite().getTime(), amanha = hoje + 86400000;
+        const ehHoje = d => d && d.getTime() >= hoje && d.getTime() < amanha;
+        let agendadasHoje = 0;
         const reagendadas = [], comerciais = [];
         for (const o of visiveis) {
+            if (ehHoje(o.agendamento)) agendadasHoje++;
             if (o.reagHoje) reagendadas.push(o);
             if (/comercial/.test(ixcNorm(o.assunto))) comerciais.push(o);
         }
@@ -423,7 +560,7 @@ const TV = (() => {
         comerciais.sort((a, b) => (a.cliente || "").localeCompare(b.cliente || "", "pt-BR"));
 
         return {
-            romp, capturado,
+            romp, capturado, finalizadas, agendadasHoje,
             equipes: equipesEmCampo(visiveis),
             prio: prioridades(visiveis),
             reagendadas, comerciais,
@@ -455,10 +592,19 @@ const TV = (() => {
         $("tvPainel").hidden = false;
         relogio();
         relogioTimer = setInterval(relogio, 20000);
+        // Link pode fixar uma TV numa tela: tv.html?tela=geral (ou rompimentos,
+        // equipes, prioridade, finalizadas, comerciais, assunto, cidade, panorama),
+        // ou tv.html?tela=3. Começa parada nessa tela (a outra TV fica girando).
+        const fixo = new URLSearchParams(location.search).get("tela");
+        if (fixo) {
+            const i = /^\d+$/.test(fixo) ? (+fixo - 1) : SLIDES.findIndex(s => s.id === fixo.toLowerCase());
+            if (i >= 0) { slideIx = i; pausado = true; }
+        }
+
         montarDots();
         atualizarBotaoGiro();
         pintar();                 // mostra "Carregando…" até o 1º tick
-        reiniciarRotacao();       // começa a girar as telas
+        reiniciarRotacao();       // começa a girar as telas (respeita `pausado`)
         tick();
         timer = setInterval(tick, CICLO_MS);
 
