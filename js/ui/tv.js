@@ -83,7 +83,7 @@ function invalidarCacheOsPendentes() { _osCache = null; }
 // -------- app da TV --------
 const TV = (() => {
     const CICLO_MS = 90 * 1000;        // recalcula os dados a cada 90s
-    const ROTACAO_MS = 15 * 1000;      // troca de tela (slide) a cada 15s
+    const ROTACAO_MS = 30 * 1000;      // troca de tela (slide) a cada 30s
     const TETO_BARRAS = 9;             // barras por gráfico (assunto/cidade)
 
     let capturadoOs = null;            // último capturado_em visto (os_pendentes)
@@ -194,6 +194,39 @@ const TV = (() => {
         };
     }
 
+    // --- técnicos com agenda HOJE que ainda não saíram (nem desloc nem execução) ---
+    // O técnico de uma OS agendada não vem direto na os_pendentes (COLAB=0). Quem
+    // resolve é o Motor (nomeColab, via evento 5), igual à Agenda IXC do app. Então
+    // rodamos Motor.montarOS pra pegar o técnico de cada OS; "parado" = técnico com
+    // OS marcada pra hoje mas que NÃO aparece em deslocamento/execução neste momento.
+    function tecnicosParados(linhas, visiveis, equipes) {
+        if (typeof Motor === "undefined" || typeof Motor.montarOS !== "function") return [];
+        let osM;
+        try { osM = Motor.montarOS(linhas.map(l => l.dados), hojeMeiaNoite(), Motor.PADRAO_PARAMS).os; }
+        catch (e) { return []; }
+
+        const tecPorId = new Map();
+        for (const o of osM) {
+            const t = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
+            if (t) tecPorId.set(String(o.id), t);
+        }
+        const emCampo = new Set();                       // quem já saiu (tem OS em desloc/exec agora)
+        equipes.desloc.concat(equipes.exec).forEach(e => emCampo.add(ixcNorm(e.nome)));
+
+        const hoje = hojeMeiaNoite().getTime(), amanha = hoje + 86400000;
+        const ehHoje = d => d && d.getTime() >= hoje && d.getTime() < amanha;
+        const porTec = new Map();                        // técnico -> nº de OS de hoje ainda paradas
+        for (const o of visiveis) {
+            if (!ehHoje(o.agendamento)) continue;
+            const st = ixcNorm(o.statusUlt);
+            if (st === "deslocamento" || st.includes("execu")) continue;   // essa OS já está em campo
+            const t = tecPorId.get(String(o.id));
+            if (!t || emCampo.has(ixcNorm(t))) continue;                   // sem técnico, ou já saiu
+            porTec.set(t, (porTec.get(t) || 0) + 1);
+        }
+        return [...porTec.entries()].map(([nome, n]) => ({ nome, n })).sort((a, b) => b.n - a.n);
+    }
+
     // --- contagens por chave (assunto/cidade) ---
     function contarPor(lista, chaveFn) {
         const m = new Map();
@@ -282,6 +315,7 @@ const TV = (() => {
             { rot: "Agendadas hoje", n: nAg, cor: "#2563eb" },
             { rot: "Em deslocamento", n: eq.desloc.length, cor: "#0891b2" },
             { rot: "Em execução", n: eq.exec.length, cor: "#b7791f" },
+            { rot: "Com agenda, parados", n: (m.parados || []).length, cor: "#dc2626" },
             { rot: "Reagendadas hoje", n: m.reagendadas.length, cor: "#7c3aed" },
             { rot: "Comerciais em aberto", n: m.comerciais.length, cor: "#db2777" },
             { rot: "Prioridade s/ agenda", n: pr.semAgenda, cor: "#dc2626" },
@@ -349,18 +383,22 @@ const TV = (() => {
         return `<div class="tv-rm-grade">${cards}</div>`;
     }
 
-    /** Tela 3: equipes em campo (deslocamento / execução). */
+    /** Tela 3: equipes em campo (deslocamento / execução / com agenda mas parados). */
     function slideEquipes(m) {
-        const eq = m.equipes;
-        if (!eq.desloc.length && !eq.exec.length)
+        const eq = m.equipes, par = m.parados || [];
+        if (!eq.desloc.length && !eq.exec.length && !par.length)
             return `<div class="tv-um"><p class="tv-vazio">Nenhuma equipe em campo agora.</p></div>`;
-        const linha = e => `<div class="tv-item">
+        const linha = (e, cor) => `<div class="tv-item">
             <div class="tv-item-txt"><div class="tv-item-tit">${escaparHtml(e.nome)}</div></div>
-            <span class="tv-pill">${fmt(e.n)} OS</span></div>`;
-        const col = (ico, rot, arr) => `<div class="tv-col">
+            <span class="tv-pill"${cor ? ` style="--c:${cor}"` : ""}>${fmt(e.n)} OS</span></div>`;
+        const col = (ico, rot, arr, cor) => `<div class="tv-col">
             <div class="tv-sub-rot">${ico} ${rot} <b>(${fmt(arr.length)})</b></div>
-            ${arr.length ? arr.slice(0, 12).map(linha).join("") : listaVazia("—")}</div>`;
-        return `<div class="tv-duas">${col("🚚", "Deslocamento", eq.desloc)}${col("🔧", "Execução", eq.exec)}</div>`;
+            ${arr.length ? arr.slice(0, 12).map(e => linha(e, cor)).join("") : listaVazia("—")}</div>`;
+        return `<div class="tv-tres">
+            ${col("🚚", "Deslocamento", eq.desloc)}
+            ${col("🔧", "Execução", eq.exec)}
+            ${col("🅿️", "Com agenda, parados", par, "#dc2626")}
+        </div>`;
     }
 
     /** Tela 4: pedidos de prioridade. */
@@ -408,6 +446,7 @@ const TV = (() => {
             ${miniKpiG(fmt(r.total), "Rompimentos", r.temRompimento)}
             ${miniKpiG(fmt(eq.desloc.length), "Deslocamento")}
             ${miniKpiG(fmt(eq.exec.length), "Execução")}
+            ${miniKpiG(fmt((m.parados || []).length), "Parados c/ agenda", (m.parados || []).length > 0)}
             ${miniKpiG(fmt(m.reagendadas.length), "Reagendadas")}
             ${miniKpiG(fmt(m.comerciais.length), "Comerciais", m.comerciais.length > 0)}
             ${miniKpiG(fmt(pr.semAgenda), "Prioridade s/ ag.", pr.semAgenda > 0)}
@@ -454,8 +493,10 @@ const TV = (() => {
         { id: "prioridade", titulo: "Pedidos de prioridade", html: slidePrioridade },
         { id: "finalizadas", titulo: "Finalizadas hoje", html: slideFinalizadas },
         { id: "comerciais", titulo: "Comerciais e reagendadas", html: slideComReag },
-        { id: "assunto", titulo: "Em aberto por assunto", html: m => `<div class="tv-um">${barras(m.porAssunto, 12)}</div>` },
-        { id: "cidade", titulo: "Em aberto por cidade", html: m => `<div class="tv-um">${barras(m.porCidade, 12)}</div>` }
+        { id: "backlog", titulo: "Em aberto por assunto e cidade", html: m => `<div class="tv-duas">
+            <div class="tv-col"><div class="tv-sub-rot">📋 Por assunto</div>${barras(m.porAssunto, 10)}</div>
+            <div class="tv-col"><div class="tv-sub-rot">📍 Por cidade</div>${barras(m.porCidade, 10)}</div>
+        </div>` }
     ];
 
     let dados = null, slideIx = 0, pausado = false;
@@ -559,9 +600,10 @@ const TV = (() => {
         reagendadas.sort((a, b) => (b.statusData || 0) - (a.statusData || 0));
         comerciais.sort((a, b) => (a.cliente || "").localeCompare(b.cliente || "", "pt-BR"));
 
+        const equipes = equipesEmCampo(visiveis);
         return {
-            romp, capturado, finalizadas, agendadasHoje,
-            equipes: equipesEmCampo(visiveis),
+            romp, capturado, finalizadas, agendadasHoje, equipes,
+            parados: tecnicosParados(linhas, visiveis, equipes),
             prio: prioridades(visiveis),
             reagendadas, comerciais,
             porAssunto: contarPor(visiveis, o => ixcAssuntoCurto(o.assunto)),
