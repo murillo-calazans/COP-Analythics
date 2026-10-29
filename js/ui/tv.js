@@ -206,8 +206,8 @@ const TV = (() => {
 
     // ---------------- render ----------------
     const SIT_COR = {
-        "Sem agendamento": "#f87171", "Agendada": "#60a5fa", "Assumida": "#c084fc",
-        "Em deslocamento": "#38bdf8", "Em execução": "#fbbf24"
+        "Sem agendamento": "#dc2626", "Agendada": "#2563eb", "Assumida": "#7c3aed",
+        "Em deslocamento": "#0891b2", "Em execução": "#b7791f"
     };
 
     function tile(valor, rotulo, sub, perigo) {
@@ -280,7 +280,7 @@ const TV = (() => {
                     <span class="tv-item-ico">${ROMP_ICO[c.cat] || "⚠️"}</span>
                     <span class="tv-rm-alvo">${alvo}</span>
                     <span class="tv-pill off">${fmt(c.total)} offline</span>
-                    ${c.semOs ? `<span class="tv-pill" style="--c:#f87171">${fmt(c.semOs)} sem OS</span>` : `<span class="tv-pill" style="--c:#34d399">todas com OS</span>`}
+                    ${c.semOs ? `<span class="tv-pill" style="--c:#dc2626">${fmt(c.semOs)} sem OS</span>` : `<span class="tv-pill" style="--c:#15a06a">todas com OS</span>`}
                     <span class="tv-rm-hora">${escaparHtml(horaDe(c.inicio))}</span>
                 </div>
                 <ul class="tv-rm-lista">${membros}${resto}</ul>
@@ -326,7 +326,7 @@ const TV = (() => {
                 <div class="tv-item-tit">#${escaparHtml(o.id)} · ${escaparHtml(o.cliente || "—")}</div>
                 <div class="tv-item-sub">${escaparHtml(o.cidade || "—")} · ${escaparHtml(ixcAssuntoCurto(o.assunto))}</div>
             </div>
-            ${o.agendamento ? `<span class="tv-pill">📅 ${escaparHtml(o.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }))}</span>` : `<span class="tv-pill" style="--c:#f87171">sem agenda</span>`}</div>`;
+            ${o.agendamento ? `<span class="tv-pill">📅 ${escaparHtml(o.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }))}</span>` : `<span class="tv-pill" style="--c:#dc2626">sem agenda</span>`}</div>`;
         const col = (rot, arr) => `<div class="tv-col">
             <div class="tv-sub-rot">${rot} <b>(${fmt(arr.length)})</b></div>
             ${arr.length ? arr.slice(0, 12).map(comLinha).join("") : listaVazia("Nada aqui agora.")}</div>`;
@@ -373,6 +373,22 @@ const TV = (() => {
     function reiniciarRotacao() {
         clearInterval(rotTimer);
         rotTimer = setInterval(() => { if (!pausado) irPara(slideIx + 1); }, ROTACAO_MS);
+    }
+
+    /** Liga/desliga o giro automático das telas (botão do rodapé e barra de espaço). */
+    function alternarGiro() {
+        pausado = !pausado;
+        atualizarBotaoGiro();
+        if (!pausado) reiniciarRotacao();   // retomou: reinicia o relógio do giro
+    }
+    function atualizarBotaoGiro() {
+        const b = $("tvGira");
+        if (b) {
+            b.textContent = pausado ? "▶ Girar telas" : "⏸ Parar nesta tela";
+            b.classList.toggle("parado", pausado);
+        }
+        const p = $("tvPausa");
+        if (p) p.hidden = !pausado;
     }
 
     // ---------------- ciclo ----------------
@@ -440,20 +456,19 @@ const TV = (() => {
         relogio();
         relogioTimer = setInterval(relogio, 20000);
         montarDots();
+        atualizarBotaoGiro();
         pintar();                 // mostra "Carregando…" até o 1º tick
         reiniciarRotacao();       // começa a girar as telas
         tick();
         timer = setInterval(tick, CICLO_MS);
 
-        // Controles: ← → troca de tela; espaço pausa/retoma o giro.
+        $("tvGira")?.addEventListener("click", alternarGiro);
+
+        // Controles de teclado: ← → troca de tela; espaço gira/para.
         document.addEventListener("keydown", e => {
             if (e.key === "ArrowRight") irPara(slideIx + 1);
             else if (e.key === "ArrowLeft") irPara(slideIx - 1);
-            else if (e.key === " ") {
-                e.preventDefault();
-                pausado = !pausado;
-                $("tvPausa").hidden = !pausado;
-            }
+            else if (e.key === " ") { e.preventDefault(); alternarGiro(); }
         });
     }
 

@@ -10,9 +10,9 @@
     crossorigin="anonymous"></script>
 <style>
   :root{
-    --bg:#0b1120; --bg2:#0f1a30; --card:#13203a; --borda:#223052;
-    --txt:#e8eef9; --txt2:#9fb0ca; --txt3:#6b7c9c;
-    --azul:#60a5fa; --verde:#34d399; --amarelo:#fbbf24; --vermelho:#f87171; --roxo:#c084fc; --ciano:#38bdf8;
+    --bg:#eef1f7; --bg2:#e4e9f2; --card:#ffffff; --borda:#d8e0ec;
+    --txt:#1e2a3e; --txt2:#5a6b86; --txt3:#8795ad;
+    --azul:#2563eb; --verde:#15a06a; --amarelo:#b7791f; --vermelho:#dc2626; --roxo:#7c3aed; --ciano:#0891b2;
   }
   *{ box-sizing:border-box; }
   /* o atributo hidden precisa vencer os display:grid/flex abaixo (senão a tela
@@ -20,7 +20,7 @@
   [hidden]{ display:none !important; }
   html,body{ height:100%; }
   body{
-    margin:0; background:radial-gradient(1200px 700px at 80% -10%, #16233f 0%, var(--bg) 55%);
+    margin:0; background:radial-gradient(1200px 700px at 80% -10%, #ffffff 0%, var(--bg) 60%);
     color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
   }
@@ -42,7 +42,7 @@
     background:transparent; color:var(--txt2); font-size:17px; border:none; cursor:pointer; }
   #tvVerSenha:hover{ color:var(--txt); }
   .tv-login-card button{ width:100%; padding:12px; border:none; border-radius:10px; cursor:pointer;
-    background:var(--azul); color:#06122a; font-weight:800; font-size:15px; }
+    background:var(--azul); color:#ffffff; font-weight:800; font-size:15px; }
   #tvLoginErro{ color:var(--vermelho); font-size:13px; margin:0 0 12px; }
 
   /* ---------- cabeçalho ---------- */
@@ -53,7 +53,7 @@
   .tv-topo-dir{ margin-left:auto; text-align:right; }
   #tvRelogio{ font-size:30px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
   #tvData{ font-size:12.5px; color:var(--txt2); text-transform:capitalize; }
-  #tvErro{ background:#3a1620; color:#fecaca; border:1px solid #7f1d1d; padding:7px 14px;
+  #tvErro{ background:#fde4e4; color:#991b1b; border:1px solid #f1b4b4; padding:7px 14px;
     border-radius:10px; font-size:13px; margin-bottom:10px; }
 
   /* ---------- KPIs ---------- */
@@ -68,7 +68,7 @@
   .tv-kpis{ display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:1fr; gap:16px; }
   .tv-kpi{ background:var(--card); border:1px solid var(--borda); border-radius:18px;
     padding:22px 26px; display:flex; flex-direction:column; justify-content:center; }
-  .tv-kpi.perigo{ border-color:#7f2d35; background:linear-gradient(180deg,#2a1420,#13203a); }
+  .tv-kpi.perigo{ border-color:#f0b4b4; background:linear-gradient(180deg,#fdeaea,#ffffff); }
   .tv-kpi-n{ font-size:64px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
   .tv-kpi.perigo .tv-kpi-n{ color:var(--vermelho); }
   .tv-kpi-rot{ font-size:20px; font-weight:700; margin-top:10px; }
@@ -87,9 +87,9 @@
   .tv-item-sub{ font-size:15px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tv-mini{ font-size:14px; font-weight:800; }
   .tv-pill{ flex:none; font-size:15px; font-weight:800; padding:5px 14px; border-radius:999px;
-    color:var(--c,#cdd9ef); background:color-mix(in srgb, var(--c,#60a5fa) 20%, transparent);
-    border:1px solid color-mix(in srgb, var(--c,#60a5fa) 42%, transparent); }
-  .tv-pill.off{ --c:#9fb0ca; }
+    color:var(--c,#2563eb); background:color-mix(in srgb, var(--c,#2563eb) 14%, #fff);
+    border:1px solid color-mix(in srgb, var(--c,#2563eb) 38%, transparent); }
+  .tv-pill.off{ --c:#5a6b86; }
   .tv-sub-rot{ font-size:15px; font-weight:800; color:var(--txt3); text-transform:uppercase; letter-spacing:.06em; margin:10px 0 4px; }
   .tv-sub-rot:first-child{ margin-top:0; }
   .tv-sub-rot b{ color:var(--txt); }
@@ -129,6 +129,7 @@
   .tv-pausa{ color:var(--amarelo); font-weight:700; }
   .tv-rodape button:not(.tv-dot){ background:none; border:1px solid var(--borda); color:var(--txt2); border-radius:8px; padding:5px 11px; font-size:13px; cursor:pointer; }
   .tv-rodape button:not(.tv-dot):hover{ color:var(--txt); border-color:var(--txt3); }
+  #tvGira.parado{ color:var(--amarelo); border-color:var(--amarelo); font-weight:700; }
   .tv-rodape .dir{ margin-left:auto; display:flex; gap:8px; }
 
   @media (max-width:1100px){
@@ -174,8 +175,8 @@
       <span class="tv-ponto"></span>
       <span id="tvAtualizado">conectando…</span>
       <span id="tvDots" class="tv-dots"></span>
-      <span id="tvPausa" class="tv-pausa" hidden>⏸ pausado</span>
       <span class="dir">
+        <button type="button" id="tvGira">⏸ Parar nesta tela</button>
         <button type="button" id="tvFull">⛶ Tela cheia</button>
         <button type="button" id="tvSair">Sair</button>
       </span>
@@ -186,7 +187,7 @@
   <script src="js/config/supabase.js"></script>
   <script src="js/agendador/motor.js?v=36"></script>
   <script src="js/engine/prioridadeengine.js?v=1"></script>
-  <script src="js/ui/tv.js?v=3"></script>
+  <script src="js/ui/tv.js?v=4"></script>
   <script src="js/ui/rompimentos.js?v=1"></script>
 </body>
 </html>
