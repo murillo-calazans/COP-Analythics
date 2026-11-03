@@ -740,12 +740,15 @@ function ativarAbaAgenda(aba) {
     const ia = document.getElementById("agendaHojeConteudo");
     const ixc = document.getElementById("agendaIxcConteudo");
     const aberto = document.getElementById("agendaAbertoConteudo");
+    const timeline = document.getElementById("agendaTimelineConteudo");
     const navDia = document.getElementById("agendaNavDia");
     if (ia) ia.hidden = aba !== "ia";
     if (ixc) ixc.hidden = aba !== "ixc";
     if (aberto) aberto.hidden = aba !== "aberto";
+    if (timeline) timeline.hidden = aba !== "timeline";
     if (navDia) navDia.style.visibility = aba === "ia" ? "" : "hidden"; // nav de dia só faz sentido na Agenda IA
     if (aba === "ixc") carregarAgendaIxc();
+    if (aba === "timeline" && typeof carregarTimelineAgenda === "function") carregarTimelineAgenda();
     if (aba === "aberto" && typeof renderizarAgendaBacklog === "function") renderizarAgendaBacklog();
 }
 
