@@ -188,7 +188,13 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
 
     // cidades (ordenadas), e ordena técnicos dentro da cidade (quem tem mais OS primeiro)
     linhasTec.forEach(lt => lt.blocos.sort((a, b) => (a.s - b.s)));
-    const cidades = [...new Set(linhasTec.map(lt => lt.cidade))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    // ordena por cidade (fora-da-escala por último dentro da cidade), depois nome —
+    // assim os técnicos da mesma cidade ficam juntos e o separador aparece 1x por cidade.
+    linhasTec.sort((a, b) =>
+        a.cidade.localeCompare(b.cidade, "pt-BR") ||
+        (a.fora === b.fora ? 0 : a.fora ? 1 : -1) ||
+        a.nome.localeCompare(b.nome, "pt-BR"));
+    const cidades = [...new Set(linhasTec.map(lt => lt.cidade))];
     return { linhasTec, cidades, agora };
 }
 
@@ -225,12 +231,12 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-board{ background:var(--cor-superficie); border:1px solid var(--cor-borda); border-radius:14px; overflow:auto; }
 .tl-grid{ position:relative; display:grid; }
 .tl-cell{ border-bottom:1px solid var(--cor-borda); }
-.tl-corner,.tl-name{ position:sticky; left:0; z-index:4; background:var(--cor-superficie); border-right:1px solid var(--cor-borda); }
-.tl-head{ position:sticky; top:0; z-index:5; background:var(--tl-head-bg); border-bottom-color:var(--tl-head-line); }
-.tl-corner{ z-index:6; display:flex; align-items:center; padding:0 14px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--tl-head-fg); background:var(--tl-head-bg); border-right-color:var(--tl-head-line); }
+.tl-corner,.tl-name{ position:sticky; left:0; z-index:20; background:var(--cor-superficie); border-right:1px solid var(--cor-borda); }
+.tl-head{ position:sticky; top:0; z-index:10; background:var(--tl-head-bg); border-bottom-color:var(--tl-head-line); }
+.tl-corner{ z-index:22; display:flex; align-items:center; padding:0 14px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--tl-head-fg); background:var(--tl-head-bg); border-right-color:var(--tl-head-line); }
 .tl-hours{ position:relative; background:var(--tl-head-bg); }
 .tl-htick{ position:absolute; top:0; bottom:0; display:flex; align-items:center; padding-left:7px; font-size:12px; font-weight:600; color:var(--tl-head-fg); border-left:1px solid var(--tl-head-line); font-variant-numeric:tabular-nums; }
-.tl-cidade-sep{ grid-column:1/-1; position:sticky; left:0; background:var(--cor-fundo-suave,rgba(0,0,0,.04)); font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cor-texto-suave); padding:5px 14px; border-bottom:1px solid var(--cor-borda); }
+.tl-cidade-sep{ grid-column:1/-1; position:sticky; left:0; background:var(--cor-fundo-suave,rgba(0,0,0,.05)); font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cor-texto); padding:6px 14px 6px 234px; border-bottom:1px solid var(--cor-borda); }
 
 .tl-name{ padding:8px 12px; display:flex; flex-direction:column; justify-content:center; gap:3px; }
 .tl-name .nm{ font-size:13.5px; font-weight:600; line-height:1.15; }
@@ -241,7 +247,7 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-name.semos .nm, .tl-name.fora .nm{ color:var(--cor-texto-suave); }
 
 .tl-lane{ position:relative; background-image:repeating-linear-gradient(90deg,var(--cor-borda) 0 1px,transparent 1px var(--tl-hourw)); }
-.tl-blk{ position:absolute; border-radius:6px; padding:3px 7px; overflow:hidden; display:flex; flex-direction:column; justify-content:center; gap:1px; }
+.tl-blk{ position:absolute; z-index:1; border-radius:6px; padding:3px 7px; overflow:hidden; display:flex; flex-direction:column; justify-content:center; gap:1px; }
 .tl-blk .os{ font-size:11px; font-weight:700; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tl-blk .cli{ font-size:10px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:.82; }
 .tl-blk .perf{ font-size:10px; font-weight:700; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
