@@ -226,6 +226,7 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-sw.exec{ background:var(--tl-azul-bg); border:1.5px solid var(--tl-azul); }
 .tl-sw.desloc{ background:var(--tl-cinza-bg); border:1.5px dashed var(--tl-cinza); }
 .tl-sw.prev{ background:transparent; border:1.5px dashed var(--cor-texto-suave); }
+.tl-sw.atras{ background:var(--tl-vermelho-bg); border:1.5px dashed var(--tl-vermelho); }
 .tl-sw.agora{ width:3px; height:14px; border-radius:2px; background:var(--tl-agora); }
 
 .tl-board{ background:var(--cor-superficie); border:1px solid var(--cor-borda); border-radius:14px; overflow:auto; }
@@ -358,6 +359,7 @@ function tlRender() {
         <span class="it"><span class="tl-sw exec"></span> Em execução</span>
         <span class="it"><span class="tl-sw desloc"></span> Deslocamento</span>
         <span class="it"><span class="tl-sw prev"></span> Prevista</span>
+        <span class="it"><span class="tl-sw atras"></span> Não iniciada (atrasada)</span>
         <span class="it"><span class="tl-sw agora"></span> Agora</span>
         <span class="tl-at">atualizado ${tlFmtH(new Date(tlEm))}</span>
       </div>
