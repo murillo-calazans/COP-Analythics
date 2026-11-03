@@ -25,7 +25,8 @@
 // ---- janela / medidas ----
 const TL_DIA_INI = 0, TL_DIA_FIM = 24;      // a linha cobre 24h
 const TL_JANELA_INI = 8, TL_JANELA_FIM = 18; // recorte padrão (rola pra ver o resto)
-const TL_NAMEW = 220;
+const TL_NAMEW = 270;
+const TL_ROW = 52;      // altura de cada sub-faixa (card + respiro)
 let _tlHourW = 110;
 
 // Tempo esperado (min) por assunto — [sozinho, dupla]. Padrão enquanto não há a tela de config.
@@ -152,42 +153,52 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
         return foraEscala.get(c);
     }
 
-    // blocos a partir das movimentações (deslocamento/execução/finalização)
+    // 1) CARD por OS (um só, com deslocamento + execução/finalização dentro)
     for (const [id, o] of porOs) {
         const info = ordensMap.get(id) || {};
         if (TL_EXCLUIR.test(tlNorm(info.assunto))) continue;
         const tec = o.tec || info.tecnico_responsavel;
         if (!tec) continue;
-        const dupla = (achaTec(tec) || {}).dupla || false;
-        const exp = tlEsperado(info.assunto, dupla);
-        const comum = { id, cli: info.cliente, a: info.assunto, exp };
-        const st = tlNorm(o.status);
         const lt = destino(tec, info.cidade);
-
+        const exp = tlEsperado(info.assunto, lt.dupla);
+        const ini = o.desloc || o.exec;                 // começo real do card
+        if (!ini && !o.fim) continue;
+        const start = ini || new Date(o.fim.getTime() - exp * 60000);
+        const descFim = (o.desloc && o.exec && o.desloc < o.exec) ? o.exec : null;  // fim do deslocamento
+        let estado, perf = "";
         if (o.fim) {
-            const ini = o.exec || o.desloc || new Date(o.fim.getTime() - exp * 60000);
-            lt.blocos.push({ ...comum, t: "fin", s: ini, e: o.fim, aproxIni: !(o.exec || o.desloc) });
-        } else if (st.includes("execu") || o.exec) {
-            lt.blocos.push({ ...comum, t: "exec", s: o.exec || o.desloc || agora, e: null });
-            if (o.desloc && o.exec && o.desloc < o.exec) lt.blocos.push({ t: "desloc", s: o.desloc, e: o.exec });
-        } else if (st === "deslocamento" || o.desloc) {
-            lt.blocos.push({ ...comum, t: "desloc", s: o.desloc || agora, e: null });
+            const act = (o.fim - (o.exec || o.desloc || start)) / 60000;
+            estado = act > exp ? "fin-over" : "fin";
+            perf = act > exp ? `▲ +${Math.round(act - exp)}min` : "✔ no tempo";
+        } else if (tlNorm(o.status).includes("execu") || o.exec) {
+            estado = "exec";
+        } else {
+            estado = "desloc";
         }
+        lt.blocos.push({ tipo: "os", id, cli: info.cliente, a: info.assunto, exp, estado, perf,
+            ini: start, descFim, fim: o.fim || null, execIni: o.exec || start });
     }
 
-    // blocos previstos (agendadas ainda não iniciadas)
-    for (const p of previstas) {
-        const lt = destino(p.tec, p.cidade);
-        const dupla = lt.dupla;
-        const exp = tlEsperado(p.assunto, dupla);
-        const fim = new Date(p.agendamento.getTime() + exp * 60000);
-        lt.blocos.push({ t: "prev", id: p.id, cli: p.cliente, a: p.assunto, exp, s: p.agendamento, e: fim, atras: p.agendamento < agora });
+    // 2) PREVISTAS (agendadas não iniciadas): futuras ficam na hora marcada (reagendada = hora nova);
+    //    as atrasadas NÃO ficam no passado — entram enfileiradas DEPOIS do "agora".
+    const prevPorTec = new Map();
+    for (const p of previstas) { const lt = destino(p.tec, p.cidade); (prevPorTec.get(lt) || prevPorTec.set(lt, []).get(lt)).push(p); }
+    for (const [lt, lista] of prevPorTec) {
+        let cursor = agora.getTime();
+        lt.blocos.forEach(b => { if (b.tipo === "os") { const e = (b.fim || agora).getTime(); if (e > cursor) cursor = e; } });
+        const fut = [], over = [];
+        lista.forEach(p => (p.agendamento.getTime() > agora.getTime() ? fut : over).push(p));
+        fut.forEach(p => { const exp = tlEsperado(p.assunto, lt.dupla); lt.blocos.push({ tipo: "prev", id: p.id, cli: p.cliente, a: p.assunto, exp, ini: p.agendamento, fim: new Date(p.agendamento.getTime() + exp * 60000) }); });
+        over.sort((a, b) => a.agendamento - b.agendamento).forEach(p => {
+            const exp = tlEsperado(p.assunto, lt.dupla);
+            const s = new Date(cursor), e = new Date(cursor + exp * 60000); cursor += exp * 60000;
+            lt.blocos.push({ tipo: "prev", id: p.id, cli: p.cliente, a: p.assunto, exp, ini: s, fim: e, fila: true });
+        });
     }
 
     for (const [, lt] of foraEscala) linhasTec.push(lt);
 
-    // cidades (ordenadas), e ordena técnicos dentro da cidade (quem tem mais OS primeiro)
-    linhasTec.forEach(lt => lt.blocos.sort((a, b) => (a.s - b.s)));
+    linhasTec.forEach(lt => lt.blocos.sort((a, b) => (a.ini - b.ini)));
     // ordena por cidade (fora-da-escala por último dentro da cidade), depois nome —
     // assim os técnicos da mesma cidade ficam juntos e o separador aparece 1x por cidade.
     linhasTec.sort((a, b) =>
@@ -237,10 +248,10 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-corner{ z-index:22; display:flex; align-items:center; padding:0 14px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--tl-head-fg); background:var(--tl-head-bg); border-right-color:var(--tl-head-line); }
 .tl-hours{ position:relative; background:var(--tl-head-bg); }
 .tl-htick{ position:absolute; top:0; bottom:0; display:flex; align-items:center; padding-left:7px; font-size:12px; font-weight:600; color:var(--tl-head-fg); border-left:1px solid var(--tl-head-line); font-variant-numeric:tabular-nums; }
-.tl-cidade-sep{ grid-column:1/-1; position:sticky; left:0; background:var(--cor-fundo-suave,rgba(0,0,0,.05)); font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cor-texto); padding:6px 14px 6px 234px; border-bottom:1px solid var(--cor-borda); }
+.tl-cidade-sep{ grid-column:1/-1; position:sticky; left:0; background:var(--cor-fundo-suave,rgba(0,0,0,.05)); font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cor-texto); padding:6px 14px 6px 284px; border-bottom:1px solid var(--cor-borda); }
 
-.tl-name{ padding:8px 12px; display:flex; flex-direction:column; justify-content:center; gap:3px; }
-.tl-name .nm{ font-size:13.5px; font-weight:600; line-height:1.15; }
+.tl-name{ padding:8px 14px; display:flex; flex-direction:column; justify-content:center; gap:3px; }
+.tl-name .nm{ font-size:13.5px; font-weight:600; line-height:1.2; overflow-wrap:anywhere; }
 .tl-name .mt{ display:flex; align-items:center; gap:6px; font-size:11px; color:var(--cor-texto-suave); }
 .tl-pill{ font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px; }
 .tl-pill.dupla{ color:var(--tl-azul); background:var(--tl-azul-bg); }
@@ -258,7 +269,24 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-blk.exec.over{ background:var(--tl-amarelo-bg); border-color:var(--tl-amarelo); color:var(--tl-amarelo); }
 .tl-blk.desloc{ background:var(--tl-cinza-bg); border:1px dashed var(--tl-cinza); color:var(--tl-cinza); }
 .tl-blk.prev{ background:transparent; border:1px dashed var(--cor-texto-suave); color:var(--cor-texto-suave); }
-.tl-blk.atras{ background:var(--tl-vermelho-bg); border:1px dashed var(--tl-vermelho); color:var(--tl-vermelho); }
+.tl-blk.prev.fila{ background:var(--cor-fundo-suave,rgba(0,0,0,.04)); }
+
+/* CARD da OS: 1 só card com deslocamento (cinza) + execução/finalização, borda grossa envolvendo */
+.tl-os{ position:absolute; z-index:1; border-radius:8px; overflow:hidden; border:2.5px solid var(--tl-cinza); background:var(--cor-superficie); }
+.tl-os.fin{ border-color:var(--tl-verde); }
+.tl-os.fin-over{ border-color:var(--tl-amarelo); }
+.tl-os.exec{ border-color:var(--tl-azul); }
+.tl-os.exec.over{ border-color:var(--tl-amarelo); }
+.tl-seg-desl{ position:absolute; left:0; top:0; bottom:0; background:repeating-linear-gradient(45deg,var(--tl-cinza-bg) 0 5px,transparent 5px 10px),var(--tl-cinza-bg); border-right:1px solid var(--cor-borda); }
+.tl-corpo{ position:absolute; top:0; right:0; bottom:0; left:0; padding:3px 8px; display:flex; flex-direction:column; justify-content:center; gap:1px; overflow:hidden; }
+.tl-os.fin .tl-corpo{ background:var(--tl-verde-bg); color:var(--tl-verde); }
+.tl-os.fin-over .tl-corpo{ background:var(--tl-amarelo-bg); color:var(--tl-amarelo); }
+.tl-os.exec .tl-corpo{ background:var(--tl-azul-bg); color:var(--tl-azul); }
+.tl-os.exec.over .tl-corpo{ background:var(--tl-amarelo-bg); color:var(--tl-amarelo); }
+.tl-corpo.desl{ background:var(--tl-cinza-bg); color:var(--tl-cinza); }
+.tl-os .os{ font-size:11px; font-weight:700; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tl-os .cli{ font-size:10px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:.82; }
+.tl-os .perf{ font-size:10px; font-weight:700; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tl-semos-chip{ position:absolute; top:8px; left:10px; font-size:11.5px; color:var(--cor-texto-suave); border:1px dashed var(--cor-borda); border-radius:999px; padding:2px 11px; }
 
 .tl-nowline{ position:absolute; top:0; bottom:0; width:2px; background:var(--tl-agora); z-index:3; pointer-events:none; transition:left .5s linear; }
@@ -413,7 +441,7 @@ function tlDesenharGrade() {
         }
         // atribui sub-faixas pra blocos que se sobrepõem
         const faixas = tlFaixas(lt.blocos);
-        const alturaLinha = Math.max(1, faixas.n) * 42 + 10;
+        const alturaLinha = Math.max(1, faixas.n) * TL_ROW + 8;
         const tag = lt.fora ? "" : (lt.dupla ? `<span class="tl-pill dupla">dupla</span>` : `<span class="tl-pill solo">sozinho</span>`);
         const sub = lt.setor ? (tlCidade === "__all__" ? lt.setor : lt.setor) : (lt.fora ? "fora da escala" : "");
         html += `<div class="tl-cell tl-name${lt.blocos.length ? "" : " semos"}${lt.fora ? " fora" : ""}" style="min-height:${alturaLinha}px">
@@ -437,7 +465,7 @@ function tlDesenharGrade() {
 function tlFaixas(blocos) {
     const fimDe = [];      // fim (ms) ocupado de cada sub-faixa
     const de = blocos.map(b => {
-        const s = b.s.getTime(), e = (b.e || new Date()).getTime();
+        const s = b.ini.getTime(), e = (b.fim || new Date()).getTime();
         let f = 0;
         while (f < fimDe.length && fimDe[f] > s + 1) f++;
         fimDe[f] = e;
@@ -447,31 +475,37 @@ function tlFaixas(blocos) {
 }
 
 function tlBlocoHtml(b, faixa) {
-    const agora = new Date();
-    const live = b.e == null;
-    const fim = live ? agora : b.e;
-    const left = tlX(tlHoras(b.s));
-    const w = Math.max(14, (tlHoras(fim) - tlHoras(b.s)) * _tlHourW);
-    const top = 6 + faixa * 42;
-    if (b.t === "desloc") {
-        return `<div class="tl-blk desloc" data-live="${live ? 1 : 0}" data-s="${tlHoras(b.s)}" style="left:${left}px;width:${w}px;top:${top}px;height:34px" title="Deslocamento"><div class="os">🚚 deslocamento</div></div>`;
-    }
-    let cls = b.t, perf = "";
-    if (b.t === "fin") {
-        const act = (b.e - b.s) / 60000;
-        if (act > b.exp) { cls = "fin fin-over"; perf = `<span>▲ +${Math.round(act - b.exp)}min</span>`; }
-        else perf = `<span>✔ no tempo</span>`;
-    } else if (b.t === "exec") {
-        perf = `<span class="tl-perf-live"></span>`;
-    } else if (b.t === "prev") {
-        if (b.atras) { cls = "prev atras"; perf = `<span>não iniciada</span>`; }
-        else perf = `<span>previsto ${b.exp}min</span>`;
-    }
+    const top = 6 + faixa * TL_ROW;
+    const live = b.fim == null;
+    const end = live ? new Date() : b.fim;
+    const left = tlX(tlHoras(b.ini));
+    const w = Math.max(16, (tlHoras(end) - tlHoras(b.ini)) * _tlHourW);
     const titulo = `#${b.id} · ${b.cli || ""} · ${tlCurto(b.a)}`;
-    return `<div class="tl-blk ${cls}" data-live="${live ? 1 : 0}" data-s="${tlHoras(b.s)}" data-exp="${b.exp}" style="left:${left}px;width:${w}px;top:${top}px;height:34px" title="${escaparHtml(titulo)}">
-        <div class="os">#${escaparHtml(b.id)} ${escaparHtml(tlCurto(b.a))}</div>
-        <div class="cli">${escaparHtml(b.cli || "—")}</div>
-        <div class="perf">${perf}</div></div>`;
+
+    // prevista (dashed) — futura na hora marcada ou enfileirada após o agora
+    if (b.tipo === "prev") {
+        return `<div class="tl-blk prev${b.fila ? " fila" : ""}" style="left:${left}px;width:${w}px;top:${top}px;height:${TL_ROW - 10}px" title="${escaparHtml(titulo)} · prevista">
+            <div class="os">#${escaparHtml(b.id)} ${escaparHtml(tlCurto(b.a))}</div>
+            <div class="cli">${escaparHtml(b.cli || "—")}</div>
+            <div class="perf">previsto ${b.exp}min</div></div>`;
+    }
+
+    // CARD da OS: deslocamento (cinza) + execução/finalização (verde/laranja/azul), borda grossa
+    const deslocMs = b.descFim ? (b.descFim - b.ini) : (b.estado === "desloc" ? (end - b.ini) : 0);
+    const deslW = Math.max(0, deslocMs / 3600000 * _tlHourW);
+    const seg = (deslW > 0 && b.estado !== "desloc") ? `<div class="tl-seg-desl" style="width:${deslW.toFixed(1)}px"></div>` : "";
+    let corpo;
+    if (b.estado === "desloc") {
+        corpo = `<div class="tl-corpo desl"><div class="os">🚚 #${escaparHtml(b.id)}</div><div class="perf tl-perf-live"></div></div>`;
+    } else {
+        const perf = b.estado === "exec" ? `<span class="tl-perf-live"></span>` : escaparHtml(b.perf || "");
+        corpo = `<div class="tl-corpo" style="left:${deslW.toFixed(1)}px">
+            <div class="os">#${escaparHtml(b.id)} ${escaparHtml(tlCurto(b.a))}</div>
+            <div class="cli">${escaparHtml(b.cli || "—")}</div>
+            <div class="perf">${perf}</div></div>`;
+    }
+    return `<div class="tl-os ${b.estado}" data-live="${live ? 1 : 0}" data-ini="${tlHoras(b.ini)}" data-exec="${tlHoras(b.execIni || b.ini)}" data-exp="${b.exp || 0}" style="left:${left}px;width:${w}px;top:${top}px;height:${TL_ROW - 10}px" title="${escaparHtml(titulo)}">
+        ${seg}${corpo}</div>`;
 }
 
 function tlResumo() {
@@ -480,9 +514,8 @@ function tlResumo() {
     const rotulo = tlCidade === "__all__" ? "todas as cidades" : tlCidade;
     let ok = 0, bad = 0; const ass = {};
     lista.forEach(lt => lt.blocos.forEach(b => {
-        if (b.t === "desloc") return;
         if (b.id) ass[tlCurto(b.a)] = (ass[tlCurto(b.a)] || 0) + 1;
-        if (b.t === "fin") { const act = (b.e - b.s) / 60000; (act > b.exp ? bad++ : ok++); }
+        if (b.tipo === "os" && (b.estado === "fin" || b.estado === "fin-over")) (b.estado === "fin-over" ? bad++ : ok++);
     }));
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set("tlOk", ok); set("tlBad", bad); set("tlPerfCid", rotulo); set("tlAssCid", rotulo);
@@ -506,12 +539,15 @@ function tlTick() {
     const rel = document.getElementById("tlRelogio"); if (rel) rel.textContent = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const nl = document.getElementById("tlNowline"), nf = document.getElementById("tlNowflag");
     if (nl) { nl.style.left = (TL_NAMEW + tlX(Math.min(TL_DIA_FIM, Math.max(TL_DIA_INI, h)))) + "px"; nf.textContent = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
-    grid.querySelectorAll('.tl-blk[data-live="1"]').forEach(el => {
-        const s = +el.dataset.s;
-        el.style.width = Math.max(14, (h - s) * _tlHourW) + "px";
+    grid.querySelectorAll('.tl-os[data-live="1"]').forEach(el => {
+        const ini = +el.dataset.ini, exec = +el.dataset.exec, exp = +el.dataset.exp;
+        el.style.width = Math.max(16, (h - ini) * _tlHourW) + "px";
         const p = el.querySelector(".tl-perf-live");
-        if (p) { const exp = +el.dataset.exp, el2 = (h - s) * 60, over = el2 > exp; el.classList.toggle("over", over);
-            p.textContent = over ? `▲ passou +${Math.round(el2 - exp)}min` : `▶ ${Math.round(el2)}min · no tempo`; }
+        if (!p) return;
+        if (el.classList.contains("desloc")) { p.textContent = `${Math.round((h - ini) * 60)}min em deslocamento`; return; }
+        const min = (h - exec) * 60, over = min > exp;
+        el.classList.toggle("over", over);
+        p.textContent = over ? `▲ passou +${Math.round(min - exp)}min` : `▶ ${Math.round(min)}min · no tempo`;
     });
 }
 
