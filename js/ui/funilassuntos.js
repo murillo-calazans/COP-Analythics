@@ -1,22 +1,5 @@
-/**
- * ==========================================================
- * UI do Funil de Assuntos
- * ==========================================================
- * "Depois de uma OS com assunto de origem (ex.: Instalação Novo
- * Cliente), o cliente abriu uma OS com assunto de destino (ex.:
- * Sem Conexão LOS)?" — mede qualidade de instalação/transferência.
- * Assuntos configuráveis via busca+chips (mesmo padrão visual do
- * Filtro Global), porque o texto exato varia por operação.
- */
-
 let _funilPendente = { origem: [], destino: [] };
 
-/**
- * Só cuida do que é permanente na página (o modal e seus campos de
- * busca) — o botão "Configurar" fica dentro da aba Indicadores, que é
- * remontada via innerHTML toda vez, então esse botão é religado em
- * cada renderizarSecaoIndicadores() (ver js/ui/indicadores.js).
- */
 function registrarFunilAssuntos() {
     const botaoSalvar = document.getElementById("btnSalvarFunilAssuntos");
     if (botaoSalvar) botaoSalvar.addEventListener("click", salvarFunilAssuntosDaTela);

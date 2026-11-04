@@ -1,36 +1,9 @@
-/**
- * ==========================================================
- * UI de Ordens de Serviço (aba Ordens)
- * ==========================================================
- * Lista TODAS as OS (ID, Cliente/Login, Assunto, Diagnóstico, Próxima
- * Tarefa, Técnico, Data final) — Diagnóstico/Próxima Tarefa/Técnico são
- * sempre do fechamento EFETIVO (ver IndicatorEngine.analisarEventosOS
- * -> fechamentoEfetivo), mesmo critério usado no resto do sistema.
- *
- * De propósito INDEPENDENTE do Filtro Global — usa APP.dados.ordens
- * (tudo), só recortado pelo filtro PRÓPRIO desta aba (Diagnóstico +
- * busca livre), mesmo padrão da aba Alertas (ver js/ui/alertas.js).
- * Motivo do pedido original: poder escolher um Diagnóstico específico e
- * ver só as OS que caíram nele, sem depender do estado do Filtro Global.
- */
-
-// Linhas já computadas (1x por render da aba — cálculo pesado, roda em
-// cima de TODAS as OS) — o filtro/busca reaproveita esse cache em vez
-// de recalcular tudo a cada tecla.
 let _linhasOrdensCache = [];
 
-// Lista de diagnósticos distintos (extraída de _linhasOrdensCache, não
-// via FiltroEngine.coletarOpcoes de novo) — pro campo de busca do
-// seletor de Diagnóstico, sem precisar reprocessar todas as OS a cada
-// tecla digitada.
 let _diagnosticosDistintosCache = [];
 
-// Diagnóstico escolhido no seletor de busca desta aba ("" = todos).
 let _ordensDiagnosticoSelecionado = "";
 
-// Cap de linhas desenhadas de uma vez — sem isso um diagnóstico muito
-// comum (ex.: TROCA DE EQUIPAMENTO, milhares de OS) travaria o
-// navegador desenhando tudo de uma vez.
 const LIMITE_LINHAS_ORDENS = 300;
 
 function renderizarOrdens() {
@@ -44,7 +17,6 @@ function renderizarOrdens() {
     aplicarFiltroOrdens();
 }
 
-/** Monta o cache de linhas — 1x, a partir de TODAS as OS (independente do Filtro Global). */
 function calcularLinhasOrdens() {
     const ordens = APP.dados.ordens;
     const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
@@ -75,12 +47,10 @@ function calcularLinhasOrdens() {
         });
     }
 
-    // Mais recente primeiro — ordem sem fechamento (dataFinal null) vai pro fim.
     _linhasOrdensCache.sort((a, b) => (b.dataFinal?.getTime() ?? -1) - (a.dataFinal?.getTime() ?? -1));
 
     _diagnosticosDistintosCache = [...diagnosticosDistintos].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-    // Diagnóstico escolhido antes de reimportar pode não existir mais.
     if (_ordensDiagnosticoSelecionado && !_diagnosticosDistintosCache.includes(_ordensDiagnosticoSelecionado)) {
         _ordensDiagnosticoSelecionado = "";
     }
@@ -91,7 +61,7 @@ function calcularLinhasOrdens() {
 let _ordensFiltroRegistrado = false;
 
 function registrarFiltroOrdens() {
-    if (_ordensFiltroRegistrado) return; // elementos são fixos no HTML, só liga 1x
+    if (_ordensFiltroRegistrado) return;
     _ordensFiltroRegistrado = true;
 
     const buscaDiagnostico = document.getElementById("buscaDiagnosticoOrdens");
@@ -119,7 +89,6 @@ function registrarFiltroOrdens() {
     });
 }
 
-/** Dropdown de busca do Diagnóstico (mesmo padrão de busca+lista do Setor do COP, ver js/ui/setorescop.js) — não muda o filtro sozinho, só narra as opções até o clique. */
 function renderizarDropdownDiagnosticoOrdens() {
     const dropdown = document.getElementById("dropdownDiagnosticoOrdens");
     const busca = document.getElementById("buscaDiagnosticoOrdens");
@@ -140,7 +109,7 @@ function renderizarDropdownDiagnosticoOrdens() {
 
     dropdown.querySelectorAll("[data-valor]").forEach(item => {
         item.addEventListener("mousedown", evento => {
-            evento.preventDefault(); // não deixa o blur do input rodar antes do clique
+            evento.preventDefault();
             selecionarDiagnosticoOrdens(item.dataset.valor);
         });
     });
@@ -160,17 +129,9 @@ function selecionarDiagnosticoOrdens(valor) {
     aplicarFiltroOrdens();
 }
 
-/**
- * Linhas de _linhasOrdensCache que batem com o filtro PRÓPRIO desta aba
- * agora (Diagnóstico + período + busca) — separado de aplicarFiltroOrdens
- * pra também servir de base pro Relatório (ver gerarRelatorioOrdens em
- * js/services/relatorios.js), sem duplicar a lógica de filtro.
- */
 function linhasOrdensFiltradas() {
     const termoNormalizado = normalizarTexto(document.getElementById("buscaOrdens")?.value ?? "");
 
-    // Período PRÓPRIO desta aba (igual Alertas) — filtra pela Data final
-    // (fechamento efetivo), não pela abertura da OS.
     const dataInicioBruta = document.getElementById("ordensDataInicio")?.value;
     const dataFimBruta = document.getElementById("ordensDataFim")?.value;
     const dataInicio = dataInicioBruta ? new Date(`${dataInicioBruta}T00:00:00`) : null;
@@ -180,7 +141,7 @@ function linhasOrdensFiltradas() {
         if (_ordensDiagnosticoSelecionado && linha.diagnostico !== _ordensDiagnosticoSelecionado) return false;
 
         if (dataInicio || dataFim) {
-            if (!linha.dataFinal) return false; // sem fechamento não tem como bater num período
+            if (!linha.dataFinal) return false;
             if (dataInicio && linha.dataFinal < dataInicio) return false;
             if (dataFim && linha.dataFinal > dataFim) return false;
         }

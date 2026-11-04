@@ -10,23 +10,22 @@ class OrdemServico {
     } = {}) {
         this.id = id;
         this.cliente = cliente;
-        this.login = login; // identificador de recorrência — um cliente pode ter vários logins, mas cada login é único
+        this.login = login;
         this.cidade = cidade;
         this.bairro = bairro;
-        this.bairroOriginal = null; // grafia exatamente como veio da planilha — preenchido por BairroEngine.normalizarBairros na 1ª normalização; this.bairro passa a ser a grafia canônica escolhida
+        this.bairroOriginal = null;
         this.assunto = assunto;
-        this.assuntoOriginal = null; // assunto exatamente como veio da planilha — preenchido por AssuntoEngine.normalizarAssuntos na 1ª normalização; this.assunto passa a ser o canônico (ver js/config/assuntosequivalentes.js)
+        this.assuntoOriginal = null;
 
         this.statusAtual = null;
-        this.tecnicoResponsavel = null; // operador da movimentação mais recente (não necessariamente a última importada)
+        this.tecnicoResponsavel = null;
         this.dataAbertura = dataAbertura;
         this.dataFechamento = null;
-        this.lat = null; // coordenada da OS no IXC (patch-30) — Mapa de calor
+        this.lat = null;
         this.lng = null;
 
-        this.movimentacoes = []; // Movimentacao[]
+        this.movimentacoes = [];
 
-        // Reservados para as próximas camadas (Business/Intelligence Engine)
         this.indicadores = {};
         this.alertas = [];
         this.auditoriaIA = null;
@@ -44,9 +43,6 @@ class OrdemServico {
                 this.dataAbertura = movimentacao.data;
             }
 
-            // statusAtual/tecnicoResponsavel vêm da movimentação com a MAIOR
-            // data, não da última lida do arquivo — planilhas não garantem
-            // que as linhas de uma OS estejam em ordem cronológica.
             if (!this.dataFechamento || movimentacao.data >= this.dataFechamento) {
                 this.dataFechamento = movimentacao.data;
                 this.statusAtual = movimentacao.status ?? this.statusAtual;

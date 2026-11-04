@@ -1,14 +1,3 @@
-/**
- * ==========================================================
- * Serviço de Configurações (mapeamento de colunas)
- * ==========================================================
- * Permite sobrescrever CONFIG_BASE/CONFIG_ORDENS (definidos em
- * js/config/colunas.js) sem editar código, guardando os ajustes
- * no localStorage do navegador. Existe porque o cabeçalho das
- * planilhas exportadas pelo sistema de origem já mudou várias
- * vezes — sem isso, cada mudança exige um ajuste manual no código.
- */
-
 const CONFIGURACOES_CHAVE_STORAGE = "cop_analytics_config_colunas";
 
 function mesclarConfigProfundo(alvo, origem) {

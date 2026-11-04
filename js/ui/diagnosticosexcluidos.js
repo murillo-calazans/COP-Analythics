@@ -1,15 +1,3 @@
-/**
- * ==========================================================
- * UI de Diagnósticos Excluídos do Tempo (TMS/TMA/TMR do COP)
- * ==========================================================
- * Abre num modal com busca: digita pra filtrar a lista, clica
- * num diagnóstico pra alternar (excluir/manter no TMS/TMA e nos
- * TMRs de Agendamento/Reagendamento do COP — ver
- * IndicatorEngine.diagnosticoExcluidoDoTempo/analisarAgendamentosOS).
- * Lista negra: por padrão nada está excluído. Cada clique já
- * salva e recalcula os indicadores na hora — sem botão "Salvar".
- */
-
 function coletarDiagnosticosDistintos() {
     const diagnosticos = new Set();
 

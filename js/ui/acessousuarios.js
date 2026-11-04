@@ -1,17 +1,3 @@
-/**
- * ==========================================================
- * Configurações > Acesso dos usuários (só admin)
- * ==========================================================
- * Por usuário: de quais SETORES ele vê as OS e quais ABAS ele abre.
- *   - setores: perfis.setores_visiveis — aplicado no banco (RLS de
- *     ordens/movimentacoes, database/patch-28), então todo relatório e
- *     tela só recebe as OS liberadas. null = todos.
- *   - abas: perfis.abas_visiveis — o site esconde o resto (ver
- *     podeVerSecao em js/ui/navegacao.js). null = todas.
- * Admin vê tudo sempre. Lê/grava pelas funções admin_listar_acessos /
- * admin_salvar_acesso, que conferem no banco se quem chama é admin.
- */
-
 const NOMES_MODULO_ACESSO = {
     ordens: "Gestão de Relatórios",
     cop: "Gestão do COP",
@@ -22,14 +8,12 @@ const NOMES_MODULO_ACESSO = {
     escala: "Escala"
 };
 
-// Seções sem botão no topo (módulo de uma tela só).
 const NOMES_SECAO_ACESSO = { "agenda-hoje": "Agenda do dia", "escala-hoje": "Escala de hoje" };
 
 let acessosUsuarios = null;
-let acessoAberto = null; // id do usuário com o editor aberto
+let acessoAberto = null;
 let rolarAteAcessoAberto = false;
 
-/** Vindo da tela de Usuários ("Editar" na coluna Pode ver): abre o editor daquele usuário. */
 function abrirAcessoDoUsuario(id) {
     acessoAberto = id;
     rolarAteAcessoAberto = true;
@@ -49,7 +33,6 @@ function nomeSecaoAcesso(secao) {
     return NOMES_SECAO_ACESSO[secao] ?? secao;
 }
 
-/** Abas controláveis, agrupadas por módulo, na ordem do menu. */
 function abasControlaveis() {
     const grupos = new Map();
     for (const [secao, modulo] of Object.entries(MODULO_DA_SECAO)) {
@@ -176,7 +159,6 @@ function htmlEditorAcesso(u) {
 function ligarEditorAcesso(el, u) {
     if (!u || u.papel === "admin") return;
 
-    // listas só valem com "Só os marcados"
     const sincronizarModo = () => {
         el.querySelector('[data-bloco="setor"]').classList.toggle("desligado", el.querySelector('[name="modoSetor"]:checked').value !== "lista");
         el.querySelector('[data-bloco="aba"]').classList.toggle("desligado", el.querySelector('[name="modoAba"]:checked').value !== "lista");
@@ -184,7 +166,6 @@ function ligarEditorAcesso(el, u) {
     el.querySelectorAll('[name="modoSetor"], [name="modoAba"]').forEach(r => r.addEventListener("change", sincronizarModo));
     sincronizarModo();
 
-    // checkbox do módulo marca/desmarca as abas dele
     const atualizarModulos = () => el.querySelectorAll("[data-modulo]").forEach(m => {
         const filhas = [...el.querySelectorAll(`[data-do-modulo="${m.dataset.modulo}"]`)];
         m.checked = filhas.length > 0 && filhas.every(f => f.checked);

@@ -1,17 +1,4 @@
-/**
- * ==========================================================
- * UI de Endereços a corrigir (módulo Gestão de Clientes)
- * ==========================================================
- * Logins cujo endereço no IXC não bate com o GPS das OS (ver
- * js/engine/enderecoengine.js e js/config/enderecos.js), pra corrigir o
- * cadastro no IXC. Recorte do Filtro Global, igual às outras abas.
- *
- * Cards filtram a lista (todos / confiança alta / fora da área); busca
- * por cliente, login ou cidade; "Baixar planilha" leva a lista inteira
- * (sem o filtro do card) pra quem vai corrigir no IXC.
- */
-
-let _enderecosFiltro = "todos"; // todos | alta | foraDaArea
+let _enderecosFiltro = "todos";
 let _enderecosResultado = null;
 let _enderecosRegistrado = false;
 

@@ -1,28 +1,5 @@
-/**
- * ==========================================================
- * Região de Atuação Engine
- * ==========================================================
- * Descobre o padrão de região de cada técnico pelas OS que ele
- * fecha: para cada OS de campo finalizada, quem ficou com o crédito
- * do fechamento (IndicatorEngine.nomeResponsavelFechamento, o mesmo
- * "quem fechou" do resto do sistema) soma 1 no bairro do cliente.
- *
- * Serve de base para definir a região de cada técnico na Escala e,
- * depois, as regiões de agendamento do Agendador.
- *
- * Não persiste nada e não filtra período/cidade por conta própria:
- * recebe as OS já recortadas pelo Filtro Global. Regras (assuntos
- * fora de campo, mínimo de OS, perfis) ficam em
- * js/config/regiaoatuacao.js.
- */
 const RegiaoAtuacaoEngine = {
 
-    /**
-     * Lista de técnicos com a distribuição por bairro, do mais
-     * concentrado para o menos:
-     * { nome, total, cidadePrincipal, percentualCidade, concentracao,
-     *   perfil: { chave, rotulo }, bairros: [{ bairro, cidade, quantidade, percentual }] }
-     */
     calcular(ordens) {
         const config = CONFIG_REGIAO_ATUACAO;
         const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
@@ -41,8 +18,7 @@ const RegiaoAtuacaoEngine = {
             const acumulado = porTecnico.get(nome);
             const cidade = ordem.cidade || "Sem cidade";
             const bairro = ordem.bairro || "Sem bairro";
-            // Agrupa pela grafia normalizada (o BairroEngine já unifica a maioria, isto
-            // garante "CALIFÓRNIA" = "California"); mostra a primeira grafia que apareceu.
+
             const chave = `${normalizarTexto(cidade)}|${normalizarTexto(bairro)}`;
 
             acumulado.total++;
@@ -81,7 +57,6 @@ const RegiaoAtuacaoEngine = {
         return fichas.sort((a, b) => b.concentracao - a.concentracao);
     },
 
-    /** Cidades presentes no resultado (pela cidade principal de cada técnico), em ordem alfabética. */
     cidades(fichas) {
         return [...new Set(fichas.map(f => f.cidadePrincipal))].sort((a, b) => a.localeCompare(b, "pt-BR"));
     },

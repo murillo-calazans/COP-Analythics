@@ -1,35 +1,9 @@
-/**
- * ==========================================================
- * Timeline da operação (aba Timeline, dentro de Gestão de Ordens)
- * ==========================================================
- * Gantt AO VIVO do dia: linhas = técnicos da escala (por cidade), colunas =
- * horas. Cada bloco é uma OS no horário REAL (deslocamento → execução →
- * finalização), com a linha do "agora" andando com o relógio. Terminou,
- * fica fixo no horário real que terminou; em execução cresce até o agora.
- *
- * Fontes (tudo já existe):
- *  - movimentacoes (data >= hoje): eventos do dia com hora real — ev.2
- *    deslocamento ("Usuário X, iniciou o deslocamento"), ev.9 execução,
- *    ev.6 finalização. Reconstrói o começo/fim de cada OS, inclusive as
- *    finalizadas (que já saíram da os_pendentes).
- *  - ordens (pelos ids do dia): cliente, cidade, assunto, técnico.
- *  - os_pendentes + Motor.montarOS: OS AGENDADAS pra hoje ainda não
- *    iniciadas (bloco "previsto"), com o técnico resolvido como na Agenda IXC.
- *  - escala do dia (EscalaDia.montarDia): quem trabalha, cidade, setor e
- *    sozinho × dupla. Técnico sem OS aparece como "sem OS".
- *
- * Tempo esperado por serviço (sozinho × dupla) por enquanto é um padrão
- * aqui no TL_TEMPOS; a tela de configuração (estilo LPU) é a próxima etapa.
- */
-
-// ---- janela / medidas ----
-const TL_DIA_INI = 0, TL_DIA_FIM = 24;      // a linha cobre 24h
-const TL_JANELA_INI = 8, TL_JANELA_FIM = 18; // recorte padrão (rola pra ver o resto)
+const TL_DIA_INI = 0, TL_DIA_FIM = 24;
+const TL_JANELA_INI = 8, TL_JANELA_FIM = 18;
 const TL_NAMEW = 270;
-const TL_ROW = 52;      // altura de cada sub-faixa (card + respiro)
+const TL_ROW = 52;
 let _tlHourW = 110;
 
-// Tempo esperado (min) por assunto — [sozinho, dupla]. Padrão enquanto não há a tela de config.
 const TL_TEMPOS = {
     "sem conexao / los": [20, 15], "troca de equipamento": [25, 20], "instalacao": [40, 40],
     "verificar conexao": [20, 15], "transferencia de endereco": [30, 25], "troca de senha": [10, 10],
@@ -48,7 +22,6 @@ const tlHoras = d => d ? (d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 
 const tlFmtH = d => d ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
 const TL_EXCLUIR = /auditoria|exclusao de acesso|pos.?terceiriz|retirada|recolhimento/;
 
-// ---------------- dados ----------------
 async function tlBuscarMovHoje() {
     const hoje = hojeMeiaNoite().toISOString();
     const linhas = [];
@@ -73,18 +46,16 @@ async function tlBuscarOrdens(ids) {
                 .select("id, cliente, cidade, assunto, tecnico_responsavel, status_atual, data_fechamento")
                 .in("id", fatia);
             (data || []).forEach(o => mapa.set(String(o.id), o));
-        } catch (e) { /* ignora */ }
+        } catch (e) {  }
     }
     return mapa;
 }
 
-/** Nome do técnico que iniciou o deslocamento (texto do evento 2). */
 function tlTecnicoDesloc(msg) {
     const m = String(msg || "").match(/usu[aá]rio\s+(.+?)\s*,\s*iniciou o deslocamento/i);
     return m ? m[1].trim() : null;
 }
 
-/** Reconstrói, por OS, o começo/fim do dia a partir das movimentações. */
 function tlPorOs(mov) {
     const porOs = new Map();
     for (const e of mov) {
@@ -101,7 +72,6 @@ function tlPorOs(mov) {
     return porOs;
 }
 
-/** OS agendadas pra HOJE ainda não iniciadas (bloco previsto), via Motor. */
 function tlAgendadasPrevistas(linhasOsPendentes, jaTocadas) {
     const out = [];
     if (typeof Motor === "undefined" || typeof Motor.montarOS !== "function") return out;
@@ -115,9 +85,9 @@ function tlAgendadasPrevistas(linhasOsPendentes, jaTocadas) {
     for (const o of osM) {
         if (!o.campo) continue;
         const id = String(o.id);
-        if (jaTocadas.has(id)) continue;                 // já tem deslocamento/execução hoje
+        if (jaTocadas.has(id)) continue;
         const ag = agDate[id];
-        if (!ag || ag.getTime() < hoje || ag.getTime() >= amanha) continue;   // agendada pra hoje
+        if (!ag || ag.getTime() < hoje || ag.getTime() >= amanha) continue;
         if (TL_EXCLUIR.test(tlNorm(o.assunto))) continue;
         const tec = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
         if (!tec) continue;
@@ -126,13 +96,11 @@ function tlAgendadasPrevistas(linhasOsPendentes, jaTocadas) {
     return out;
 }
 
-/** Monta as linhas de técnico (escala do dia) com os blocos de cada um. */
 function tlMontar(mov, ordensMap, previstas, escalaDia) {
     const agora = new Date();
     const porOs = tlPorOs(mov);
 
-    // técnicos da escala de hoje: nome, cidade, setor, dupla
-    const linhasTec = [];      // { nome, chaveNorm, tech, cidade, setor, dupla, blocos:[] }
+    const linhasTec = [];
     const bate = (typeof Motor !== "undefined" && Motor.nomeBate) ? Motor.nomeBate : () => false;
     for (const d of (escalaDia || [])) {
         if (!d.trabalha) continue;
@@ -144,7 +112,7 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
     }
     const achaTec = nome => linhasTec.find(lt => bate(nome, lt.tech));
 
-    const foraEscala = new Map();   // cidade -> linha sintética "fora da escala"
+    const foraEscala = new Map();
     function destino(nome, cidade) {
         const lt = achaTec(nome);
         if (lt) return lt;
@@ -153,7 +121,6 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
         return foraEscala.get(c);
     }
 
-    // 1) CARD por OS (um só, com deslocamento + execução/finalização dentro)
     for (const [id, o] of porOs) {
         const info = ordensMap.get(id) || {};
         if (TL_EXCLUIR.test(tlNorm(info.assunto))) continue;
@@ -161,10 +128,10 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
         if (!tec) continue;
         const lt = destino(tec, info.cidade);
         const exp = tlEsperado(info.assunto, lt.dupla);
-        const ini = o.desloc || o.exec;                 // começo real do card
+        const ini = o.desloc || o.exec;
         if (!ini && !o.fim) continue;
         const start = ini || new Date(o.fim.getTime() - exp * 60000);
-        const descFim = (o.desloc && o.exec && o.desloc < o.exec) ? o.exec : null;  // fim do deslocamento
+        const descFim = (o.desloc && o.exec && o.desloc < o.exec) ? o.exec : null;
         let estado, perf = "";
         if (o.fim) {
             const act = (o.fim - (o.exec || o.desloc || start)) / 60000;
@@ -179,8 +146,6 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
             ini: start, descFim, fim: o.fim || null, execIni: o.exec || start });
     }
 
-    // 2) PREVISTAS (agendadas não iniciadas): futuras ficam na hora marcada (reagendada = hora nova);
-    //    as atrasadas NÃO ficam no passado — entram enfileiradas DEPOIS do "agora".
     const prevPorTec = new Map();
     for (const p of previstas) { const lt = destino(p.tec, p.cidade); (prevPorTec.get(lt) || prevPorTec.set(lt, []).get(lt)).push(p); }
     for (const [lt, lista] of prevPorTec) {
@@ -199,8 +164,7 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
     for (const [, lt] of foraEscala) linhasTec.push(lt);
 
     linhasTec.forEach(lt => lt.blocos.sort((a, b) => (a.ini - b.ini)));
-    // ordena por cidade (fora-da-escala por último dentro da cidade), depois nome —
-    // assim os técnicos da mesma cidade ficam juntos e o separador aparece 1x por cidade.
+
     linhasTec.sort((a, b) =>
         a.cidade.localeCompare(b.cidade, "pt-BR") ||
         (a.fora === b.fora ? 0 : a.fora ? 1 : -1) ||
@@ -209,7 +173,6 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
     return { linhasTec, cidades, agora };
 }
 
-// ---------------- render ----------------
 let tlDados = null, tlCidade = "__all__", tlCarregando = false, tlEm = 0, tlTimer = null;
 
 const TL_CSS = `
@@ -432,14 +395,13 @@ function tlDesenharGrade() {
     for (let h = TL_DIA_INI; h < TL_DIA_FIM; h++) html += `<span class="tl-htick" style="left:${tlX(h)}px">${h}h</span>`;
     html += `</div>`;
 
-    // agrupa por cidade quando for "Todas"
     let cidadeAtual = null;
     lista.forEach(lt => {
         if (tlCidade === "__all__" && lt.cidade !== cidadeAtual) {
             cidadeAtual = lt.cidade;
             html += `<div class="tl-cidade-sep">${escaparHtml(cidadeAtual)}</div>`;
         }
-        // atribui sub-faixas pra blocos que se sobrepõem
+
         const faixas = tlFaixas(lt.blocos);
         const alturaLinha = Math.max(1, faixas.n) * TL_ROW + 8;
         const tag = lt.fora ? "" : (lt.dupla ? `<span class="tl-pill dupla">dupla</span>` : `<span class="tl-pill solo">sozinho</span>`);
@@ -461,9 +423,8 @@ function tlDesenharGrade() {
     board.scrollLeft = tlX(TL_JANELA_INI);
 }
 
-/** Atribui cada bloco a uma sub-faixa (0,1,2…) evitando sobreposição. Retorna {de:[], n}. */
 function tlFaixas(blocos) {
-    const fimDe = [];      // fim (ms) ocupado de cada sub-faixa
+    const fimDe = [];
     const de = blocos.map(b => {
         const s = b.ini.getTime(), e = (b.fim || new Date()).getTime();
         let f = 0;
@@ -482,7 +443,6 @@ function tlBlocoHtml(b, faixa) {
     const w = Math.max(16, (tlHoras(end) - tlHoras(b.ini)) * _tlHourW);
     const titulo = `#${b.id} · ${b.cli || ""} · ${tlCurto(b.a)}`;
 
-    // prevista (dashed) — futura na hora marcada ou enfileirada após o agora
     if (b.tipo === "prev") {
         return `<div class="tl-blk prev${b.fila ? " fila" : ""}" style="left:${left}px;width:${w}px;top:${top}px;height:${TL_ROW - 10}px" title="${escaparHtml(titulo)} · prevista">
             <div class="os">#${escaparHtml(b.id)} ${escaparHtml(tlCurto(b.a))}</div>
@@ -490,7 +450,6 @@ function tlBlocoHtml(b, faixa) {
             <div class="perf">previsto ${b.exp}min</div></div>`;
     }
 
-    // CARD da OS: deslocamento (cinza) + execução/finalização (verde/laranja/azul), borda grossa
     const deslocMs = b.descFim ? (b.descFim - b.ini) : (b.estado === "desloc" ? (end - b.ini) : 0);
     const deslW = Math.max(0, deslocMs / 3600000 * _tlHourW);
     const seg = (deslW > 0 && b.estado !== "desloc") ? `<div class="tl-seg-desl" style="width:${deslW.toFixed(1)}px"></div>` : "";
@@ -551,7 +510,6 @@ function tlTick() {
     });
 }
 
-// re-encaixa ao redimensionar enquanto a aba está visível
 let _tlRz;
 window.addEventListener("resize", () => {
     const alvo = document.getElementById("agendaTimelineConteudo");

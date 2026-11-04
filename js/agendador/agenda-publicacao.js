@@ -1,18 +1,6 @@
-/**
- * ==========================================================
- * Publicação da agenda (compartilhado)
- * ==========================================================
- * Padrões do pré-agendamento e o formato da agenda publicada
- * (tabela agenda_publicada, ver database/patch-15) — o mesmo para o
- * botão "Publicar agenda" do agendador.html e para a publicação
- * automática (supabase/functions/publicar-agenda), que roda todo dia
- * sem ninguém abrir a página.
- */
 (function (global) {
     "use strict";
 
-    // Cidade da OS = seções da escala que atendem (exceções; cidade com o mesmo
-    // nome de uma seção da escala é ligada sozinha).
     const MAPA_PADRAO = [
         "Cachoeiras de Macacu = Cachoeiras de Macacu; Japuíba; Papucaia",
         "Itaboraí = Cachoeiras de Macacu; Japuíba; Papucaia",
@@ -23,31 +11,21 @@
         "Queluz = São Paulo"
     ].join("\n");
 
-    // Bairros que vão para o mesmo técnico.
     const REGIOES_PADRAO = [
         "Agro Brasil e Sambaetiba = Agro Brasil; Sambaetiba",
         "Japuíba e Papucaia = Japuíba; Papucaia",
-        // A Região Sul de Friburgo no mapa junta dois lados da cidade: Olaria/Cônego e Ponte da Saudade/Mury
-        // ficam perto em linha reta, mas pela estrada é preciso atravessar o Centro.
+
         "Sul - Mury / Ponte da Saudade = Ponte da Saudade; Mury; Stucky"
     ].join("\n");
 
     const URL_MAPA_REGIOES = "https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html";
 
-    // Valor de "publicado_por" da publicação automática. Agenda com outro valor
-    // foi publicada à mão pelo botão — a automática não substitui.
     const PUBLICADOR_AUTOMATICO = "Agenda automática (IA)";
 
     const ehAutomatica = linha => !linha || linha.publicado_por === PUBLICADOR_AUTOMATICO;
 
-    /**
-     * Linhas da agenda publicada a partir do plano do motor
-     * (Motor.planejar): uma por parada, mais as OS que não couberam.
-     * Devolve { itens, resumo } prontos para a tabela agenda_publicada.
-     */
     function montarAgenda(plano) {
-        // Dados da rota (repetidos em cada parada): jornada, ocupação (mesma conta da barra "carga" da aba
-        // Rotas) e se a última OS termina depois do fim da jornada — a Agenda do dia usa pra barra e o filtro.
+
         const daRota = r => {
             const usado = r.paradas.reduce((s, p) => s + p.os.dur, 0);
             const ultima = r.paradas[r.paradas.length - 1];
@@ -58,7 +36,7 @@
                 passaJornada: !!(ultima && ultima.fimMin > r.fim)
             };
         };
-        // Da OS: há quanto tempo está aberta (até o dia do plano) e quantas vezes já foi reagendada/visitada.
+
         const daOS = o => ({
             abertura: o.abertura instanceof Date && !isNaN(o.abertura) ? o.abertura.toISOString() : null,
             idadeDias: o.idadeDias ?? null,

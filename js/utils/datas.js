@@ -1,11 +1,3 @@
-/**
- * ==========================================================
- * Utilitários de Datas
- * ==========================================================
- * Converte valores vindos do Excel (Date, número serial ou
- * texto dd/mm/aaaa) sempre para um objeto Date nativo.
- */
-
 function paraData(valor) {
     if (!valor) return null;
     if (valor instanceof Date) {
@@ -13,7 +5,7 @@ function paraData(valor) {
     }
 
     if (typeof valor === "number") {
-        // Data serial do Excel (dias desde 1899-12-30)
+
         const data = new Date(Math.round((valor - 25569) * 86400 * 1000));
         return isNaN(data.getTime()) ? null : data;
     }

@@ -626,8 +626,6 @@ begin
         raise exception 'Você não pode remover o seu próprio acesso.';
     end if;
 
-    -- Só tira a linha de "perfis": a conta continua existindo, mas sem
-    -- papel não entra no COP (ver js/services/auth.js).
     delete from public.perfis where id = p_id;
 end
 $$;

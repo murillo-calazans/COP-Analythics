@@ -1,30 +1,12 @@
-/**
- * ==========================================================
- * Agenda do Dia (módulo Agendador IA)
- * ==========================================================
- * Só leitura: mostra o plano que um admin/editor publicou pelo
- * pré-agendamento (agendador.html -> botão "Publicar agenda"),
- * guardado em agenda_publicada (database/patch-15). Uma linha por
- * dia, com uma lista de paradas: técnico, horário, OS, cliente...
- * Cada parada leva também os dados da rota (jornada, ocupação e se
- * passa do fim da jornada) — agendas publicadas antes disso não têm,
- * e a barra cai numa estimativa pelo nº de OS.
- *
- * Visual compartilhado com a Escala de hoje (classes escala-*).
- * O pré-agendamento em si abre numa guia nova e só admin/editor vê o botão.
- */
-
-let agendaHojeData = null;       // dia exibido (Date à meia-noite)
-let agendaCache = null;          // { iso, linha } — pra trocar filtro sem buscar de novo
-let agendaFiltro = "todos";      // todos | instalador | manutencao | jornada | sem
-let agendaAssunto = null;        // rótulo do assunto escolhido no quadro "Assuntos agendados no dia"
+let agendaHojeData = null;
+let agendaCache = null;
+let agendaFiltro = "todos";
+let agendaAssunto = null;
 const agendaTecnicosAbertos = new Set();
 const AGENDA_PARADAS_VISIVEIS = 5;
 
-// Limites de OS por técnico do pré-agendamento (07/10) — só pra estimar a barra de agendas antigas.
 const AGENDA_LIMITE_OS = { instalador: 5, manutencao: 8 };
 
-/** "publicada automaticamente às 17:02 de 13/10" ou "publicada por fulano às …" (ver js/agendador/publicar-agenda.js). */
 function origemAgenda(linha) {
     const quando = linha.atualizado_em ? new Date(linha.atualizado_em) : null;
     const hora = quando ? ` às ${quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} de ${quando.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : "";
@@ -42,7 +24,6 @@ async function buscarAgendaPublicada(data) {
     return linha;
 }
 
-/** Quantas OS a agenda de hoje tem — pra tela inicial. null = sem agenda/erro. */
 async function totalAgendaDeHoje() {
     try {
         const linha = await buscarAgendaPublicada(hojeMeiaNoite());
@@ -54,14 +35,12 @@ async function totalAgendaDeHoje() {
 
 const SIGLAS_ASSUNTO = new Set(["LOS", "ONU", "ONT", "CTO", "OLT", "FTTH", "IP", "PPPOE", "TV", "IPTV", "VOIP"]);
 
-/** "INSTALAÇÃO NOVO CLIENTE (70)" -> "Instalação novo cliente"; siglas (LOS, ONU...) continuam maiúsculas. */
 function rotuloAssunto(assunto) {
     const texto = String(assunto ?? "").replace(/\([^)]*\)/g, "").replace(/-\s*TERCEIRIZAD[OA]\s*$/i, "").replace(/\s+/g, " ").trim()
         .split(" ").map(p => SIGLAS_ASSUNTO.has(normalizarTexto(p)) ? p.toUpperCase() : p.toLowerCase()).join(" ");
     return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
-/** Cor da etiqueta: instalação (azul), troca/mudança (laranja), resto (neutra). */
 function tipoAssunto(assunto) {
     const a = normalizarTexto(assunto ?? "");
     if (/INSTALA|ULTIMA MILHA|NOVO CLIENTE|TRANSFERENCIA/.test(a)) return "inst";
@@ -73,7 +52,6 @@ function setorDaRota(item) {
     return item.setor === "instalador" ? "instalador" : "manutencao";
 }
 
-/** Agrupa as paradas por técnico, com os dados da rota. */
 function montarRotasAgenda(itens) {
     const porTecnico = new Map();
     for (const item of itens.filter(i => i.tecnico)) {
@@ -100,7 +78,6 @@ function montarRotasAgenda(itens) {
     }).sort((a, b) => a.tecnico.localeCompare(b.tecnico, "pt-BR"));
 }
 
-/** usarCache: troca de filtro/"ver mais" não busca de novo; abrir a tela ou trocar o dia busca. */
 async function renderizarAgendaHoje(usarCache = false) {
     const container = document.getElementById("agendaHojeConteudo");
     if (!container) return;
@@ -131,7 +108,7 @@ async function renderizarAgendaHoje(usarCache = false) {
                 : `<p class="alerta-vazio">Não deu pra carregar a agenda: ${escaparHtml(erro.message ?? String(erro))}</p>`;
             return;
         }
-        if (agendaHojeData !== data) return; // trocou de dia enquanto carregava
+        if (agendaHojeData !== data) return;
         agendaCache = { iso, linha };
     }
 
@@ -174,7 +151,6 @@ async function renderizarAgendaHoje(usarCache = false) {
             agendaFiltro === "jornada" ? r.passaJornada :
             r.setor === agendaFiltro);
 
-        // Assunto escolhido: cada cartão fica só com as OS dele (e some quem não tem nenhuma).
         if (agendaAssunto && !filtradas.some(r => r.paradas.some(ehDoAssunto))) agendaAssunto = null;
         const visiveis = agendaAssunto
             ? filtradas
@@ -220,7 +196,7 @@ async function renderizarAgendaHoje(usarCache = false) {
         const assunto = botao.dataset.assuntoAgenda || null;
         const paraSem = botao.dataset.assuntoDestino === "sem";
         const mesmaVisao = paraSem === (agendaFiltro === "sem");
-        // "Não vão hoje" leva pra lista de quem não coube; "agendados" volta pros cartões.
+
         if (paraSem) { agendaFiltro = "sem"; agendaProblema = null; }
         else if (agendaFiltro === "sem") agendaFiltro = "todos";
         agendaAssunto = mesmaVisao && agendaAssunto === assunto ? null : assunto;
@@ -239,12 +215,6 @@ async function renderizarAgendaHoje(usarCache = false) {
     }));
 }
 
-/**
- * Quadros de assuntos: OS por assunto (rótulo limpo, então
- * "INSTALAÇÃO NOVO CLIENTE" e a versão "- TERCEIRIZADO" contam juntas).
- * destino "todos" = agendadas (filtra os cartões dos técnicos);
- * destino "sem" = não vão hoje (abre/filtra a lista de "Não couberam").
- */
 function htmlAssuntosAgenda(itens, titulo, destino) {
     const contagem = new Map();
     for (const p of itens) {
@@ -278,12 +248,6 @@ function htmlAssuntosAgenda(itens, titulo, destino) {
         </div>`;
 }
 
-/**
- * Etiquetas da OS: há quanto tempo está aberta e quantas vezes já foi
- * reagendada/visitada (publicado pelo pré-agendamento a partir de 08/10 —
- * agenda antiga não tem e fica sem etiqueta). soAlertas: só mostra o que
- * chama atenção (usado nos cartões das agendadas, pra não poluir).
- */
 function htmlSinaisOS(p, soAlertas = false) {
     const sinais = [];
     if (p.idadeDias != null) {
@@ -338,13 +302,6 @@ function cartaoRotaAgenda(rota) {
         </div>`;
 }
 
-/**
- * Motivos do pré-agendamento (js/agendador/motor.js, semTecnico[].motivo)
- * agrupados em problemas — o texto original traz cidade e números
- * ("Técnicos já estão com 8 OS em Nova Friburgo"), aqui vira uma causa
- * só com contagem e o que dá pra fazer. Motivo novo que não bater com
- * nenhum padrão aparece com o próprio texto.
- */
 const PROBLEMAS_AGENDA = [
     { id: "capacidade", padrao: /^Técnicos já estão com/i, titulo: "Técnicos no limite de OS", acao: "Falta técnico nessas cidades: escalar mais gente ou remanejar de outra cidade.", tipo: "falta" },
     { id: "dupla-cheia", padrao: /exige dupla e as duplas já estão/i, titulo: "LOS exige dupla e as duplas estão cheias", acao: "Formar mais duplas de manutenção na escala do dia.", tipo: "falta" },
@@ -358,7 +315,7 @@ const PROBLEMAS_AGENDA = [
     { id: "dia-pedido", padrao: /^Cliente pediu o dia/i, titulo: "Cliente pediu outro dia", acao: "Não é problema: agendar no dia pedido.", tipo: "cliente" }
 ];
 
-let agendaProblema = null; // id do problema aberto na lista de "Não couberam"
+let agendaProblema = null;
 
 function problemaDoMotivo(motivo) {
     const texto = String(motivo ?? "").trim();
@@ -371,7 +328,6 @@ function problemaDoMotivo(motivo) {
 function htmlSemTecnicoAgenda(semTecnico) {
     if (!semTecnico.length) return '<p class="alerta-vazio">Todas as OS couberam no dia. 🎉</p>';
 
-    // Agrupa por problema.
     const problemas = new Map();
     for (const item of semTecnico) {
         const problema = problemaDoMotivo(item.observacao);
@@ -433,12 +389,10 @@ function htmlSemTecnicoAgenda(semTecnico) {
             </div>`).join("")}</div>`;
 }
 
-/** Mais antiga primeiro; empate = mais reagendada primeiro. */
 function ordenarPorUrgencia(itens) {
     return [...itens].sort((a, b) => (b.idadeDias ?? -1) - (a.idadeDias ?? -1) || (b.reagendamentos ?? 0) - (a.reagendamentos ?? 0));
 }
 
-/** "8 já reagendadas · mais antiga aberta há 21 dias" (vazio em agenda antiga, sem esses dados). */
 function resumoUrgencia(itens) {
     const reagendadas = itens.filter(i => i.reagendamentos > 0).length;
     const idades = itens.map(i => i.idadeDias).filter(d => d != null);
@@ -448,7 +402,6 @@ function resumoUrgencia(itens) {
     return partes.length ? `<em class="agenda-urgencia">${partes.join(" · ")}</em>` : "";
 }
 
-/** "Nova Friburgo (12), Cabo Frio (5) e mais 3 cidades". */
 function resumoCidades(itens) {
     const contagem = new Map();
     for (const item of itens) contagem.set(item.cidade || "Sem cidade", (contagem.get(item.cidade || "Sem cidade") ?? 0) + 1);

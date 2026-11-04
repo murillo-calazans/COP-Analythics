@@ -1,11 +1,3 @@
-/**
- * ==========================================================
- * UI de Timeline — Detalhes da OS + histórico de movimentações
- * ==========================================================
- * Recebe do AuditEngine tudo já resolvido (nomes, não códigos)
- * — aqui só monta o HTML.
- */
-
 function abrirModalOS(id, idModalRetorno = null) {
     const detalhes = AuditEngine.obterDetalhes(id);
 
@@ -26,12 +18,6 @@ function abrirModalOS(id, idModalRetorno = null) {
 function renderizarDetalhesOS({ ordem, timeline }) {
     document.getElementById("modalTitulo").textContent = `OS ${ordem.id}`;
 
-    // Diagnóstico/Próxima Tarefa/Fechamento mostrados aqui são do
-    // FECHAMENTO EFETIVO — 1º Fechamento por padrão, ou o último quando a
-    // reabertura foi classificada como "serviço não executado" (ver
-    // IndicatorEngine.analisarEventosOS -> fechamentoEfetivo e
-    // js/config/motivosreabertura.js). Mesmo critério do resto do sistema
-    // (ver js/engine/filtroengine.js).
     const infoEventos = IndicatorEngine.analisarEventosOS(ordem);
     const fechamento = infoEventos.fechamentoEfetivo;
     const colaboradorResponsavel = IndicatorEngine.nomeResponsavelFechamento(fechamento);
@@ -91,12 +77,6 @@ function renderizarDetalhesOS({ ordem, timeline }) {
     `).join("");
 }
 
-/**
- * Mostra o veredito já salvo (se existir) e, só pra admin, o botão pra
- * rodar/re-rodar a análise — a Edge Function confere o papel de novo
- * do lado do servidor, então esconder o botão aqui é só conveniência
- * de UI, não é a proteção de verdade.
- */
 function renderizarAuditorIA(ordem) {
     const container = document.getElementById("modalAuditorIA");
     if (!container) return;
@@ -150,8 +130,6 @@ async function acionarAuditorIA(ordemId, botao) {
         return;
     }
 
-    // Atualiza a OS em memória com o resultado novo, sem precisar
-    // recarregar tudo do Supabase só pra ver a avaliação que acabou de sair.
     const ordem = APP.dados.ordens.get(ordemId)
         ?? APP.dados.ordens.get(Number(ordemId))
         ?? APP.dados.ordens.get(String(ordemId));

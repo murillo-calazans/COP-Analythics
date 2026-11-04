@@ -1,17 +1,3 @@
-/**
- * ==========================================================
- * Endereço Engine — cidade cadastrada × GPS da OS
- * ==========================================================
- * Acha cliente com endereço errado no IXC: a coordenada da OS (ordens.lat/
- * lng) cai em outra cidade, longe da cidade cadastrada — ou a OS está numa
- * cidade fora da área (CONFIG_ENDERECOS.cidadesSempreAlerta), que costuma
- * ser o endereço da sede do cliente. Agrupa por login, porque é o cadastro
- * do login que se corrige no IXC.
- *
- * Login cuja OS MAIS RECENTE já bate com o GPS conta como "já corrigido"
- * (o IXC foi acertado e as OS antigas só ficaram com o endereço velho) e
- * sai da lista — sem precisar marcar nada à mão.
- */
 const EnderecoEngine = {
 
     distanciaKm(a, b) {
@@ -25,7 +11,6 @@ const EnderecoEngine = {
         return normalizarTexto(cidade ?? "").toLowerCase().trim();
     },
 
-    // Pontos de base/escritório do recorte atual (ver pontosRepetidos).
     _pontosBase: new Set(),
 
     chavePonto(lat, lng) {
@@ -38,7 +23,6 @@ const EnderecoEngine = {
             && lat >= c.latMin && lat <= c.latMax && lng >= c.lngMin && lng <= c.lngMax;
     },
 
-    /** Coordenadas que se repetem em OS de muitos logins diferentes = base/escritório, não o cliente. */
     pontosRepetidos(ordens) {
         const loginsPorPonto = new Map();
         for (const ordem of ordens.values()) {
@@ -60,7 +44,6 @@ const EnderecoEngine = {
         return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
     },
 
-    /** Centro de cada cidade: fixo da config, senão mediana das OS dela (com amostra mínima). Também a grafia mais usada de cada cidade, pra exibir. */
     centrosDasCidades(ordens) {
         const pontos = new Map();
         const grafias = new Map();
@@ -86,7 +69,6 @@ const EnderecoEngine = {
         return { centros, nomeExibicao };
     },
 
-    /** Uma OS: null (endereço ok / sem como saber) ou { cidadeProvavel, distanciaKm, motivo }. */
     avaliarOS(ordem, centros, sempreAlerta) {
         const chave = this.chaveCidade(ordem.cidade);
         const temGps = this.gpsValido(ordem);
@@ -120,10 +102,6 @@ const EnderecoEngine = {
         return { cidadeProvavel: maisPerto, distanciaKm: dist, motivo: "GPS da OS em outra cidade" };
     },
 
-    /**
-     * Logins com endereço a corrigir (recorte recebido — normalmente
-     * FiltroEngine.ordensFiltradas()). Devolve { logins, resumo }.
-     */
     calcular(ordens) {
         this._pontosBase = this.pontosRepetidos(ordens);
         const { centros, nomeExibicao } = this.centrosDasCidades(ordens);

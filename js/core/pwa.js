@@ -1,15 +1,3 @@
-/**
- * ==========================================================
- * App instalável (PWA) — botão "Instalar app"
- * ==========================================================
- * Registra o service worker (sw.js) e mostra o botão de baixar no
- * cabeçalho (#btnInstalarApp):
- * - Android / Chrome / Edge: o navegador avisa que dá pra instalar
- *   (beforeinstallprompt) e o botão abre a instalação de verdade;
- * - iPhone/iPad: a Apple não deixa o site instalar sozinho — o botão abre
- *   o passo a passo (Compartilhar → Adicionar à Tela de Início).
- * Já aberto como app (tela cheia), o botão some.
- */
 (function () {
     const jaInstalado = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
     const ehIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -75,7 +63,7 @@
     function ligarBotao() {
         const b = botao();
         if (!b) return;
-        if (ehIOS && !jaInstalado()) b.hidden = false;   // no iPhone não há aviso automático: mostra direto
+        if (ehIOS && !jaInstalado()) b.hidden = false;
         b.addEventListener("click", async () => {
             if (pedidoInstalacao) {
                 pedidoInstalacao.prompt();

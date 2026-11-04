@@ -1,27 +1,12 @@
-/**
- * ==========================================================
- * Gestão de Terceiras — telas
- * ==========================================================
- * Quatro abas do módulo (menu lateral > Gestão de Terceiras):
- *   - terceiras             Painel do mês (quanto pagar a cada uma)
- *   - terceiras-fechamento  Fechamento mensal (detalhe, PDF, fechar mês)
- *   - terceiras-lpu         LPU e classificação dos diagnósticos
- *   - terceiras-qualidade   Reaberturas, retornos e garantias
- *
- * Cálculo em js/engine/terceirasengine.js. Banco: patch-19
- * (terceiras_config e terceiras_fechamentos). Editar LPU e fechar o
- * mês: admin ou editor. Reabrir um mês fechado: só admin.
- */
-
-let terceirasConfig = null;          // { lpu, diagnosticos, atualizado_por, atualizado_em }
-let terceirasRascunho = null;        // cópia editável da config (aba LPU)
+let terceirasConfig = null;
+let terceirasRascunho = null;
 let terceirasRascunhoAlterado = false;
-let terceirasMes = null;             // 'AAAA-MM'
+let terceirasMes = null;
 let terceiraSelecionada = TERCEIRAS[0].id;
 let terceirasFiltroSituacao = "todas";
 let terceirasFiltroQualidade = "todas";
-let terceirasAnaliseCache = null;    // { ordens, tamanho, analise }
-const terceirasFechamentosCache = new Map(); // mes -> Map(terceira -> fechamento)
+let terceirasAnaliseCache = null;
+const terceirasFechamentosCache = new Map();
 
 const ROTULOS_SITUACAO = {
     paga: "Paga",
@@ -91,7 +76,6 @@ async function carregarFechamentosDoMes(mes, forcar = false) {
     return mapa;
 }
 
-/** Barra com o seletor de mês, comum às abas. */
 function htmlBarraMes(extra = "") {
     return `
         <div class="terceiras-barra">
@@ -120,10 +104,6 @@ function chipSituacao(situacao) {
     return `<span class="terceiras-chip situacao-pag-${situacao}">${ROTULOS_SITUACAO[situacao] ?? situacao}</span>`;
 }
 
-// ==========================================================
-// Painel do mês
-// ==========================================================
-
 async function renderizarTerceirasPainel() {
     const container = document.getElementById("terceirasPainelConteudo");
     if (!container || semDadosTerceiras(container)) return;
@@ -140,7 +120,6 @@ async function renderizarTerceirasPainel() {
     const itens = TerceirasEngine.itensDoMes(mes, config, analiseTerceiras());
     const pend = TerceirasEngine.pendencias(itens);
 
-    // Mês fechado vale o que foi congelado; aberto vale a prévia.
     const porTerceira = TERCEIRAS.map(t => {
         const fechado = fechamentos.get(t.id);
         const itensT = fechado ? fechado.itens : itens.filter(i => i.terceira === t.id);
@@ -148,7 +127,6 @@ async function renderizarTerceirasPainel() {
     });
     const totalGeral = porTerceira.reduce((s, x) => s + x.resumo.total, 0);
 
-    // Tabela assunto × terceirizada (OS pagas e valor).
     const assuntos = new Map();
     for (const { t, resumo } of porTerceira) {
         for (const a of resumo.porAssunto) {
@@ -239,10 +217,6 @@ async function renderizarTerceirasPainel() {
     }));
     container.querySelectorAll("[data-ir-secao]").forEach(b => b.addEventListener("click", () => mostrarSecao(b.dataset.irSecao)));
 }
-
-// ==========================================================
-// Fechamento mensal
-// ==========================================================
 
 async function renderizarTerceirasFechamento() {
     const container = document.getElementById("terceirasFechamentoConteudo");
@@ -421,11 +395,6 @@ function baixarCsvFechamento(mes, terceira, itens) {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-/**
- * Tabela do alerta "instalação de terceira → manutenção suspeita"
- * (TerceirasEngine.instalacoesComManutencaoSuspeita). Mesmo HTML usado no
- * relatório de Terceiras e na Auditoria (cálculo único no engine).
- */
 function htmlTabelaInstalManutSuspeita(alertas) {
     if (!alertas.length) return '<p class="alerta-vazio">Nenhuma instalação de terceira com manutenção suspeita (até 15 dias, sem reparo real).</p>';
     const dataBR = d => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
@@ -493,10 +462,6 @@ function imprimirFechamento(mes, terceira, itens, resumo, fechado) {
     if (!janela) alert("O navegador bloqueou a janela. Libere pop-ups para este site e tente de novo.");
 }
 
-// ==========================================================
-// LPU e diagnósticos
-// ==========================================================
-
 function lerNumeroLpu(valor) {
     if (valor === null || valor === undefined) return undefined;
     const texto = String(valor).trim().replace(/[R$\s]/g, "");
@@ -505,12 +470,10 @@ function lerNumeroLpu(valor) {
     return Number.isFinite(numero) ? numero : undefined;
 }
 
-/** Chave já usada no rascunho pra esse texto (ignorando acento/maiúscula), ou o próprio texto. */
 function chaveExistente(objeto, texto) {
     return Object.keys(objeto).find(k => normalizarTexto(k) === normalizarTexto(texto)) ?? texto;
 }
 
-/** Linha da LPU no rascunho, criando se precisar. */
 function entradaRascunho(assunto) {
     const chave = chaveExistente(terceirasRascunho.lpu, assunto);
     terceirasRascunho.lpu[chave] ??= {};
@@ -524,7 +487,6 @@ function definirPrecoRascunho(assunto, terceira, categoria, valor) {
     else alvo[terceira] = valor;
 }
 
-/** Junta { produtivo, categoria } no diagnóstico do rascunho; tudo vazio apaga a linha. */
 function definirDiagnosticoRascunho(diagnostico, mudanca) {
     const chave = chaveExistente(terceirasRascunho.diagnosticos, diagnostico);
     const novo = { ...TerceirasEngine.infoDiagnostico(terceirasRascunho, diagnostico), ...mudanca };
@@ -554,7 +516,6 @@ async function renderizarTerceirasLpu() {
     const editavel = podeEditarOperacao();
     const catalogo = TerceirasEngine.catalogo(analiseTerceiras());
 
-    // Linhas = assuntos que as terceirizadas fecharam + os que já estão na LPU.
     const assuntos = new Map(catalogo.assuntos.map(a => [normalizarTexto(a.assunto), a]));
     for (const chave of Object.keys(terceirasRascunho.lpu)) {
         if (!assuntos.has(normalizarTexto(chave))) assuntos.set(normalizarTexto(chave), { assunto: chave, total: 0, porTerceira: {} });
@@ -708,7 +669,7 @@ async function renderizarTerceirasLpu() {
             delete entrada.dividido;
             delete entrada.porCategoria;
         } else {
-            // Começa as duas categorias com o preço único que já existia.
+
             entrada.porCategoria = {};
             for (const c of CATEGORIAS_PRECO) {
                 entrada.porCategoria[c.id] = {};
@@ -763,7 +724,6 @@ async function salvarLpu() {
     const botao = document.getElementById("btnSalvarLpu");
     if (botao) { botao.disabled = true; botao.textContent = "Salvando..."; }
 
-    // Tira assuntos que ficaram sem nenhum preço (dividido vazio continua: é escolha de formato).
     for (const [chave, entrada] of Object.entries(terceirasRascunho.lpu)) {
         if (!entrada || (!entrada.dividido && Object.keys(entrada).length === 0)) delete terceirasRascunho.lpu[chave];
     }
@@ -808,13 +768,6 @@ function exportarLpu(assuntos, diagnosticos) {
     XLSX.writeFile(wb, `LPU Terceirizadas ${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-/**
- * Lê o Excel no formato do modelo (abas LPU e DIAGNOSTICOS) e joga no
- * rascunho — só grava no banco quando clicar em "Salvar alterações".
- * Coluna de terceirizada é achada pelo nome (AZUL, VELOZ, TECHNOMAIS);
- * linha com CATEGORIA (EXTERNA/INTERNA) divide o assunto. Célula vazia
- * não apaga o preço que já existe.
- */
 async function importarLpu(arquivo) {
     if (!arquivo) return;
     try {
@@ -885,10 +838,6 @@ async function importarLpu(arquivo) {
     }
 }
 
-// ==========================================================
-// Qualidade
-// ==========================================================
-
 function renderizarTerceirasQualidade() {
     const container = document.getElementById("terceirasQualidadeConteudo");
     if (!container || semDadosTerceiras(container)) return;
@@ -958,7 +907,7 @@ function renderizarTerceirasQualidade() {
 }
 
 function registrarTerceiras() {
-    // Busca de novo no banco (outra pessoa pode ter mudado a LPU ou fechado um mês).
+
     document.querySelectorAll("[data-atualizar-terceiras]").forEach(botao => botao.addEventListener("click", () => {
         terceirasConfig = null;
         terceirasFechamentosCache.clear();

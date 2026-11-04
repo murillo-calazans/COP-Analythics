@@ -1,65 +1,8 @@
-/**
- * ==========================================================
- * Indicator Engine
- * ==========================================================
- * Calcula indicadores operacionais em cima de APP.dados.ordens.
- * Recorrência de cliente usa "login" (não "cliente", que é
- * texto livre e pode variar na digitação) como chave, já que um
- * cliente pode ter vários logins mas cada login é único.
- *
- * Quatro métricas de tempo, todas em horas, medindo a equipe técnica —
- * todas baseadas no STATUS da movimentação (coluna STATUS da planilha),
- * não no evento:
- *
- *   TMR — Tempo Médio de Resposta: DATA/HORA ABERTURA até a data do
- *         1º status "Agendada" da OS — sempre o primeiro que aparecer,
- *         independente de reagendamentos depois (o que importa é a
- *         velocidade da empresa em organizar a primeira visita).
- *
- *   TMS — Tempo Médio de Solução: para cada status "Deslocamento",
- *         procura o status "Finalizada" seguinte DO MESMO OPERADOR, NO
- *         MESMO DIA — a diferença entre as duas datas (coluna DATA) é
- *         um segmento. Uma OS pode gerar mais de um segmento (visitas
- *         em dias diferentes, inclusive depois de reaberta); o TMS
- *         da OS é a soma desses segmentos. Deslocamento sem uma
- *         Finalizada do mesmo operador no mesmo dia depois (abandonado
- *         — outro operador reorganizou a visita antes de concluir) não
- *         forma segmento nenhum, fica de fora da conta.
- *
- *   TMA — Tempo Médio de Atendimento: igual ao TMS, mas a partir do
- *         status "Execução" em vez de "Deslocamento" — só o trabalho
- *         em si, sem contar o deslocamento até o local. OS que nunca
- *         teve Deslocamento nem Execução (fechada sem passar por
- *         campo) não entra nem em TMS nem em TMA.
- *
- *   TME — Tempo Médio de Espera: DATA/HORA ABERTURA até a data do
- *         status "Finalizada" — visão do cliente, quanto tempo esperou
- *         no total. OS que teve Reabertura em algum momento (o técnico
- *         fechou e reabrimos pra acertar diagnóstico, etc. — não é um
- *         atendimento "limpo") fica de fora inteira, não só o desconto
- *         do tempo extra.
- *
- * TMS/TMA/TMR/TME não têm filtro próprio de assunto — pra restringir,
- * use o Filtro Global (ele já corta as OS antes de qualquer cálculo
- * aqui). Recorrência é a única métrica com filtro de assunto separado
- * (Configurações > Assuntos que Contam para Recorrência), de propósito
- * independente do Filtro Global.
- *
- * Uma OS sem nenhuma movimentação de Fechamento é considerada ainda
- * em aberto e fica fora de TMS/TMA/TME.
- */
-
 const IndicatorEngine = {
 
     LIMITE_DIAS_RECORRENCIA: 90,
     LIMITE_QTD_RECORRENCIA: 2,
 
-    // Assunto que identifica um cliente como cancelado (ver
-    // encontrarCancelamentoCliente) — de propósito FORA da lista branca
-    // de assuntosIncluidos da recorrência normal: cancelamento não é um
-    // "problema recorrente" a resolver, é o desfecho, então a busca por
-    // ele varre TODAS as OS do cliente (agruparTodasPorLogin), não só as
-    // que passam pelo filtro de assunto.
     ASSUNTO_CANCELAMENTO: "CANCELAMENTO (350)",
 
     NOME_EVENTO_FECHAMENTO: "Fechamento",
@@ -67,54 +10,13 @@ const IndicatorEngine = {
     NOME_EVENTO_REAGENDAMENTO: "Reagendar",
     NOME_EVENTO_AGENDAMENTO: "Agendamento",
 
-    // TMS/TMA/TMR são baseados no STATUS da movimentação (coluna STATUS
-    // da planilha), não no evento — ver cabeçalho do arquivo.
     STATUS_DESLOCAMENTO: "Deslocamento",
     STATUS_EM_EXECUCAO: "Execução",
     STATUS_FINALIZADA: "Finalizada",
     STATUS_AGENDADA: "Agendada",
-    // Sinal explícito do técnico de que não vai concluir aquele
-    // deslocamento/execução (pediu reagendamento) — ver analisarEventosOS.
+
     STATUS_AGUARDANDO_AGENDAMENTO: "Aguardando agendamento",
 
-    /**
-     * Nome de quem fica com o crédito de ter finalizado a OS: o
-     * Colaborador Responsável informado na movimentação de Fechamento
-     * (quem de fato atendeu/fechou, ver
-     * CONFIG_ORDENS.colaboradorResponsavel) — cai pro Operador só
-     * quando aquela coluna vier vazia (fechamentos antigos, de antes
-     * dela existir na planilha). O Operador sozinho às vezes é só quem
-     * clicou "Fechamento" no sistema em nome de outro colaborador, não
-     * necessariamente quem foi a campo — por isso todo "quem fechou a
-     * OS" do sistema (ranking, TMS/TMA/TMR/TME por técnico, recorrência
-     * por técnico, Filtro Global) usa isto em vez de ler ".operador"
-     * direto do fechamento. Não se aplica a eventos que não são
-     * Fechamento (deslocamento, execução, agendamento, reagendamento)
-     * — nesses o Operador continua sendo a fonte certa de "quem fez
-     * aquela ação".
-     *
-     * IMPORTANTE: Colaborador Responsável é resolvido pela aba PRÓPRIA
-     * da Base.xlsx (APP.referencias.colaboradoresResponsaveis), NÃO
-     * pela de Operadores — são cadastros separados, o mesmo número de
-     * ID é pessoas diferentes nas duas abas (ver
-     * database/patch-08-colaborador-responsavel.sql). Por isso devolve
-     * o NOME já resolvido (na tabela certa para cada caso), não o
-     * código cru — quem chama não tem como saber sozinho qual das duas
-     * tabelas usar. Essa aba não tem coluna de SETOR: agrupamento por
-     * setor continua vindo do Operador (ver agregarPorSetor/
-     * FiltroEngine.fechamentoEhDoSetor), nunca do Colaborador
-     * Responsável.
-     *
-     * Se o código do Colaborador Responsável vier preenchido mas SEM
-     * cadastro correspondente na aba (Base.xlsx desatualizada/
-     * incompleta — já aconteceu de verdade: ID sem linha na aba
-     * "Coloborador Responsável" enquanto o Operador da mesma
-     * movimentação tinha cadastro certinho), cai pro Operador em vez de
-     * devolver o código cru — um número solto (ex.: "443") não serve de
-     * nome pra ninguém em ranking/gráfico, e pior: rouba o crédito de
-     * quem de fato fechou a OS (o Operador), que ficaria escondido
-     * atrás desse número.
-     */
     nomeResponsavelFechamento(movFechamento) {
         if (!movFechamento) return null;
         const { colaboradorResponsavel, operador } = movFechamento;
@@ -127,28 +29,11 @@ const IndicatorEngine = {
         return AuditEngine.resolverReferencia(APP.referencias.operadores, operador, CONFIG_BASE.operadores.nome);
     },
 
-    /** Acha a linha crua na Base pro código dado, ou null se não achar — sem o fallback pro código cru que AuditEngine.resolverReferencia devolve (aqui quem chama decide o que fazer quando não acha). */
     encontrarLinhaReferencia(mapa, codigo) {
         if (codigo === null || codigo === undefined || codigo === "") return null;
         return mapa.get(codigo) ?? mapa.get(Number(codigo)) ?? mapa.get(String(codigo)) ?? null;
     },
 
-    /**
-     * Confere se um operador pertence ao(s) setor(es) atualmente
-     * selecionado(s) no Filtro Global > Setor (sem filtro de setor
-     * ativo, deixa passar sempre) — usado nos indicadores "por
-     * técnico" que atribuem a quem fez uma ação ESPECÍFICA
-     * (deslocamento abandonado, reagendamento, segmento de TMS/TMA),
-     * não a quem fechou a OS.
-     *
-     * Sem essa checagem, o Filtro Global > Setor só recorta QUAIS OS
-     * entram (pelo setor de quem FECHOU — ver
-     * FiltroEngine.fechamentoEhDoSetor), mas um técnico de OUTRO setor
-     * que só tocou a mesma OS no meio do caminho (ex.: abandonou um
-     * deslocamento antes de alguém do setor filtrado fechar) continuava
-     * aparecendo nesses indicadores específicos, mesmo filtrando por 1
-     * setor só.
-     */
     operadorPertenceAoFiltroSetor(codigoOperador) {
         const setoresFiltro = APP.filtrosGlobais?.setores;
         if (!setoresFiltro || setoresFiltro.length === 0) return true;
@@ -162,25 +47,12 @@ const IndicatorEngine = {
         return alvo.includes(normalizarTexto(setor ?? ""));
     },
 
-    /**
-     * Data que conta pra janela de recorrência (LIMITE_DIAS_RECORRENCIA):
-     * o Fechamento de verdade (evento "Fechamento", ver analisarEventosOS),
-     * caindo pra dataAbertura só se a OS nunca fechou. Mesmo padrão já
-     * usado em calcularFunilAssuntos — necessário porque dataAbertura
-     * sozinha não representa quando o cliente foi de fato atendido: OS
-     * geradas automaticamente (sem intervenção humana na abertura) podem
-     * ficar dias/semanas esperando um técnico ir a campo, e é essa visita
-     * (o Fechamento) que é o evento relevante pra "cliente recorrente",
-     * não a data em que o sistema criou a OS sozinho.
-     */
     dataEfetivaRecorrencia(ordem, analise) {
         return analise.get(ordem.id)?.ultimoFechamento?.data ?? ordem.dataAbertura;
     },
 
     calcularRecorrencia(ordens) {
-        // Idempotente: pode ser chamado de novo (ex.: depois de mudar o
-        // Filtro Global) sem deixar alertas velhos presos numa OS que já
-        // não se qualifica mais.
+
         this.limparAlertasRecorrencia(ordens);
 
         const analise = this.analisarEventosDeTodas(ordens);
@@ -189,8 +61,6 @@ const IndicatorEngine = {
         const todasPorLogin = this.agruparTodasPorLogin(ordens);
         const recorrentes = new Map();
 
-        // Ativos: exige o padrão de recorrência (LIMITE_QTD_RECORRENCIA+
-        // OS do mesmo tipo em LIMITE_DIAS_RECORRENCIA dias).
         for (const [login, listaOrdens] of porLogin) {
             const recentes = listaOrdens.filter(ordem =>
                 this.dentroDoLimite(this.dataEfetivaRecorrencia(ordem, analise), dataReferencia)
@@ -214,12 +84,6 @@ const IndicatorEngine = {
             }
         }
 
-        // Cancelados: TODO cliente com uma OS de Cancelamento entra aqui,
-        // independente de ter batido o padrão de recorrência acima —
-        // mostra as OS que ele teve (mesmo que sejam menos que o limite),
-        // pra sempre dar pra ver o contexto de quem cancelou. Se o login
-        // também for recorrente (loop de cima), esse registro substitui
-        // o de "ativo" — cliente cancelado não deve aparecer como ativo.
         for (const [login, todasOrdensCliente] of todasPorLogin) {
             const cancelamento = this.encontrarCancelamentoCliente(todasOrdensCliente);
             if (!cancelamento) continue;
@@ -250,18 +114,6 @@ const IndicatorEngine = {
         return recorrentes;
     },
 
-    /**
-     * Entre TODAS as OS de um cliente (sem o filtro de assunto da
-     * recorrência — ver ASSUNTO_CANCELAMENTO), acha a OS de cancelamento
-     * mais recente (se houver) e a última OS de verdade aberta antes
-     * dela, pra dar contexto do que motivou o cliente a cancelar.
-     * "De verdade" respeita Configurações > Assuntos Incluídos na
-     * Última OS Antes do Cancelamento — lista BRANCA (mesmo padrão de
-     * Assuntos que Contam para Recorrência): por padrão nenhum assunto
-     * conta, marque só os que são visita técnica de verdade. Assunto
-     * administrativo (ex.: "Conferência de Contrato") não deve ser
-     * marcado, pra não aparecer como o motivo do cancelamento.
-     */
     encontrarCancelamentoCliente(todasOrdensCliente) {
         const alvo = normalizarTexto(this.ASSUNTO_CANCELAMENTO);
         const incluidos = APP.configuracoes.assuntosIncluidosCancelamento ?? new Set();
@@ -290,13 +142,6 @@ const IndicatorEngine = {
         };
     },
 
-    /**
-     * Detalha um registro de recorrência (vindo de calcularRecorrencia)
-     * pra tela de Alertas: cada OS envolvida, com assunto e o técnico
-     * que FECHOU (evento Fechamento, não a última movimentação — uma OS
-     * pode ter sido tocada de novo depois de fechada) — pra saber quem
-     * atendeu o cliente em cada uma das idas e vindas.
-     */
     detalharRecorrenciaCliente(registro, ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
 
@@ -313,11 +158,7 @@ const IndicatorEngine = {
                 id: ordem.id,
                 assunto: ordem.assunto,
                 tecnico,
-                // Mesma base de data usada pra qualificar a recorrência
-                // (ver dataEfetivaRecorrencia) — assim o agrupamento por
-                // mês abaixo (contarOSPorMes) bate com o mês em que a OS
-                // de fato contou, não com a abertura (que numa OS
-                // automática pode ser bem anterior ao atendimento).
+
                 dataAbertura: this.dataEfetivaRecorrencia(ordem, analise)
             };
         });
@@ -342,12 +183,6 @@ const IndicatorEngine = {
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ],
 
-    /**
-     * Quantidade de OS abertas por mês, dentro do mesmo conjunto que já
-     * aparece na ficha do cliente (ordensDetalhes) — mais informativo
-     * que só o total, mostra em quais meses a recorrência se concentrou.
-     * Mais recente primeiro.
-     */
     contarOSPorMes(ordensDetalhes) {
         const porMes = new Map();
 
@@ -370,16 +205,6 @@ const IndicatorEngine = {
             .map(([, valor]) => valor);
     },
 
-    /**
-     * Funil configurável (APP.configuracoes.funilAssuntos): quantos
-     * clientes, depois de uma OS com assunto em "origem" (ex.: Instalação
-     * Novo Cliente, Transferência de Endereço), abriram uma OS com
-     * assunto em "destino" (ex.: Verificar Conexão, Sem Conexão LOS)
-     * dentro da mesma janela usada pela recorrência geral — sinal de
-     * instalação/transferência malfeita. Não usa a lista branca de
-     * assuntos da recorrência — aqui os assuntos relevantes são
-     * exatamente os configurados pro funil.
-     */
     calcularFunilAssuntos(ordens) {
         const config = APP.configuracoes.funilAssuntos ?? { origem: [], destino: [] };
 
@@ -408,11 +233,6 @@ const IndicatorEngine = {
                 const origem = ordenadas[i];
                 if (!origem.assunto || !origemNormalizada.includes(normalizarTexto(origem.assunto))) continue;
 
-                // dataFechamento é a ÚLTIMA movimentação da OS, não
-                // necessariamente o Fechamento (uma OS ainda aberta, só
-                // remexida, teria uma data recente demais aqui) — usa o
-                // Fechamento de verdade (analise), caindo pra abertura só
-                // se a OS nunca fechou.
                 const dataBase = analise.get(origem.id)?.ultimoFechamento?.data ?? origem.dataAbertura;
                 if (!dataBase) continue;
 
@@ -431,7 +251,7 @@ const IndicatorEngine = {
                         assuntoDestino: destino.assunto
                     });
                     clientesAfetados.add(login);
-                    break; // já achou 1 destino pra essa origem, passa pra próxima origem
+                    break;
                 }
             }
         }
@@ -442,21 +262,12 @@ const IndicatorEngine = {
     agruparPorLogin(ordens, analise) {
         const porLogin = new Map();
 
-        // Lista branca: um assunto só entra na recorrência se estiver
-        // explicitamente marcado como incluído no Filtro Global. Assunto
-        // sem marcação (inclusive assunto novo, nunca visto antes) fica
-        // de fora até alguém incluir manualmente — padrão mais seguro
-        // contra falso-positivo de recorrência.
         const assuntosIncluidos = APP.configuracoes.assuntosIncluidos ?? new Set();
 
         for (const ordem of ordens.values()) {
             if (!ordem.login) continue;
             if (!ordem.assunto || !assuntosIncluidos.has(normalizarTexto(ordem.assunto))) continue;
 
-            // Diagnóstico excluído da recorrência (Configurações) — ex.:
-            // "Verificação sem problema encontrado" não deveria contar
-            // como visita recorrente de verdade. Lista negra própria,
-            // separada da usada no TMS/TMA (ver diagnosticoExcluidoDoTempo).
             const info = analise.get(ordem.id);
             if (this.diagnosticoExcluidoDaRecorrencia(info?.ultimoFechamento)) continue;
 
@@ -469,12 +280,6 @@ const IndicatorEngine = {
         return porLogin;
     },
 
-    /**
-     * Igual agruparPorLogin, mas SEM o filtro de assunto — usado só pra
-     * achar a OS de cancelamento de um cliente (encontrarCancelamentoCliente),
-     * já que "CANCELAMENTO (350)" nunca vai estar na lista branca de
-     * assuntos recorrentes.
-     */
     agruparTodasPorLogin(ordens) {
         const porLogin = new Map();
 
@@ -524,10 +329,6 @@ const IndicatorEngine = {
         }
     },
 
-    /**
-     * Painel completo pro Dashboard: um único ponto de entrada que já
-     * devolve tudo pronto pra UI só desenhar. Nenhum cálculo na tela.
-     */
     calcularPainelDashboard(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
 
@@ -551,12 +352,6 @@ const IndicatorEngine = {
         };
     },
 
-    /**
-     * Passa por cada OS 1x só, resolvendo os eventos de suas movimentações,
-     * e guarda o resultado — TMS/TMR/TMA, índice de reabertura e ranking
-     * de técnicos (por fechamento) usam esse mesmo resultado em vez de
-     * resolver referência 3x pra cada OS.
-     */
     analisarEventosDeTodas(ordens) {
         const analise = new Map();
         for (const ordem of ordens.values()) {
@@ -565,24 +360,10 @@ const IndicatorEngine = {
         return analise;
     },
 
-    /** Mesmo dia de calendário (ano/mês/dia) — ignora hora. */
     mesmoDia(a, b) {
         return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
     },
 
-    /**
-     * TMS/TMA são baseados no STATUS (não no evento) — ver cabeçalho do
-     * arquivo. Passa pelas movimentações em ordem cronológica guardando,
-     * por OPERADOR, o último status "Deslocamento"/"Execução" ainda sem
-     * uma "Finalizada" correspondente; quando esse mesmo operador finaliza
-     * no MESMO DIA, fecha um segmento. Um novo "Agendamento" com algum
-     * desses ainda pendentes (de qualquer operador) descarta tudo sem
-     * virar segmento — é um deslocamento/execução abandonado, outro
-     * operador reorganizou a visita antes do técnico concluir. EXCETO se
-     * o técnico avisou primeiro (status "Aguardando agendamento") — aí é
-     * fluxo normal, não abandono: mesmo tratamento de limpar sem contar
-     * que a "Finalizada" já recebe.
-     */
     analisarEventosOS(ordem) {
         const alvoFechamento = normalizarTexto(this.NOME_EVENTO_FECHAMENTO);
         const alvoReabertura = normalizarTexto(this.NOME_EVENTO_REABERTURA);
@@ -596,36 +377,19 @@ const IndicatorEngine = {
         const alvoStatusAguardandoAgendamento = normalizarTexto(this.STATUS_AGUARDANDO_AGENDAMENTO);
 
         let ultimoFechamento = null;
-        // 1º Fechamento cronológico — regra padrão (ver
-        // classificarMotivoReabertura/fechamentoEfetivo abaixo): reabertura
-        // É acerto de processo NA MAIORIA dos casos (nunca um novo
-        // atendimento de campo), então esse costuma ser o fechamento "de
-        // verdade" pra período, crédito de técnico, Auditoria Operacional e
-        // TME. A EXCEÇÃO é quando a mensagem do evento de Reabertura indica
-        // que o serviço não chegou a ser executado (ver
-        // MOTIVOS_REABERTURA.SERVICO_NAO_EXECUTADO em
-        // js/config/motivosreabertura.js) — nesse caso quem fez o trabalho
-        // de campo de verdade foi quem fechou por ÚLTIMO, então é esse que
-        // deveria contar. ultimoFechamento continua existindo (histórico
-        // bruto de "qual foi a última movimentação de Fechamento", sem
-        // juízo de valor) — quem decide qual dos dois é "o fechamento" é o
-        // campo fechamentoEfetivo, calculado logo abaixo.
+
         let primeiroFechamento = null;
-        let ultimaReabertura = null; // mov. mais recente de evento "Reabertura"
-        // Fechamento imediatamente ANTES da última Reabertura — quem reabre
-        // às vezes só escreve "cliente retornou contato" (a reabertura em
-        // si) e o motivo de verdade ("visita sem sucesso") está na
-        // mensagem de QUEM FECHOU antes — por isso o motivo é classificado
-        // usando as DUAS mensagens juntas, não só a da reabertura isolada.
+        let ultimaReabertura = null;
+
         let fechamentoAntesDaUltimaReabertura = null;
-        let ultimoEncerramento = null; // Fechamento OU Reagendar — usado pro índice de reabertura/reagendamento
-        let primeiroAgendamento = null; // 1º status "Agendada" — fim do TMR
+        let ultimoEncerramento = null;
+        let primeiroAgendamento = null;
         let temReabertura = false;
         let temReagendamento = false;
 
-        const segmentosSolucao = []; // {operador, inicio, fim} — pares Deslocamento -> Finalizada (TMS)
-        const segmentosAtendimento = []; // {operador, inicio, fim} — pares Execução -> Finalizada (TMA)
-        const deslocamentosAbandonados = []; // {operador, data, tipo}
+        const segmentosSolucao = [];
+        const segmentosAtendimento = [];
+        const deslocamentosAbandonados = [];
 
         const deslocamentoAbertoPorOperador = new Map();
         const execucaoAbertaPorOperador = new Map();
@@ -660,25 +424,18 @@ const IndicatorEngine = {
                     temReabertura = true;
                     if (!ultimaReabertura || (mov.data && ultimaReabertura.data && mov.data > ultimaReabertura.data)) {
                         ultimaReabertura = mov;
-                        // ultimoFechamento aqui ainda é "o de antes" —
-                        // movimentações são processadas em ordem
-                        // cronológica (ver DataEngine.processarOrdens), e
-                        // só é reatribuído lá em cima quando ehFechamento.
+
                         fechamentoAntesDaUltimaReabertura = ultimoFechamento;
                     }
                 }
                 if (ehReagendamento) temReagendamento = true;
             }
 
-            // TMR — 1º status "Agendada", sempre o primeiro (reagendamentos
-            // depois não mudam isso).
             if (statusNormalizado === alvoStatusAgendada) {
                 if (!primeiroAgendamento || (mov.data && primeiroAgendamento.data && mov.data < primeiroAgendamento.data)) {
                     primeiroAgendamento = mov;
                 }
 
-                // Novo Agendamento (não reagendamento do próprio técnico) com
-                // deslocamento/execução pendente = abandono.
                 if (nomeEventoNormalizado === alvoAgendamentoEvento) {
                     for (const [operadorAberto, movAberto] of deslocamentoAbertoPorOperador) {
                         deslocamentosAbandonados.push({ operador: operadorAberto, data: movAberto.data, tipo: "deslocamento" });
@@ -713,41 +470,19 @@ const IndicatorEngine = {
             }
 
             if (statusNormalizado === alvoStatusFinalizada) {
-                // OS encerrada nesse ciclo — descarta o que ainda estava
-                // pendente (de qualquer operador que não bateu o par).
+
                 deslocamentoAbertoPorOperador.clear();
                 execucaoAbertaPorOperador.clear();
             }
 
-            // Técnico sinalizou que não vai concluir agora (pediu
-            // reagendamento) ANTES de outro operador reorganizar a visita
-            // — não é abandono, é fluxo normal. Limpa sem registrar em
-            // deslocamentosAbandonados (diferente do que acontece lá
-            // embaixo quando um novo Agendamento pega algo AINDA pendente,
-            // sem ter passado por aqui).
             if (statusNormalizado === alvoStatusAguardandoAgendamento) {
                 deslocamentoAbertoPorOperador.clear();
                 execucaoAbertaPorOperador.clear();
             }
         }
 
-        // Baseado no diagnóstico do fechamento FINAL (o mais recente, já
-        // resolvido acima) — uma OS cancelada/aberta errada não representa
-        // trabalho real de campo, então nem ela nem o técnico que a fechou
-        // devem carregar esse tempo no TMS/TMA. Não afeta OS finalizadas
-        // nem ranking — só a conta de tempo (ver calcularTMS/calcularFichasTecnicos).
         const excluidoDoTempo = this.diagnosticoExcluidoDoTempo(ultimoFechamento);
 
-        // Motivo da reabertura (ver js/config/motivosreabertura.js) — só é
-        // calculado quando a OS teve reabertura de verdade (senão fica
-        // null, nem entra no cálculo). Classifica pela mensagem da
-        // Reabertura JUNTO com a do Fechamento que ela reabriu — quem
-        // reabre às vezes só escreve algo curto tipo "cliente retornou
-        // contato" e o motivo de verdade ("visita sem sucesso") está na
-        // mensagem de quem fechou antes, não repetido na reabertura.
-        // "servico_nao_executado" é a ÚNICA classificação que muda qual
-        // fechamento conta; qualquer outra ("erro_processo", "indefinido"
-        // ou sem reabertura nenhuma) mantém o padrão — 1º Fechamento.
         const mensagemParaClassificar = [fechamentoAntesDaUltimaReabertura?.mensagem, ultimaReabertura?.mensagem]
             .filter(Boolean)
             .join(" ");
@@ -762,13 +497,7 @@ const IndicatorEngine = {
         return {
             ultimoFechamento, primeiroFechamento, fechamentoEfetivo,
             motivoReabertura, mensagemReabertura: ultimaReabertura?.mensagem ?? null,
-            // Quem executou a REABERTURA em si (evento "Reabertura") — via
-            // de regra um operador interno/despachante organizando o
-            // processo, NÃO necessariamente o técnico que vai ficar com o
-            // crédito do fechamento seguinte (esse é
-            // nomeResponsavelFechamento(ultimoFechamento), coisa
-            // separada). Cru aqui (código do Operador) — quem consome
-            // resolve o nome, igual diagnóstico/próxima tarefa.
+
             operadorReabertura: ultimaReabertura?.operador ?? null,
             ultimoEncerramento, primeiroAgendamento,
             temReabertura, temReagendamento, segmentosSolucao, segmentosAtendimento,
@@ -776,13 +505,6 @@ const IndicatorEngine = {
         };
     },
 
-    /**
-     * Verifica se o diagnóstico do fechamento está na lista configurável
-     * de diagnósticos que NÃO devem contar no TMS/TMA (ex.: "Cancelada
-     * pelo Cliente", "Aberto Errado") — ver Configurações > Diagnósticos
-     * excluídos do tempo. Lista vazia = nada é excluído (comportamento
-     * padrão, sem configuração nenhuma).
-     */
     diagnosticoExcluidoDoTempo(movFechamento) {
         if (!movFechamento) return false;
 
@@ -797,13 +519,6 @@ const IndicatorEngine = {
         return excluidos.has(normalizarTexto(nome));
     },
 
-    /**
-     * Igual diagnosticoExcluidoDoTempo, mas pra recorrência (Alertas) —
-     * lista negra própria e independente (Configurações > Diagnósticos
-     * Excluídos da Recorrência). Ex.: "Verificação sem problema
-     * encontrado" no fechamento não deveria contar como uma visita
-     * recorrente de verdade. Lista vazia = nada excluído (padrão).
-     */
     diagnosticoExcluidoDaRecorrencia(movFechamento) {
         if (!movFechamento) return false;
 
@@ -818,7 +533,6 @@ const IndicatorEngine = {
         return excluidos.has(normalizarTexto(nome));
     },
 
-    /** Soma, em horas, a duração de uma lista de segmentos {inicio, fim} (Date). */
     somarHorasSegmentos(segmentos) {
         if (!segmentos || segmentos.length === 0) return null;
         let total = 0;
@@ -828,13 +542,6 @@ const IndicatorEngine = {
         return total;
     },
 
-    /**
-     * Agrupa uma lista de segmentos {operador, inicio, fim} pelo próprio
-     * operador do segmento, somando a duração de cada um — usado na
-     * ficha por técnico (calcularFichasTecnicos), já que dentro de uma
-     * mesma OS segmentos diferentes podem ter operadores diferentes (ver
-     * analisarEventosOS). Retorna Map<código do operador, horas somadas>.
-     */
     agruparSegmentosPorOperador(segmentos) {
         const porOperador = new Map();
         for (const seg of segmentos) {
@@ -853,14 +560,6 @@ const IndicatorEngine = {
         return total;
     },
 
-    /**
-     * TMS — Tempo Médio de Solução, em horas: média da soma dos segmentos
-     * Deslocamento → Finalizada de cada OS (mesmo operador, mesmo dia —
-     * ver analisarEventosOS). OS sem nenhum segmento válido (nunca teve
-     * Deslocamento, ou teve mas ninguém finalizou no mesmo dia) fica fora
-     * da conta — assim como OS cancelada/aberta errada (diagnóstico na
-     * lista configurável de exclusão, ver diagnosticoExcluidoDoTempo).
-     */
     calcularTMS(ordens, analise) {
         let somaHoras = 0;
         let contagem = 0;
@@ -879,11 +578,6 @@ const IndicatorEngine = {
         return contagem > 0 ? somaHoras / contagem : null;
     },
 
-    /**
-     * TMA — Tempo Médio de Atendimento, em horas: igual ao TMS, mas com
-     * segmentos Execução → Finalizada (mesmo operador, mesmo dia) — só o
-     * trabalho em si, sem contar o deslocamento até o local.
-     */
     calcularTMA(ordens, analise) {
         let somaHoras = 0;
         let contagem = 0;
@@ -902,15 +596,6 @@ const IndicatorEngine = {
         return contagem > 0 ? somaHoras / contagem : null;
     },
 
-    /**
-     * TMR — Tempo Médio de Resposta, em horas: da abertura da OS até o
-     * 1º Agendamento. Mede a velocidade da empresa em agendar uma visita,
-     * não a atuação do técnico em campo (por isso não entra na ficha
-     * individual dele). OS sem Agendamento algum fica fora da conta.
-     * Pra restringir a assuntos específicos, use o Filtro Global — TMR
-     * (assim como TMS/TMA) já é calculado só em cima do que ele deixa
-     * passar.
-     */
     calcularTMR(ordens, analise) {
         let somaHoras = 0;
         let contagem = 0;
@@ -929,20 +614,6 @@ const IndicatorEngine = {
         return contagem > 0 ? somaHoras / contagem : null;
     },
 
-    /**
-     * TME — Tempo Médio de Espera, em horas: da abertura da OS até o
-     * Fechamento Efetivo. Visão do cliente — quanto tempo ele esperou no
-     * total, do pedido até a solução, sem descontar nada (fila,
-     * reagendamentos, tudo conta, porque tudo isso é tempo real de
-     * espera do cliente). Usa o 1º Fechamento mesmo se a OS foi reaberta
-     * depois — reabertura É acerto de processo NA MAIORIA dos casos, não
-     * um novo atendimento de campo, então não teria sentido descontar/
-     * inflar o tempo de espera do cliente por causa dela (ver
-     * js/engine/filtroengine.js pro mesmo raciocínio) — EXCETO quando a
-     * mensagem da reabertura indica que o serviço não tinha sido
-     * executado ainda, caso em que o ÚLTIMO Fechamento é quem conta (ver
-     * fechamentoEfetivo em analisarEventosOS).
-     */
     calcularTME(ordens, analise) {
         let somaHoras = 0;
         let contagem = 0;
@@ -979,12 +650,6 @@ const IndicatorEngine = {
         };
     },
 
-    /**
-     * % de OS encerradas (Fechamento OU Reagendamento) que tiveram pelo
-     * menos um Reagendamento no caminho. Usa "encerradas", não só
-     * "finalizadas" — uma OS pode nunca ter chegado ao Fechamento e
-     * ainda assim já ter sido reagendada várias vezes.
-     */
     calcularIndiceReagendamento(analise) {
         let totalEncerradas = 0;
         let totalReagendadas = 0;
@@ -1003,13 +668,6 @@ const IndicatorEngine = {
         };
     },
 
-    /**
-     * Motivos mais frequentes de reagendamento. Vêm da Resposta Padrão
-     * da movimentação com evento "Reagendar" — no sistema de origem
-     * esse campo nunca fica em branco nessas linhas e é justamente onde
-     * o motivo é registrado (diferente do Diagnóstico, que fica vazio
-     * numa linha de reagendamento).
-     */
     calcularMotivosReagendamento(ordens) {
         const alvoReagendamento = normalizarTexto(this.NOME_EVENTO_REAGENDAMENTO);
         const contagem = new Map();
@@ -1033,12 +691,6 @@ const IndicatorEngine = {
         return this.paraListaOrdenada(contagem);
     },
 
-    /**
-     * Qualidade do reagendamento por técnico: quem fez o reagendamento
-     * (operador daquela movimentação específica — pode ser diferente de
-     * quem fecha a OS no fim) preenchendo a Resposta Padrão conta como
-     * "acerto"; deixando em branco (nunca deveria) conta como "erro".
-     */
     calcularQualidadeReagendamentoPorTecnico(ordens) {
         const alvoReagendamento = normalizarTexto(this.NOME_EVENTO_REAGENDAMENTO);
         const porTecnico = new Map();
@@ -1073,7 +725,6 @@ const IndicatorEngine = {
         return porTecnico;
     },
 
-    /** Quantidade de reagendamentos por técnico (quem executou a movimentação Reagendar). */
     calcularReagendamentosPorTecnico(ordens) {
         const qualidade = this.calcularQualidadeReagendamentoPorTecnico(ordens);
         const contagem = new Map();
@@ -1106,14 +757,6 @@ const IndicatorEngine = {
         return this.paraListaOrdenada(contagem);
     },
 
-    /**
-     * Diagnóstico só é preenchido de verdade na movimentação de
-     * Fechamento (nas outras, como Reagendar, o campo vem vazio/0 por
-     * padrão do sistema de origem) — por isso conta só a partir de
-     * info.ultimoFechamento, uma vez por OS, e não de toda movimentação.
-     * Contar de qualquer movimentação inflava "0"/valores vazios como se
-     * fossem diagnóstico de verdade em OS que nem chegaram a fechar.
-     */
     calcularDiagnosticosMaisUsados(ordens, analise) {
         const contagem = new Map();
 
@@ -1134,13 +777,6 @@ const IndicatorEngine = {
         return this.paraListaOrdenada(contagem);
     },
 
-    /**
-     * Ranking de técnicos por volume de OS **realmente finalizadas**
-     * (tem evento Fechamento) — o técnico contado é quem executou o 1º
-     * Fechamento especificamente (ver js/engine/filtroengine.js — uma
-     * reabertura+refechamento posterior é acerto de processo, não
-     * atendimento novo, e não deveria mudar de mãos o crédito).
-     */
     calcularRankingTecnicos(analise) {
         const contagem = new Map();
 
@@ -1156,16 +792,6 @@ const IndicatorEngine = {
         return this.paraListaOrdenada(contagem);
     },
 
-    /**
-     * Quando o mesmo cliente (login) abre uma OS nova depois que uma
-     * anterior foi encerrada, o técnico responsável pelo fechamento da
-     * OS anterior é contabilizado como gerador de recorrência — mesma
-     * janela de dias e mesma lista branca de assuntos usadas em
-     * calcularRecorrencia(), pra manter os dois indicadores consistentes.
-     * Guarda o detalhe de cada ocorrência (ID da OS original, assunto,
-     * ID da OS que reabriu, assunto dela) pra dar contexto na ficha do
-     * técnico — não só o número.
-     */
     calcularRecorrenciaPorTecnicoDetalhado(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
         const porLogin = this.agruparPorLogin(ordens, analise);
@@ -1180,11 +806,6 @@ const IndicatorEngine = {
                 const anterior = ordenadas[i];
                 const seguinte = ordenadas[i + 1];
 
-                // anterior.dataFechamento/tecnicoResponsavel são a
-                // ÚLTIMA movimentação da OS, não necessariamente o
-                // Fechamento (uma OS nunca fechada também tem esses
-                // campos preenchidos) — usa o Fechamento de verdade
-                // (analise), igual o resto do sistema já faz.
                 const fechamentoAnterior = analise.get(anterior.id)?.ultimoFechamento;
                 if (!fechamentoAnterior?.data || !seguinte.dataAbertura) continue;
                 const nome = this.nomeResponsavelFechamento(fechamentoAnterior);
@@ -1218,14 +839,6 @@ const IndicatorEngine = {
         return this.paraListaOrdenada(contagem);
     },
 
-    /**
-     * Quantos deslocamentos/execuções foram abandonados por técnico —
-     * ele começou o atendimento mas outro operador reagendou por cima
-     * antes dele reagendar ou executar (ver analisarEventosOS). Passa
-     * por TODAS as OS, não só as finalizadas: o abandono é um evento em
-     * si, independente da OS ainda estar aberta ou ter sido fechada por
-     * outra pessoa depois.
-     */
     calcularDeslocamentosAbandonadosPorTecnico(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
         const porTecnico = new Map();
@@ -1275,12 +888,6 @@ const IndicatorEngine = {
             .sort((a, b) => b.valor - a.valor);
     },
 
-    /**
-     * "Equipe" é tratado igual a "Operador": pode vir como código (resolve
-     * pela Base de operadores) ou já como texto solto — usa o que der.
-     * Equipe igual ao operador que fechou a OS (ou em branco, ninguém
-     * registrado) = trabalhou sozinho; nomes diferentes = trabalhou em dupla.
-     */
     ehTrabalhoSolo(movFechamento) {
         if (!movFechamento) return true;
 
@@ -1295,9 +902,6 @@ const IndicatorEngine = {
         return normalizarTexto(String(nomeOperador ?? "")) === normalizarTexto(String(nomeEquipe ?? ""));
     },
 
-    /**
-     * Total de OS finalizadas feitas sozinho vs em dupla, no agregado geral.
-     */
     calcularSoloVsDupla(ordens, analise) {
         let solo = 0;
         let dupla = 0;
@@ -1313,20 +917,6 @@ const IndicatorEngine = {
         return { solo, dupla, total: solo + dupla };
     },
 
-    /**
-     * Classifica cada OS FINALIZADA (só olha o Fechamento, igual o
-     * resto do sistema — nunca OS ainda aberta) em Produtiva,
-     * Improdutiva ou Não classificada, a partir do diagnóstico do
-     * fechamento e da lista configurável de diagnósticos improdutivos
-     * (Configurações > Diagnósticos Improdutivos — mesmo padrão de
-     * Diagnósticos Excluídos do Tempo/Recorrência).
-     *
-     * Lista vazia (nada configurado ainda) = tudo fica em "Não
-     * classificada", de propósito — não presume que está tudo
-     * produtivo antes de alguém revisar e marcar os diagnósticos que
-     * realmente são improdutivos, senão o indicador mostraria um
-     * "100% produtivo" enganoso logo de cara.
-     */
     calcularProdutividade(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
         const improdutivos = APP.configuracoes.diagnosticosImprodutivos ?? new Set();
@@ -1368,14 +958,6 @@ const IndicatorEngine = {
         };
     },
 
-    /**
-     * Ficha individual por técnico: OS finalizadas, TMS/TMA próprios
-     * (segmentados — ver cabeçalho do arquivo), reaberturas, % de
-     * reabertura, recorrência gerada (cliente que volta depois do
-     * fechamento dele) e posição no ranking geral. Só entra técnico com
-     * pelo menos 1 OS finalizada (evento Fechamento) — sem isso não tem
-     * "ficha" que se sustente.
-     */
     calcularFichasTecnicos(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
         const recorrenciaDetalhada = this.calcularRecorrenciaPorTecnicoDetalhado(ordens);
@@ -1407,11 +989,6 @@ const IndicatorEngine = {
             return acumulado.get(nome);
         };
 
-        // Passo 1: finalizadas/reabertura/diagnóstico/solo-dupla ficam com
-        // quem de fato fechou a OS a 1ª vez (ver
-        // js/engine/filtroengine.js — reabertura é acerto de processo,
-        // não atendimento novo, então o crédito não muda de mãos por
-        // causa dela) — isso não depende de segmento algum.
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
             if (!info?.fechamentoEfetivo) continue;
@@ -1442,13 +1019,6 @@ const IndicatorEngine = {
             }
         }
 
-        // Passo 2: TMS/TMA ficam com quem de fato fez CADA segmento
-        // (Deslocamento->Finalizada / Execução->Finalizada) — dentro da
-        // mesma OS, segmentos diferentes podem ter operadores diferentes
-        // (ver analisarEventosOS), então um técnico que nunca fechou uma
-        // OS mas contribuiu um segmento válido ainda aparece aqui, com
-        // totalFinalizadas: 0. OS cancelada/aberta errada (excluidoDoTempo)
-        // não vira tempo nenhum pra ninguém — nem soma nem detalhe.
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
             if (!info || info.excluidoDoTempo) continue;
@@ -1521,16 +1091,6 @@ const IndicatorEngine = {
 
     NOMES_MES: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
 
-    /**
-     * Visão mensal (Jan até o último mês com dado) das OS finalizadas
-     * naquele ano: volume, TMS/TMA/TMR/TME médios, reaberturas (contagem)
-     * e técnicos ativos — todos agrupados pelo mês do 1º FECHAMENTO da OS
-     * (não abertura, agendamento, nem um refechamento posterior depois de
-     * reaberta — ver js/engine/filtroengine.js), pra ficar consistente
-     * entre as métricas. Ano de referência é o ano da finalização mais
-     * recente nos dados (ou, sem nenhuma finalizada, o da abertura mais
-     * recente). Só entram OS com Fechamento — igual ao resto do sistema.
-     */
     calcularTendenciaMensal(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
 
@@ -1568,9 +1128,6 @@ const IndicatorEngine = {
             const info = analise.get(ordem.id);
             if (!info?.fechamentoEfetivo?.data) continue;
 
-            // 1º Fechamento, não o último — reabertura é acerto de
-            // processo (ver js/engine/filtroengine.js), então o mês em
-            // que a OS "conta" é o do atendimento de verdade.
             const dataFechamento = info.fechamentoEfetivo.data;
             if (dataFechamento.getFullYear() !== ano) continue;
 
@@ -1599,7 +1156,6 @@ const IndicatorEngine = {
                 if (horasTmr >= 0) { bucket.somaTmr += horasTmr; bucket.contagemTmr++; }
             }
 
-            // TME usa o 1º Fechamento (dataFechamento já é ele) — mesma regra de calcularTME.
             if (ordem.dataAbertura) {
                 const horasTme = (dataFechamento - ordem.dataAbertura) / 3600000;
                 if (horasTme >= 0) { bucket.somaTme += horasTme; bucket.contagemTme++; }
@@ -1620,7 +1176,6 @@ const IndicatorEngine = {
         return { ano, meses };
     },
 
-    /** TMS médio por técnico (segmentado) — ranking de velocidade, não de volume. */
     calcularTmsPorTecnico(ordens) {
         return this.calcularFichasTecnicos(ordens)
             .filter(ficha => ficha.tmsHoras !== null)
@@ -1628,7 +1183,6 @@ const IndicatorEngine = {
             .sort((a, b) => a.valor - b.valor);
     },
 
-    /** TMA médio por técnico (segmentado) — só o tempo de mão na massa. */
     calcularTmaPorTecnico(ordens) {
         return this.calcularFichasTecnicos(ordens)
             .filter(ficha => ficha.tmaHoras !== null)
@@ -1636,20 +1190,8 @@ const IndicatorEngine = {
             .sort((a, b) => a.valor - b.valor);
     },
 
-    // Cidade/setor com poucas OS distorce a média (1 OS rápida "vence"
-    // fácil) — exige um mínimo pra entrar no ranking de melhores tempos.
     MINIMO_OS_RANKING_CIDADE: 3,
 
-    /**
-     * Agrupa (por cidade, setor, etc. — quem chama decide via
-     * calcularGrupo) um valor calculado por OS (calcularHorasDaOS devolve
-     * horas ou null), tira a média de cada grupo e devolve os "top" com o
-     * MENOR tempo primeiro (melhores) — ou o MAIOR primeiro (piores),
-     * se "piores" for true — pro relatório conseguir apontar tanto quem
-     * está indo bem quanto quem precisa de atenção. Grupo com menos de
-     * MINIMO_OS_RANKING_CIDADE OS no período fica de fora, pra não deixar
-     * 1 OS isolada "vencer" (ou "perder") o ranking por acaso.
-     */
     agregarPorGrupo(ordens, analise, calcularGrupo, calcularHorasDaOS, top, piores = false) {
         const acumulado = new Map();
 
@@ -1680,10 +1222,6 @@ const IndicatorEngine = {
         return this.agregarPorGrupo(ordens, analise, ordem => ordem.cidade, calcularHorasDaOS, top, piores);
     },
 
-    // Setor é atributo do OPERADOR (Base.xlsx), não da OS — usa o
-    // Operador do fechamento (não o Colaborador Responsável: aquela
-    // aba não tem coluna de SETOR, ver nomeResponsavelFechamento),
-    // igual o Filtro Global já faz (ver FiltroEngine.fechamentoEhDoSetor).
     agregarPorSetor(ordens, analise, calcularHorasDaOS, top, piores = false) {
         const calcularGrupo = (ordem, info) => {
             const operador = info.ultimoFechamento?.operador;
@@ -1695,7 +1233,6 @@ const IndicatorEngine = {
         return this.agregarPorGrupo(ordens, analise, calcularGrupo, calcularHorasDaOS, top, piores);
     },
 
-    /** Cidades com o melhor (ou, com piores=true, o pior) TMS médio (segmentado, visão do técnico). */
     calcularTmsPorCidade(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
@@ -1704,7 +1241,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Cidades com o melhor (ou, com piores=true, o pior) TMA médio (segmentado, visão do técnico). */
     calcularTmaPorCidade(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
@@ -1713,7 +1249,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Cidades com o melhor (ou, com piores=true, o pior) TMR médio (abertura até 1º agendamento). */
     calcularTmrPorCidade(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
@@ -1723,7 +1258,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Setores com o melhor (ou, com piores=true, o pior) TMS médio (segmentado, visão do técnico). */
     calcularTmsPorSetor(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorSetor(ordens, analise, (ordem, info) => {
@@ -1732,7 +1266,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Setores com o melhor (ou, com piores=true, o pior) TMA médio (segmentado, visão do técnico). */
     calcularTmaPorSetor(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorSetor(ordens, analise, (ordem, info) => {
@@ -1741,7 +1274,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Setores com o melhor (ou, com piores=true, o pior) TMR médio (abertura até 1º agendamento). */
     calcularTmrPorSetor(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorSetor(ordens, analise, (ordem, info) => {
@@ -1755,8 +1287,6 @@ const IndicatorEngine = {
         return this.agregarPorGrupo(ordens, analise, ordem => ordem.assunto, calcularHorasDaOS, top, piores);
     },
 
-    // Diagnóstico só existe de verdade no FECHAMENTO da OS (mesma regra
-    // usada em calcularDiagnosticosMaisUsados/coletarLinhasDetalheOS).
     agregarPorDiagnostico(ordens, analise, calcularHorasDaOS, top, piores = false) {
         const calcularGrupo = (ordem, info) => {
             if (info.ultimoFechamento.diagnostico === null || info.ultimoFechamento.diagnostico === undefined) return null;
@@ -1767,7 +1297,6 @@ const IndicatorEngine = {
         return this.agregarPorGrupo(ordens, analise, calcularGrupo, calcularHorasDaOS, top, piores);
     },
 
-    /** Assuntos com o melhor (ou, com piores=true, o pior) TMS médio (segmentado, visão do técnico). */
     calcularTmsPorAssunto(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
@@ -1776,7 +1305,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Assuntos com o melhor (ou, com piores=true, o pior) TMA médio (segmentado, visão do técnico). */
     calcularTmaPorAssunto(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
@@ -1785,7 +1313,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Assuntos com o melhor (ou, com piores=true, o pior) TMR médio (abertura até 1º agendamento). */
     calcularTmrPorAssunto(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
@@ -1795,7 +1322,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Assuntos com o melhor (ou, com piores=true, o pior) TME médio (abertura até o 1º Fechamento). */
     calcularTmePorAssunto(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorAssunto(ordens, analise, (ordem, info) => {
@@ -1805,7 +1331,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TMS médio. */
     calcularTmsPorDiagnostico(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
@@ -1814,7 +1339,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TMA médio. */
     calcularTmaPorDiagnostico(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
@@ -1823,7 +1347,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TMR médio. */
     calcularTmrPorDiagnostico(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
@@ -1833,7 +1356,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Diagnósticos (do fechamento) com o melhor (ou, com piores=true, o pior) TME médio. */
     calcularTmePorDiagnostico(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorDiagnostico(ordens, analise, (ordem, info) => {
@@ -1843,7 +1365,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Cidades com o melhor (ou, com piores=true, o pior) TME médio (abertura até o 1º Fechamento). */
     calcularTmePorCidade(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorCidade(ordens, analise, (ordem, info) => {
@@ -1853,7 +1374,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /** Setores com o melhor (ou, com piores=true, o pior) TME médio (abertura até o 1º Fechamento). */
     calcularTmePorSetor(ordens, top = 5, piores = false) {
         const analise = this.analisarEventosDeTodas(ordens);
         return this.agregarPorSetor(ordens, analise, (ordem, info) => {
@@ -1863,14 +1383,6 @@ const IndicatorEngine = {
         }, top, piores);
     },
 
-    /**
-     * TME médio por técnico — diferente de TMS/TMA por técnico
-     * (calcularFichasTecnicos), aqui não tem segmento por operador pra
-     * dividir: TME é a OS inteira (abertura até fechamento), então
-     * atribui pra quem fechou, igual cidade/setor já fazem. Mostra
-     * todos os técnicos com pelo menos 1 OS válida (sem corte de top N
-     * nem mínimo de OS), igual TMS/TMA por técnico já fazem.
-     */
     calcularTmePorTecnico(ordens) {
         const analise = this.analisarEventosDeTodas(ordens);
         const acumulado = new Map();
@@ -1895,47 +1407,6 @@ const IndicatorEngine = {
             .sort((a, b) => a.valor - b.valor);
     },
 
-    // ==========================================================
-    // TMR de Agendamento/Reagendamento do COP, por colaborador
-    // ==========================================================
-    // Diferente do TMR de cima (calcularTMR — mede a empresa como um
-    // todo), estes medem especificamente o trabalho de quem está no(s)
-    // setor(es) configurados como "COP" (Configurações > Setor do COP,
-    // ver js/services/setorescop.js). Setor é texto livre na Base.xlsx
-    // (ex.: "Controle de Operações", "COP - B2B" já apareceram como
-    // setores distintos em dados reais) — por isso é configurável em
-    // vez de fixo no código, mesmo padrão de assuntosIncluidos/
-    // funilAssuntos.
-    //
-    // TMR Primeiro Agendamento do COP: abertura da OS até o 1º status
-    // "Agendada" (mesma janela do TMR de cima), mas só entram OS cujo
-    // esse 1º agendamento foi feito por alguém do COP — na prática isso
-    // já separa Manutenção (COP agenda desde a abertura) de Instalação
-    // (Comercial agenda primeiro, fica de fora daqui).
-    //
-    // TMR Reagendamento do COP: mede o tempo entre a OS "precisar" de um
-    // novo agendamento e esse novo agendamento acontecer (um segmento
-    // por ciclo, uma OS pode gerar mais de um). Em dados reais (489 mil
-    // linhas de amostra) só existem 9 status possíveis — não há um
-    // status literal "Reagendamento" — e uma OS "precisa" de novo
-    // agendamento de duas formas:
-    //  - sinalizada: status vira "Aguardando agendamento" (a mesma
-    //    constante que analisarEventosOS já usa pra "técnico avisou
-    //    antes de outro operador reorganizar", ver STATUS_AGUARDANDO_
-    //    AGENDAMENTO) — é o que acontece em 25.445 das 25.451 vezes que
-    //    o evento "Reagendar" aparece nos dados;
-    //  - silenciosa: um Deslocamento/Execução fica pendente (sem
-    //    Finalizada) e é sobrescrito direto por um novo status
-    //    "Agendada", sem passar por "Aguardando agendamento" — hoje já
-    //    é contado como abandono (deslocamentosAbandonados), aqui além
-    //    de contar também vira tempo.
-    // O segmento fecha no próximo status "Agendada" — sem filtrar por
-    // evento: assim como TMS/TMA/TMR (ver cabeçalho do arquivo), o que
-    // importa é o STATUS, não o evento que levou a ele (na prática,
-    // ~7% dos status "Agendada" vêm de um evento de "Alteração", não de
-    // "Agendamento"). Credita quem fez ESSE agendamento — só entra na
-    // conta se esse operador for do COP.
-
     operadorEhDoCop(codigoOperador) {
         const setoresCop = APP.configuracoes.setoresCop ?? [];
         if (setoresCop.length === 0) return false;
@@ -1950,12 +1421,6 @@ const IndicatorEngine = {
         return setoresCop.some(s => normalizarTexto(s) === alvo);
     },
 
-    /**
-     * Função irmã de analisarEventosOS (mesmo estilo de varredura
-     * cronológica das movimentações), separada dela de propósito — não
-     * mexe em nada do que já está em produção (TMS/TMA/TME/reabertura/
-     * deslocamentosAbandonados/etc.).
-     */
     analisarAgendamentosOS(ordem) {
         const alvoFechamento = normalizarTexto(this.NOME_EVENTO_FECHAMENTO);
         const alvoStatusAgendada = normalizarTexto(this.STATUS_AGENDADA);
@@ -1966,7 +1431,7 @@ const IndicatorEngine = {
 
         let ultimoFechamento = null;
         let primeiroAgendamento = null;
-        const segmentosReagendamento = []; // {operador, inicio, fim}
+        const segmentosReagendamento = [];
 
         let aguardandoDesde = null;
         const deslocamentoAbertoPorOperador = new Map();
@@ -1978,9 +1443,6 @@ const IndicatorEngine = {
             execucaoAbertaPorOperador.clear();
         };
 
-        // Timestamp mais antigo entre todos os sinais de "precisa
-        // reagendar" ainda pendentes — é a partir dele que o tempo de
-        // reagendamento é contado.
         const inicioMaisAntigo = () => {
             let inicio = aguardandoDesde;
             for (const data of deslocamentoAbertoPorOperador.values()) {
@@ -2028,10 +1490,6 @@ const IndicatorEngine = {
                 }
             }
 
-            // Sinal explícito ("Aguardando agendamento") resolve/limpa o
-            // que estava pendente de Deslocamento/Execução — mesmo
-            // tratamento de analisarEventosOS: não é abandono, é fluxo
-            // normal do técnico avisando antes.
             if (statusNormalizado === alvoStatusAguardandoAgendamento) {
                 if (!aguardandoDesde) aguardandoDesde = mov.data ?? null;
                 deslocamentoAbertoPorOperador.clear();
@@ -2044,10 +1502,6 @@ const IndicatorEngine = {
             }
         }
 
-        // Mesma lista negra usada em TMS/TMA (Configurações > Diagnósticos
-        // excluídos do tempo) — OS cancelada/aberta errada não representa
-        // trabalho real, então o tempo gasto agendando/reagendando ela
-        // também não deveria contar nesses TMRs.
         const excluidoDoTempo = this.diagnosticoExcluidoDoTempo(ultimoFechamento);
 
         return { primeiroAgendamento, segmentosReagendamento, excluidoDoTempo };
@@ -2061,14 +1515,6 @@ const IndicatorEngine = {
         return analise;
     },
 
-    /**
-     * OS cujo 1º agendamento foi feito por alguém do COP, com o tempo
-     * individual de cada uma (abertura até o agendamento) — agrupado por
-     * quem agendou. Base de calcularTmrPrimeiroAgendamentoCop(PorColaborador)
-     * e do drill-down da tela (clicar no colaborador mostra essas OS, ver
-     * js/ui/setorescop.js). Respeita Configurações > Diagnósticos excluídos
-     * do tempo, igual TMS/TMA (ver analisarAgendamentosOS).
-     */
     calcularAgendamentosCopDetalhado(ordens) {
         const analise = this.analisarAgendamentosDeTodas(ordens);
         const porColaborador = new Map();
@@ -2097,7 +1543,6 @@ const IndicatorEngine = {
         return porColaborador;
     },
 
-    /** TMR médio (horas) + contagem de OS — ver calcularAgendamentosCopDetalhado. */
     calcularTmrPrimeiroAgendamentoCop(ordens) {
         const detalhado = this.calcularAgendamentosCopDetalhado(ordens);
         let somaHoras = 0;
@@ -2113,7 +1558,6 @@ const IndicatorEngine = {
         return { horas: contagem > 0 ? somaHoras / contagem : null, contagem };
     },
 
-    /** Igual calcularTmrPrimeiroAgendamentoCop, quebrado por quem agendou. */
     calcularTmrPrimeiroAgendamentoCopPorColaborador(ordens) {
         const detalhado = this.calcularAgendamentosCopDetalhado(ordens);
 
@@ -2125,16 +1569,6 @@ const IndicatorEngine = {
             .sort((a, b) => a.valor - b.valor);
     },
 
-    /**
-     * Segmentos de reagendamento (ver analisarAgendamentosOS) cujo
-     * responsável pelo novo agendamento é do COP, com o tempo individual
-     * de cada um — agrupado por quem reagendou. Base de
-     * calcularTmrReagendamentoCop(PorColaborador) e do drill-down da
-     * tela (ver js/ui/setorescop.js). Uma mesma OS pode aparecer mais de
-     * uma vez aqui (um segmento por ciclo de reagendamento). Respeita
-     * Configurações > Diagnósticos excluídos do tempo, igual TMS/TMA
-     * (ver analisarAgendamentosOS).
-     */
     calcularReagendamentosCopDetalhado(ordens) {
         const analise = this.analisarAgendamentosDeTodas(ordens);
         const porColaborador = new Map();
@@ -2164,7 +1598,6 @@ const IndicatorEngine = {
         return porColaborador;
     },
 
-    /** TMR médio (horas) + contagem de segmentos — ver calcularReagendamentosCopDetalhado. */
     calcularTmrReagendamentoCop(ordens) {
         const detalhado = this.calcularReagendamentosCopDetalhado(ordens);
         let somaHoras = 0;
@@ -2180,7 +1613,6 @@ const IndicatorEngine = {
         return { horas: contagem > 0 ? somaHoras / contagem : null, contagem };
     },
 
-    /** Igual calcularTmrReagendamentoCop, quebrado por quem reagendou. */
     calcularTmrReagendamentoCopPorColaborador(ordens) {
         const detalhado = this.calcularReagendamentosCopDetalhado(ordens);
 

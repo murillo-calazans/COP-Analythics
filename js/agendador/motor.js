@@ -1,6 +1,3 @@
-// Motor do pré-agendamento (agendador.html): lê o relatório de eventos de OS do IXC, reconstrói
-// o estado de cada OS na data de referência e distribui as pendentes entre os técnicos da escala.
-// Funções puras (sem DOM nem Supabase) para poder testar fora do navegador.
 (function (global) {
   'use strict';
 
@@ -17,8 +14,6 @@
     return m ? new Date(+m[3], m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)) : null;
   }
 
-  // O IXC exporta cabeçalhos com acento corrompido (HISTARICO, DESCRIAAO, PRAXIMA TAREFA);
-  // resolve cada coluna pelo primeiro nome que existir.
   function resolverColunas(headers) {
     const byNorm = {};
     headers.forEach(h => { byNorm[norm(h)] = h; });
@@ -51,21 +46,12 @@
     velocidadeKmh: 30, fatorEstrada: 1.4, almocoMin: 60, maxOS: 8, maxOSInstalador: 5, raioRegiaoKm: 5, maxForaRotaKm: 8,
   };
 
-  // Infraestrutura de rede (área de manutenção, expansão/melhoria de rede, rearranjo, CTO sem potência,
-  // ajuste de potência, CTO sem vaga, verificar viabilidade) e "Pós terceirizada", eSIM, licitação e inviabilidade
-  // (ex.: "INVIABILIDADE - ÁREA DE RISCO", fica no setor do COP — 08/10) também
-  // não entra: não é visita a cliente.
-  // 13/10: Construção de rede FTTH (infra), Reagendamento suporte e Cliente indisponível (COP liga pro cliente),
-  // Faturar débitos contratuais (faturamento) e Tratativa de IP fixo (CGR) também não contam pra agendamento.
   const NAO_CAMPO = /auditoria|exclusao de acesso|instalacao nao concluida|mudanca de tecnologia nao concluida|nova tentativa de instalacao|configurar conexao|configuracao telefonia|verificar troca de plano|chip|orcamento|remocao telefonia|area de manutencao|expansao de rede|rearranjo|cto sem potencia|ajuste de potencia|melhoria de rede|cto sem vaga|verificar viabilidade|pos terceirizada|esim|licitacao|inviabilidade|construcao de rede|reagendamento suporte|cliente indisponivel|faturar debitos|ip fixo/;
 
-  // OS "de rua" (reparo/instalação em campo) x trabalho de escritório/COP
-  // (auditoria, chip, configuração, expansão…). Fonte única da regra NAO_CAMPO.
   const assuntoEhDeCampo = assunto => !NAO_CAMPO.test(norm(assunto));
 
   const RE_VISITANTE = /Usu[aá]rio\s+(.+?)\s*,\s*(?:iniciou o deslocamento|executou)/i;
 
-  // O nome do IXC ("LUCIO DO NASCIMENTO - VELOZ") contém as palavras do nome da escala ("Lucio (Veloz)")?
   function nomeBate(nomeIxc, tech) {
     const real = norm(nomeIxc).replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean);
     const tem = w => real.some(r => r === w || (w.length >= 5 && distEdicao(r, w) <= 1));
@@ -75,13 +61,11 @@
     });
   }
 
-
   const ehTransfAssunto = o => /transferencia/.test(norm(o.assunto));
 
   function tipoServico(assunto) {
     const a = norm(assunto);
-    // Transferência de endereço só com técnico próprio; vai para a fila da manutenção (equipe própria)
-    // e só sobra para instalador terceirizado em último caso (ver planejar).
+
     const setor = /transferencia/.test(a) ? 'manutencao'
       : /instala|terceirizad|mudanca de tecnologia|ultima milha|parceria/.test(a) ? 'instalador' : 'manutencao';
     let dur = 'durManutencao';
@@ -91,9 +75,6 @@
     return { setor, dur };
   }
 
-  // Preferência de horário e disponibilidade do cliente, lidas das mensagens (mais recente vence).
-  // Mensagem que cita um dia (ex.: "segunda 21/09 após as 14h") vale só para aquele dia: se o dia já
-  // passou ou é outro, ela é ignorada; se é um dia futuro, a OS fica marcada como "pediu o dia X".
   function lerPreferencia(msgs, ref) {
     const p = { janela: null, aPartir: null, fdsOnly: false, fdsMencao: false, ausencias: 0, texto: '', textoData: null, diaPedido: null };
     const ordenadas = msgs.slice().sort((a, b) => b.data - a.data);
@@ -102,11 +83,11 @@
     const fonte = m => { if (!p.texto) { p.texto = m.texto; p.textoData = m.data; } };
     for (const m of ordenadas) {
       const t = norm(m.texto);
-      // A mensagem de abertura traz o checklist/termos do contrato, que não dizem nada sobre o cliente.
+
       if (!t || /termos da adesao|o contrato esta assinado/.test(t)) continue;
       if (/nao estava em casa|cliente ausente|nao se encontra|ninguem em casa|estava no trabalho|estaria trabalhando|esta no servico|esta no trabalho/.test(t)) p.ausencias++;
       const d = m.evento !== 1 && t.match(/(?:^|[^\d\/])(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?![\d\/])/);
-      // "hoje" / "amanhã" também prendem a mensagem a um dia, contado a partir da data da mensagem.
+
       const relativo = !d && m.data && (/(^|[^a-z])amanha/.test(t) ? 1 : (/(^|[^a-z])hoje([^a-z]|$)/.test(t) ? 0 : null));
       if ((d || relativo != null && relativo !== false) && ref) {
         let citada;
@@ -120,7 +101,7 @@
           const primeira = !viuDataCitada;
           viuDataCitada = true;
           if (!mesmoDia(citada, ref)) {
-            // Só a citação mais recente decide se o cliente pediu um dia futuro.
+
             if (primeira && citada > ref && citada - ref < 60 * 864e5) { p.diaPedido = citada; fonte(m); }
             continue;
           }
@@ -132,7 +113,7 @@
         else if (/(^|[^a-z])(parte|periodo|pela|de|na) manha/.test(t) || /(^|[^a-z])manha cedo/.test(t)) { p.janela = 'manha'; fonte(m); }
       }
       if (p.aPartir == null) {
-        // Exige "as 16", "16h" ou "16:00" para não confundir com "após 11 dias de inadimplência".
+
         const h = t.match(/(apos|a partir d[ae]s?|depois d[ae]s?|so (?:chega|esta|fica|estara)[^0-9]{0,30}?)\s*(?:(?:as\s*)(\d{1,2})(?::(\d{2}))?(?!\s*(?:dia|mes|\/))|(\d{1,2})(?::(\d{2})|\s*(?:h|hs|hrs|horas)(?![a-z])))/);
         if (h) {
           if (h[4] != null) { h[2] = h[4]; h[3] = h[5]; }
@@ -142,7 +123,7 @@
       }
       if (/final de semana|fim de semana|sabado/.test(t)) {
         p.fdsMencao = true;
-        // "Somente aos sábados OU após as 17h" tem alternativa em dia de semana: não é só fim de semana.
+
         const alternativa = /(final de semana|fim de semana|sabado)[^.]{0,30}\sou\s[^.]{0,30}(apos|depois|a partir|\d{1,2}\s*h|\d{1,2}:\d{2}|noite|tarde)/.test(t);
         if (!alternativa && /(so|somente|apenas)[^.]{0,40}(final de semana|fim de semana|sabado)/.test(t)) { p.fdsOnly = true; fonte(m); }
       }
@@ -151,9 +132,6 @@
     return p;
   }
 
-  // ---------- Mapa de regiões (mapa-logistico-cop/mapa-regioes.html) ----------
-  // A página do mapa guarda os dados em três arrays JS (CITIES, REGIONS, BAIRROS). Lemos o texto
-  // e convertemos para JSON sem executar nada da página.
   function lerMapaRegioes(html) {
     const pega = nome => {
       const i = html.indexOf('const ' + nome + ' = [');
@@ -171,7 +149,6 @@
     } catch (e) { return null; }
   }
 
-  // Nome de bairro sem prefixos que variam entre o IXC e o mapa ("Jardim Ouro Preto" x "Ouro Preto").
   const chaveBairro = s => norm(s).replace(/\(.*?\)/g, ' ')
     .replace(/(^|\s)(jardim|jd|parque|pq|vila|vl|loteamento|lot|condominio|cond|bairro|residencial|estrada|estr|alto|morro)\.?(?=\s|$)/g, ' ')
     .replace(/(^|\s)(de|da|do|das|dos)(?=\s|$)/g, ' ')
@@ -191,7 +168,7 @@
     const nomeCidade = Object.fromEntries(dados.cidades.map(c => [c.id, c.name]));
     const regiao = Object.fromEntries(dados.regioes.map(r => [r.id, { id: r.id, nome: r.name, cidade: nomeCidade[r.cityId] || '' }]));
     const itens = dados.bairros.filter(b => regiao[b[1]]).map(([nome, rid, lat, lng]) => ({ chave: chaveBairro(nome), regiao: regiao[rid], lat, lng }));
-    // O nome da própria região também serve de bairro ("SAMBAETIBA", "JAPUIBA").
+
     for (const r of Object.values(regiao)) {
       const bs = itens.filter(i => i.regiao === r);
       if (bs.length) itens.push({ chave: chaveBairro(r.nome), regiao: r, lat: bs.reduce((s, b) => s + b.lat, 0) / bs.length, lng: bs.reduce((s, b) => s + b.lng, 0) / bs.length });
@@ -201,11 +178,6 @@
     return { itens: itens.filter(i => i.chave), regioesPorCidade, total: { regioes: dados.regioes.length, bairros: dados.bairros.length } };
   }
 
-  // Acha a região (e a coordenada do bairro) de uma OS pelo nome do bairro. Prefere a mesma cidade;
-  // aceita nome igual, com 1 letra de diferença, ou um nome contido no outro (o mais longo vence).
-  // Se a cidade existe no mapa, só vale bairro dela; se não existe (ex.: Itaboraí), vale de qualquer cidade.
-  // Sem nome parecido, usa o bairro do mapa mais próximo do GPS (até 1,5 km) na mesma cidade.
-  // Cidade com uma região só no mapa (ex.: Bom Jardim) fica nessa região mesmo sem achar o bairro.
   function localizarNoMapa(idx, cidade, bairro, lat, lng) {
     if (!idx) return null;
     const k = chaveBairro(bairro);
@@ -236,8 +208,6 @@
     return unicas && unicas.length === 1 ? { regiao: unicas[0], lat: null, lng: null } : null;
   }
 
-  // Monta uma OS por ID com o estado que ela tinha logo antes da data de referência.
-  // mapaIdx (opcional, de indiceMapa) dá a região do mapa e a coordenada do bairro.
   function montarOS(rows, ref, params, mapaIdx) {
     if (!rows.length) return { os: [], stats: {} };
     const c = resolverColunas(Object.keys(rows[0]));
@@ -249,15 +219,10 @@
       grupos.get(id).push({ r, data: parseDataBR(r[c.data]) });
     }
 
-    // Recorrência: aberturas por login.
     const aberturasPorLogin = {};
-    // Centros de bairro/cidade para OS sem coordenada.
+
     const somaBairro = {}, somaCidade = {};
 
-    // O IXC tem coordenada errada em algumas OS (já apareceu Nova Friburgo no Mato Grosso).
-    // GPS a mais de 40 km da mediana das OS da mesma cidade é tratado como inválido.
-    // COLABORADOR RESPONSAVEL é um código; o nome sai da própria planilha: no deslocamento o
-    // histórico diz "Usuário NOME, iniciou o deslocamento" e na OS assumida "colaborador(a): 979 - NOME".
     const contagemNome = {};
     for (const r of rows) {
       const id = String(r[c.colab] == null ? '' : r[c.colab]).trim();
@@ -305,8 +270,6 @@
       }
     }
 
-    // Assuntos resolvidos internamente, sem técnico no cliente (lista confirmada com a operação).
-    // Não dá para deduzir da planilha: numa fila de OS em aberto quase nenhuma teve deslocamento ainda.
     const ehCampo = assunto => !NAO_CAMPO.test(norm(assunto));
 
     const lista = [];
@@ -317,9 +280,7 @@
       if (!passado.length) continue;
       const ult = passado[passado.length - 1].r;
       if (norm(ult[c.status]) === 'finalizada') continue;
-      // Algumas visões do IXC não trazem a linha de finalização. Diagnóstico só é preenchido no
-      // fechamento (na visão de OS em aberto nenhuma aberta tem diagnóstico), então OS com
-      // diagnóstico e sem evento "Finalizada" na planilha é tratada como já fechada.
+
       if (!evs.some(e => norm(e.r[c.status]) === 'finalizada') && evs.some(e => String(e.r[c.diagnostico] || '').trim())) { fechadasPorDiagnostico++; continue; }
       const f = evs[0].r;
       const abertura = parseDataBR(f[c.abertura]) || evs[0].data;
@@ -330,7 +291,7 @@
       if (iAg >= 0 && !passado.slice(iAg + 1).some(e => norm(e.r[c.status]) === 'deslocamento' || [9, 10].includes(+e.r[c.evento]))) {
         const ev = passado[iAg];
         const id = String(ev.r[c.colab] == null ? '' : ev.r[c.colab]).trim();
-        // Dia combinado, quando a mensagem do agendamento cita ("dia 02/10", "amanhã").
+
         const t = norm(ev.r[c.mensagem]);
         let dia = null;
         const dm = t.match(/(?:^|[^\d\/])(\d{1,2})\/(\d{1,2})(?![\d\/])/);
@@ -340,7 +301,7 @@
         if (id && id !== '0') agendaIxc = { colab: id, tecnico: nomeColab[id] || null, em: ev.data, dia };
       }
       const reag = passado.filter(e => +e.r[c.evento] === 10).length;
-      // Visitas = dias em que um técnico se deslocou/executou a OS; visitantes do mais recente ao mais antigo.
+
       const idas = passado.filter(e => norm(e.r[c.status]) === 'deslocamento' || +e.r[c.evento] === 9);
       const visitas = new Set(idas.map(e => e.data.toDateString())).size;
       const visitantes = [];
@@ -352,8 +313,6 @@
       const recorrIds = (aberturasPorLogin[login] || []).filter(x => x.ab && x.ab >= new Date(ref - 30 * umDia) && x.ab < ref).map(x => String(x.id));
       const recorr = recorrIds.length;
 
-      // Região do mapa pelo bairro. Achado em outra cidade só vale se o bairro do mapa fica
-      // perto das OS desta cidade (evita "Várzea" de Teresópolis cair na Várzea de Cachoeiras).
       const gpsBruto = gpsValido(f[c.cidade], +f[c.lat], +f[c.lng]);
       const loc = localizarNoMapa(mapaIdx, f[c.cidade], f[c.bairro], gpsBruto ? +f[c.lat] : null, gpsBruto ? +f[c.lng] : null);
       const locOk = !!loc && (norm(loc.regiao.cidade) === norm(f[c.cidade]) ||
@@ -371,7 +330,6 @@
         else { lat = null; lng = null; coordFonte = null; }
       }
 
-      // Quem realmente executou depois da referência (só existe quando a referência é passada).
       let realExec = null;
       const exec = evs.find(e => e.data && e.data >= ref && +e.r[c.evento] === 9);
       if (exec) {
@@ -380,7 +338,7 @@
       }
 
       const ts = tipoServico(f[c.assunto]);
-      // Recolhimento e retirada de equipamento não entram no roteiro (decisão da operação).
+
       const naoAgendar = /recolhimento|retirada de equipamento/.test(norm(f[c.assunto]));
       const pref = lerPreferencia(msgs, ref);
       const prioridade = String(ult[c.prioridade] || f[c.prioridade] || 'Normal').trim() || 'Normal';
@@ -388,13 +346,11 @@
       const status = String(ult[c.status]).trim();
 
       let score = 0;
-      // Visita técnica prioritária e Sem conexão / LOS são sempre prioridade máxima (regra da operação).
+
       const prioritaria = /visita tecnica prioritaria|sem conexao/.test(norm(f[c.assunto]));
       if (norm(prioridade) === 'critica' || prioritaria) score += 100;
       else if (norm(prioridade) === 'alta') score += 50;
-      // OS marcada para o dia no IXC (agendamento ativo sem data citada, de hoje ou já vencida) entra
-      // antes das demais; as outras são encaixadas nas vagas que sobrarem. O técnico do IXC não é
-      // obrigatório: o pré-agendamento redistribui por cima.
+
       const marcadaHoje = !!agendaIxc && !(agendaIxc.dia && agendaIxc.dia > ref);
       if (marcadaHoje) score += 60;
       score += Math.min(reag * 10, 40);
@@ -414,9 +370,6 @@
     return { os: lista, stats: { totalOS: grupos.size, fechadasPorDiagnostico } };
   }
 
-  // Junta o histórico de OS do COP Analytics (tabela "ordens", só leitura) às OS pendentes:
-  // recorrência passa a contar também as OS que o cliente já teve e foram fechadas, e cada OS
-  // ganha o último atendimento finalizado daquele login. Precisa rodar antes de planejar().
   function aplicarHistorico(osList, historico, ref) {
     const umDia = 864e5, desde = new Date(ref - 30 * umDia);
     const porLogin = {};
@@ -452,7 +405,6 @@
     return 2 * R * Math.asin(Math.sqrt(h));
   }
 
-  // "Cidade da OS = Seção A; Seção B" → mapa normalizado.
   function lerMapeamento(texto) {
     const mapa = {};
     String(texto || '').split(/\r?\n/).forEach(l => {
@@ -474,7 +426,6 @@
     const secoesEscala = new Set(techs.map(t => norm(t.secao)));
     const viagemMin = km => km * params.fatorEstrada / params.velocidadeKmh * 60;
 
-    // Seções ligadas pelo mapeamento formam um único grupo de técnicos (ex.: Cachoeiras + Japuíba + Papucaia).
     const pai = {};
     const achar = x => { pai[x] = pai[x] || x; return pai[x] === x ? x : (pai[x] = achar(pai[x])); };
     const unir = (a, b) => { pai[achar(a)] = achar(b); };
@@ -536,21 +487,18 @@
           transfParaTerceiro.length = 0;
         }
         if (!eqs.length) continue;
-        // Instalação tem limite próprio (padrão 5); reparo usa o limite geral (padrão 8).
+
         const cap = setor === 'instalador' ? (params.maxOSInstalador || params.maxOS) : params.maxOS;
-        // Sem vaga na equipe própria, transferência ainda tenta o terceirizado; o resto fica sem técnico.
+
         const naoCabe = (o, motivo) => (setor === 'manutencao' && ehTransf(o) && porSetor('instalador').length)
           ? transfParaTerceiro.push(o) : semTecnico.push({ os: o, motivo });
-        // "Sem conexão" vai de preferência para dupla de manutenção. Só em Nova Friburgo a dupla é
-        // obrigatória (técnico sozinho não pega); nas outras cidades, sem dupla com vaga, vai solo.
+
         const duplaObrigatoria = setor === 'manutencao' && [...pool.secoes].some(x => norm(x) === 'nova friburgo');
         const prefereDupla = o => setor === 'manutencao' && precisaDupla(o);
         const exigeDupla = o => duplaObrigatoria && precisaDupla(o);
         const duplas = eqs.filter(e => e.tech.dupla);
         const fila = filas[setor].sort((a, b) => (a.terceiroUltimoCaso ? 1 : 0) - (b.terceiroUltimoCaso ? 1 : 0) || b.score - a.score);
 
-        // 1) Quais OS entram no dia: as de maior prioridade, respeitando o limite de OS por técnico.
-        //    Primeiro as que exigem dupla (só cabem nas duplas), depois o resto nas vagas que sobrarem.
         const soDupla = fila.filter(prefereDupla);
         let livres = fila.filter(o => !prefereDupla(o));
         const entraDupla = soDupla.slice(0, duplas.length * cap);
@@ -563,11 +511,8 @@
         const entraLivre = livres.slice(0, vagasLivres);
         livres.slice(vagasLivres).forEach(o => naoCabe(o, 'Técnicos já estão com ' + cap + ' OS em ' + nomeGrupo));
 
-        // 2) Divide em regiões, uma por técnico. Isso evita a rota "encadeada" que atravessa a
-        //    cidade e deixa técnico sem OS. As de dupla são distribuídas primeiro entre as duplas.
         eqs.forEach(e => { e.stops = []; });
-        // Técnico que já foi ao cliente (reagendada, cliente ausente…) fica com a OS se estiver escalado
-        // aqui hoje e tiver vaga; vale o visitante mais recente que estiver na escala.
+
         const comVisitante = new Set();
         for (const o of [...entraDupla, ...entraLivre]) {
           for (const nome of o.visitantes || []) {
@@ -581,8 +526,6 @@
         distribuirPorRegiao([...(duplaObrigatoria ? [] : sobraDupla), ...entraLivre.filter(o => !comVisitante.has(o))], eqs, cap, opcoes)
           .forEach(o => naoCabe(o, 'Técnicos já estão com ' + cap + ' OS em ' + nomeGrupo));
 
-        // 3) Sequencia. O que não couber na jornada (ex.: janela do cliente) tenta outro técnico
-        //    do mesmo setor com vaga, do mais próximo para o mais distante; senão fica sem técnico.
         const sobras = [];
         for (const e of eqs) {
           while (e.stops.length && !cabe(e)) {
@@ -609,7 +552,7 @@
       for (const e of equipes) {
         if (!e.paradas) sequenciar(e, base, params, viagemMin);
         marcarForaDaRota(e, regioes, params.raioRegiaoKm);
-        // "Um pouco fora da rota" pode (fica marcado); longe demais fica para outro dia.
+
         for (;;) {
           const longe = e.paradas.filter(p => p.foraRota && p.kmFora > params.maxForaRotaKm).sort((a, b) => b.kmFora - a.kmFora)[0];
           if (!longe) break;
@@ -620,9 +563,6 @@
         }
       }
 
-      // Rodada final de encaixe: vagas que sobraram (OS reservadas que saíram por distância, pedido do
-      // cliente ou jornada) recebem as OS que ficaram de fora por limite, jornada ou distância,
-      // respeitando setor, dupla obrigatória em Nova Friburgo, jornada e distância máxima da rota.
       const capDe = setor => setor === 'instalador' ? (params.maxOSInstalador || params.maxOS) : params.maxOS;
       const nfObrigaDupla = [...pool.secoes].some(x => norm(x) === 'nova friburgo');
       const doPool = new Set(pool.itens);
@@ -645,8 +585,7 @@
           let ok = cabe(e);
           if (ok) {
             marcarForaDaRota(e, regioes, params.raioRegiaoKm);
-            // Encaixe não pode deixar ninguém fora da rota (nem a OS nova, nem as que já estavam):
-            // a vaga só é usada por OS da mesma região ou a até "raio" km das outras paradas.
+
             ok = !e.paradas.some(x => x.foraRota && (x.os === o || !antes.has(x.os)));
           }
           if (ok) {
@@ -667,14 +606,9 @@
     return { rotas, semTecnico, foraCampo, fimDeSemana };
   }
 
-  // Ajuste fino entre técnicos do mesmo setor: passa OS (uma ou o bairro inteiro) para outro técnico
-  // com vaga, ou troca uma OS de cada um. Regra: o técnico que vai a um bairro fica com o máximo de
-  // OS de lá (até o limite), em vez de dois técnicos dividirem o bairro, desde que isso não alongue
-  // as rotas. Mantém limite de OS, jornada, janela do cliente e dupla obrigatória.
   function melhorarTrocas(equipes, ctx) {
     const { cabe, capDe, nfObrigaDupla, regioes, raio, base, params, viagemMin } = ctx;
-    // Custo de cada rota: caminho entre as paradas (sem a saída da base, que é só o centro do grupo)
-    // e penalidade por parada fora da rota. Quem já visitou o cliente tem uma pequena preferência.
+
     const custoRota = e => {
       if (!e.paradas || !e.paradas.length) return 0;
       marcarForaDaRota(e, regioes, raio);
@@ -683,7 +617,7 @@
       const visitou = e.stops.filter(o => (o.visitantes || []).some(n => nomeBate(n, e.tech))).length;
       return km + e.foraDaRota * raio - visitou * 1.5;
     };
-    // Bairro atendido por mais de um técnico do mesmo setor custa ~5 km por técnico a mais.
+
     const PESO_DIVIDIDO = 5;
     const divididos = setor => {
       const porBairro = {};
@@ -709,7 +643,7 @@
       let mexeu = false;
       for (const a of equipes) for (const b of equipes) {
         if (a === b || a.tech.setor !== b.tech.setor) continue;
-        // Bairro inteiro de A para B, quando B também atende esse bairro e tem vaga para todas.
+
         const bairrosB = new Set(b.stops.map(o => chaveBairro(o.bairro)));
         for (const chave of [...new Set(a.stops.map(o => chaveBairro(o.bairro)))]) {
           if (!bairrosB.has(chave)) continue;
@@ -720,9 +654,9 @@
         }
         for (const o of a.stops.slice()) {
           if (!a.stops.includes(o) || !aceita(o, b) || !podeSair(o, a)) continue;
-          // Passa a OS para B, se B tiver vaga.
+
           if (b.stops.length < capDe(b.tech.setor) && testar(a, b, a.stops.filter(x => x !== o), [...b.stops, o])) { mexeu = true; continue; }
-          // Troca com uma OS de B.
+
           for (const p of b.stops.slice()) {
             if (!aceita(p, a) || !podeSair(p, b)) continue;
             if (testar(a, b, [...a.stops.filter(x => x !== o), p], [...b.stops.filter(x => x !== p), o])) { mexeu = true; break; }
@@ -739,7 +673,6 @@
 
   const precisaDupla = o => /sem conexao/.test(norm(o.assunto));
 
-  // "Nome da região = bairro; bairro" → bairros que devem ir para o mesmo técnico.
   function lerRegioes(texto) {
     const lista = [];
     String(texto || '').split(/\r?\n/).forEach(l => {
@@ -753,24 +686,16 @@
   const regiaoDe = (o, regioes) => regioes.find(z => z.bairros.some(b =>
     norm(o.bairro).includes(b) || (o.regiaoMapa && chaveBairro(o.regiaoMapa.nome) === chaveBairro(b)))) || null;
 
-  // Reparte as OS entre as equipes por região geográfica, com no máximo "cap" OS por equipe,
-  // somando ao que cada equipe já tem em "stops". Devolve as OS que não couberam.
-  //  - OS da mesma região configurada andam juntas (um "bloco"); o resto é uma OS por bloco.
-  //  - Técnico escalado numa seção com nome de bairro (ex.: Japuíba) começa pelo bloco desse bairro.
-  //  - Só abre região nova para outro técnico se o bloco estiver a mais de "raio" km das regiões
-  //    já abertas, ou se as abertas já estiverem cheias. Assim duas OS vizinhas não se separam.
-  //  - Depois ajusta como k-means: recalcula o centro de cada região e redistribui até estabilizar.
   function distribuirPorRegiao(itens, equipes, cap, opcoes) {
     const { regioes = [], raio = 5 } = opcoes || {};
     const abertas = equipes.filter(e => e.stops.length < cap);
     if (!itens.length) return [];
     if (!abertas.length) return itens.slice();
 
-    // Blocos: região configurada (quebrada em pedaços de até "cap", por proximidade) ou OS avulsa.
     const porChave = new Map();
     for (const o of itens) {
       const z = regiaoDe(o, regioes);
-      // Região configurada na tela > região do mapa > OS avulsa.
+
       const k = z ? 'z:' + z.nome : (o.regiaoMapa ? 'm:' + o.regiaoMapa.id : 'o:' + o.id);
       if (!porChave.has(k)) porChave.set(k, { zona: z, itens: [] });
       porChave.get(k).itens.push(o);
@@ -794,11 +719,9 @@
     const afinidade = (e, b) => b.itens.some(o => norm(o.bairro).includes(secao(e)) || (o.regiaoMapa && chaveBairro(o.regiaoMapa.nome) === chaveBairro(e.tech.secao)))
       || (b.zona && b.zona.bairros.some(x => chaveBairro(x) === chaveBairro(e.tech.secao)));
 
-    // Região de cada bloco: a configurada na tela ou a do mapa (sem região = só distância).
     const chaveReg = b => b.zona ? 'z:' + b.zona.nome : (b.itens[0].regiaoMapa ? 'm:' + b.itens[0].regiaoMapa.id : null);
     const regDasOS = os => { const o = os.find(x => x.regiaoMapa); return o ? 'm:' + o.regiaoMapa.id : null; };
 
-    // Sementes: quem já tem OS começa nelas; técnico de seção-bairro começa no bloco do bairro.
     const centros = abertas.map(e => e.stops.length ? centro(e.stops) : null);
     const regCentro = abertas.map(e => e.stops.length ? regDasOS(e.stops) : null);
     const semeados = new Set();
@@ -807,10 +730,7 @@
       const b = blocos.find(bl => !semeados.has(bl) && afinidade(e, bl));
       if (b) { centros[i] = { lat: b.lat, lng: b.lng }; regCentro[i] = chaveReg(b); semeados.add(b); }
     });
-    // Demais técnicos livres vão para as regiões com mais OS ainda sem técnico: cada técnico cobre até
-    // "cap" OS, então região com 8 OS e limite 5 pede dois. O limite é teto, não meta: melhor dividir
-    // entre os disponíveis do que mandar alguém para fora da rota. Sem região pendente, abre pela
-    // distância (o bloco mais longe das rotas abertas, se passar do raio).
+
     const qtd = {};
     blocos.forEach(b => { const k = chaveReg(b); if (k) qtd[k] = (qtd[k] || 0) + b.itens.length; });
     for (let i = 0; i < abertas.length; i++) {
@@ -840,7 +760,7 @@
     for (let it = 0; it < 20; it++) {
       const grupos = iniciais.map(s => s.slice());
       sobra = [];
-      // Mesma região do técnico conta como perto (bônus de 2× o raio); afinidade de seção manda.
+
       const dist = (i, b) => distKm(centros[i], b) - (afinidade(abertas[i], b) ? 1000 : 0) - (regCentro[i] && regCentro[i] === chaveReg(b) ? 2 * raio : 0);
       const ordem = blocos.map(b => {
         const ds = centros.map((c, i) => c ? dist(i, b) : Infinity).sort((a, x) => a - x);
@@ -850,12 +770,12 @@
         const pref = centros.map((c, i) => ({ i, d: c ? dist(i, b) : Infinity })).filter(p => isFinite(p.d)).sort((a, x) => a.d - x.d);
         let destino = pref.find(p => grupos[p.i].length + b.itens.length <= cap);
         if (!destino) {
-          // Regiões abertas cheias: abre uma nova num técnico livre, com este bloco de semente.
+
           const livre = abertas.findIndex((e, i) => !centros[i]);
           if (livre >= 0) { centros[livre] = { lat: b.lat, lng: b.lng }; regCentro[livre] = chaveReg(b); destino = { i: livre }; }
         }
         if (destino) { grupos[destino.i].push(...b.itens); continue; }
-        // Não coube inteiro em lugar nenhum: tenta OS por OS nas regiões com vaga.
+
         for (const o of b.itens) {
           const p = centros.map((c, i) => ({ i, d: c ? distKm(c, o) : Infinity })).filter(x => isFinite(x.d) && grupos[x.i].length < cap).sort((a, x) => a.d - x.d)[0];
           if (p) grupos[p.i].push(o); else sobra.push(o);
@@ -870,8 +790,6 @@
     return sobra;
   }
 
-  // Marca a parada que ficou fora da rota do técnico: região diferente da principal da rota
-  // (regiões juntadas na tela contam como uma só) ou, sem região, longe das outras paradas.
   function marcarForaDaRota(e, regioes, raio) {
     const reg = o => { const z = regiaoDe(o, regioes); return z ? { k: 'z:' + z.nome, nome: z.nome } : (o.regiaoMapa ? { k: 'm:' + o.regiaoMapa.id, nome: o.regiaoMapa.nome } : null); };
     const cont = {};
@@ -881,8 +799,7 @@
     for (const p of e.paradas) {
       const r = reg(p.os);
       const outraRegiao = principal && r && r.k !== principal[0];
-      // OS de outra região mede a distância só até as paradas da região principal; senão duas OS de
-      // fora, vizinhas entre si, se "aprovariam" uma à outra e a rota atravessaria a cidade.
+
       const outras = e.paradas.filter(x => x !== p && (!outraRegiao || (reg(x.os) || {}).k === principal[0])).map(x => x.os);
       const km = outras.length ? Math.min(...outras.map(o => distKm(o, p.os))) : 0;
       p.kmFora = km;
@@ -893,12 +810,8 @@
     }
   }
 
-  // Horário mínimo de chegada pedido pelo cliente ("em casa a partir das 10h"; "tarde" = 13h).
   const horaMinima = o => o.pref.aPartir != null ? o.pref.aPartir : (o.pref.janela === 'tarde' ? 13 * 60 : null);
 
-  // Monta a rota simulando o relógio: a cada passo vai para o cliente mais próximo que já pode
-  // receber naquele horário (quem pediu manhã tem preferência antes do meio-dia). Se ninguém pode
-  // ainda, vai para quem libera mais cedo. Depois calcula o horário previsto de chegada.
   function sequenciar(e, base, params, viagemMin) {
     const restantes = e.stops.slice();
     const ordem = [];
@@ -933,7 +846,7 @@
       let espera = 0;
       const minimo = horaMinima(o);
       if (!almocou && t >= 12 * 60) { t += params.almocoMin; almocou = true; }
-      // Na primeira parada o técnico simplesmente sai mais tarde; espera só conta entre visitas.
+
       if (minimo != null && t < minimo) { espera = pos === base ? 0 : minimo - t; t = minimo; }
       const chegada = t;
       t += o.dur;

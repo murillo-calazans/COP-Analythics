@@ -1,9 +1,3 @@
-/**
- * ==========================================================
- * Inicialização da Aplicação
- * ==========================================================
- */
-
 document.addEventListener("DOMContentLoaded", iniciarSistema);
 
 async function iniciarSistema() {
@@ -71,10 +65,6 @@ async function iniciarSistema() {
     registrarModal("modalSetoresCop");
     registrarModal("modalTmrCopDetalhe");
 
-    // Sem login, nada mais roda — a tela de login (ver js/ui/login.js)
-    // é a única coisa visível até autenticar (css/layout.css,
-    // body.nao-autenticado). Uma sessão do Supabase Auth já existente
-    // (aba recarregada, por exemplo) pula direto pro app autenticado.
     const sessao = await obterSessaoAtual();
 
     if (sessao) {
@@ -97,18 +87,8 @@ async function iniciarSistema() {
 
 }
 
-/**
- * Busca os dados compartilhados do Supabase e mostra o Dashboard —
- * chamado tanto ao carregar a página com sessão já ativa (acima)
- * quanto logo depois de um login bem-sucedido (js/ui/login.js).
- */
 async function inicializarDadosAutenticado() {
-    // Cache-first: se já tem algo salvo deste navegador (ver
-    // js/services/cachelocal.js), mostra na hora, sem esperar rede
-    // nenhuma — só entra o overlay de "Carregando..." quando não há
-    // nada pra mostrar ainda (primeiro acesso, ou depois de "Limpar
-    // dados"). De um jeito ou de outro, a busca no Supabase abaixo
-    // sempre roda e substitui pelo que houver de mais atual.
+
     const tinhaCache = await restaurarDoCacheLocal();
 
     if (tinhaCache) {
@@ -117,9 +97,6 @@ async function inicializarDadosAutenticado() {
         mostrarCarregandoDados();
     }
 
-    // Independente do cache/Supabase de ordens — tabela pequena e à parte
-    // (ver js/services/auditoriacorrecoes.js). Não bloqueia o resto do
-    // carregamento.
     buscarCorrecoesAuditoria().then(mapa => { APP.correcoesAuditoria = mapa; });
 
     const carregado = await atualizarDoSupabase(
@@ -144,20 +121,16 @@ async function inicializarDadosAutenticado() {
                 `${APP.referencias.diagnosticos.size} diagnósticos.`;
         }
     } else if (podeImportar()) {
-        // Sem dado nenhum ainda — só faz sentido oferecer o popup de
-        // importação pra quem pode importar (admin ou editor).
+
         abrirModalImportar();
     }
 
     renderizarDashboard();
-    // Abre a tela pedida no endereço; se já estava nela (ou não pediu nada),
-    // redesenha a tela aberta agora que os dados chegaram.
+
     const secaoAntes = secaoAtiva();
     abrirSecaoDoEndereco();
     if (secaoAtiva() === secaoAntes && secaoAntes !== "dashboard") renderizarSecaoAtiva();
 
-    // Atualização automática enquanto a tela fica aberta (robô de hora em hora
-    // / importações de outras pessoas aparecem sozinhas — ver js/services/aovivo.js).
     iniciarAoVivo();
 }
 
@@ -193,13 +166,6 @@ function registrarEventos() {
 
 }
 
-/**
- * Overlay de "Carregando dados..." mostrado só quando não há cache
- * local pra exibir de cara (ver inicializarDadosAutenticado) enquanto
- * atualizarDoSupabase() busca tudo do banco compartilhado — sem isso,
- * a tela fica em branco (dashboard vazio) durante o tempo que uma base
- * grande leva pra paginar, parecendo travada/quebrada.
- */
 function mostrarCarregandoDados() {
     const overlay = document.getElementById("carregandoDados");
     if (overlay) overlay.hidden = false;
@@ -216,16 +182,6 @@ function esconderCarregandoDados() {
     if (overlay) overlay.hidden = true;
 }
 
-/**
- * Botão de debug (🔄 no header): limpa o cache LOCAL deste navegador —
- * o snapshot do IndexedDB (js/services/cachelocal.js) e qualquer Cache
- * Storage/Service Worker que porventura exista — e recarrega numa URL
- * cache-busted, pra forçar o navegador a buscar HTML/JS/CSS na rede em
- * vez de servir uma versão antiga guardada no cache HTTP. Não mexe em
- * dado compartilhado nenhum (isso é limparDadosImportados, ação
- * distinta e restrita a admin) nem em preferências locais (tema,
- * configurações, filtros salvos).
- */
 async function limparCacheEAtualizar() {
     const confirmado = confirm(
         "Isso vai limpar o cache local deste navegador e recarregar a página, buscando a versão " +

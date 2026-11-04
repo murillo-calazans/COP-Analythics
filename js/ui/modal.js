@@ -1,18 +1,4 @@
-/**
- * ==========================================================
- * UI de Modal — Popup genérico
- * ==========================================================
- * Suporta múltiplos modais na mesma página, identificados por
- * ID. Cada modal precisa de um botão com [data-fechar-modal]
- * dentro dele para fechar.
- *
- * Suporta também "modal com retorno": abrir um modal a partir de
- * outro (ex.: OS aberta de dentro da ficha do técnico) e, ao
- * fechar, voltar pro modal anterior em vez de fechar tudo. Isso
- * é opcional — um modal aberto sem retorno fecha normalmente.
- */
-
-const _modalRetorno = new Map(); // idModalAberto -> idModalParaVoltar
+const _modalRetorno = new Map();
 
 function abrirModal(id) {
     const modal = document.getElementById(id);

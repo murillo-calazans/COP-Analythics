@@ -1,13 +1,3 @@
-/**
- * ==========================================================
- * UI do Filtro Global de Assuntos
- * ==========================================================
- * Abre num modal com busca: digita pra filtrar a lista, clica
- * num assunto pra alternar (incluir/remover da recorrência).
- * Lista branca: por padrão nada está incluído. Cada clique já
- * salva e recalcula a recorrência na hora — sem botão "Salvar".
- */
-
 function coletarAssuntosDistintos() {
     const assuntos = new Set();
 
@@ -90,9 +80,7 @@ function alternarAssuntoIncluido(chaveAssunto) {
     salvarAssuntosIncluidos(incluidos);
 
     if (APP.dados.ordens.size > 0) {
-        // Assuntos que Contam pra Recorrência afeta os dois cálculos —
-        // o do Dashboard (Filtro Global) e o de Alertas (independente,
-        // ver js/ui/alertas.js -> atualizarAlertas).
+
         APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
         renderizarDashboard();
         atualizarAlertas();

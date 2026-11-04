@@ -1,32 +1,12 @@
-/**
- * ==========================================================
- * Possíveis rompimentos (chip do cabeçalho)
- * ==========================================================
- * Lê a tabela clientes_offline (logins offline do IXC, puxada pelo robô a
- * cada rodada) e agrupa quem caiu JUNTO — mesma OLT + PON, na mesma janela
- * de horário — pra flagar queda em massa:
- *   dying-gasp / lost-carrier  -> falta de ENERGIA (⚡)
- *   LOS / LOB / LOF / SF…       -> ROMPIMENTO de fibra / conector (✂)
- *
- * Cruza com as OS em aberto (os_pendentes): pra cada cliente caído mostra o
- * número da OS e se ela está agendada (📅 data), sem agenda, ou sem OS; e o
- * grupo resume quantos ainda não têm OS. O chip no cabeçalho só aparece quando há
- * cluster; clicar abre o pop-up com os grupos. Visível a todo usuário logado.
- */
-
 let rompCache = null;
 
-// Mínimo de logins caídos no MESMO OLT+PON e MESMA janela pra virar suspeita.
 const ROMP_LIMIAR = 4;
-// Janela (min) que agrupa quedas "ao mesmo tempo" (bucket da última conexão).
-const ROMP_JANELA_MIN = 30;
-// Só queda RECENTE conta como rompimento — offline há dias é crônico/abandonado.
-const ROMP_RECENCIA_H = 24;
-const ROMP_TETO_MEMBROS = 200;   // membros listados por grupo no pop-up
 
-// status_acesso vem como código do IXC: A=Ativo, CA=Bloqueio Automático,
-// CM=Bloqueio Manual, FA=Financeiro. Só o Ativo conta como queda (os outros
-// estão offline porque foram bloqueados, não por rompimento).
+const ROMP_JANELA_MIN = 30;
+
+const ROMP_RECENCIA_H = 24;
+const ROMP_TETO_MEMBROS = 200;
+
 const rompEhAtivo = s => { const v = String(s || "").trim(); return v === "A" || /^ativo/i.test(v); };
 
 const ROMP_CSS = `
@@ -76,7 +56,6 @@ html[data-tema="dark"] .romp-os-sem{ color: #fecaca; }
 .romp-resumo{ font-size: 13px; color: var(--cor-texto-suave); margin: 0 0 12px; }
 `;
 
-// --- categoria da causa ---------------------------------------------------
 function rompCategoriaCausa(causa) {
     const c = ixcNorm(causa);
     if (!c || c === "-") return "outro";
@@ -93,7 +72,6 @@ const ROMP_ROTULO_CAT = {
     outro: { ico: "⚠️", nome: "Queda em massa", dica: "logins caídos juntos (causa não informada)" }
 };
 
-// --- leitura da tabela ----------------------------------------------------
 async function buscarClientesOffline() {
     if (typeof supabaseClient === "undefined") return [];
     const linhas = [];
@@ -109,36 +87,22 @@ async function buscarClientesOffline() {
     return linhas;
 }
 
-/**
- * Logins que já têm OS em aberto (os_pendentes) -> dados da OS: número e se
- * está agendada. A os_pendentes tem uma linha por evento (a OS se repete), então
- * agrego por OS: pego o AGENDAMENTO e o último STATUS. "Agendada" segue a mesma
- * regra do backlog (js/ui/agendabacklog.js): tem data de agendamento E não foi
- * assumida (quem assumiu está indo, não é mais "agendada"). Se o mesmo login tem
- * mais de uma OS, fica com a mais recente (desempate: a agendada).
- */
-/**
- * A OS é "de rua" (reparo/instalação em campo) ou trabalho de escritório/COP
- * (auditoria, chip, configuração…)? Rompimento só se importa com OS de campo —
- * uma auditoria aberta no cliente não é a OS que vai resolver a queda. Fonte da
- * regra: Motor.assuntoEhDeCampo (js/agendador/motor.js); fallback pelo COP.
- */
 function rompOsEhDeCampo(assunto) {
     if (typeof Motor !== "undefined" && typeof Motor.assuntoEhDeCampo === "function") return Motor.assuntoEhDeCampo(assunto);
     if (typeof assuntoEhDoCop === "function") return !assuntoEhDoCop(assunto);
-    return true;   // sem como classificar: não filtra
+    return true;
 }
 
 async function rompOsPorLogin() {
-    const mapa = new Map();   // loginNorm -> { id, agendada, agendamento }
+    const mapa = new Map();
     try {
         const linhas = typeof buscarOsPendentesCacheado === "function" ? await buscarOsPendentesCacheado() : [];
-        const porOs = new Map();   // id -> { login, agDate, assumida, ultimaData }
+        const porOs = new Map();
         for (const l of linhas) {
             const d = l.dados || {};
             const id = String(d["ID OS"] || "").trim();
             if (!id) continue;
-            if (!rompOsEhDeCampo(d.ASSUNTO)) continue;   // auditoria/COP não é ordem de rua
+            if (!rompOsEhDeCampo(d.ASSUNTO)) continue;
             const login = ixcNorm(d.LOGIN || "");
             let o = porOs.get(id);
             if (!o) { o = { id, login, agDate: null, assumida: false, ultimaData: null }; porOs.set(id, o); }
@@ -152,17 +116,16 @@ async function rompOsPorLogin() {
             const agendada = !o.assumida && !!o.agDate;
             const info = { id: o.id, agendada, agendamento: o.assumida ? null : o.agDate, quando: o.ultimaData };
             const atual = mapa.get(o.login);
-            // fica com a OS mais recente; na dúvida, prioriza a agendada
+
             if (!atual || (info.agendada && !atual.agendada) ||
                 (info.agendada === atual.agendada && info.quando && (!atual.quando || info.quando > atual.quando))) {
                 mapa.set(o.login, info);
             }
         }
-    } catch (e) { /* sem cruzamento se os_pendentes falhar */ }
+    } catch (e) {  }
     return mapa;
 }
 
-/** Nome do cliente por login (clientes_cto), só pros logins dos clusters. */
 async function rompNomesPorLogin(logins) {
     const mapa = new Map();
     if (typeof supabaseClient === "undefined" || !logins.length) return mapa;
@@ -172,12 +135,11 @@ async function rompNomesPorLogin(logins) {
         try {
             const { data } = await supabaseClient.from("clientes_cto").select("login, cliente").in("login", fatia);
             (data || []).forEach(r => { if (r.login && r.cliente) mapa.set(r.login, r.cliente); });
-        } catch (e) { /* ignora */ }
+        } catch (e) {  }
     }
     return mapa;
 }
 
-// --- detecção dos clusters ------------------------------------------------
 async function calcularRompimentos() {
     const linhas = await buscarClientesOffline();
     if (!linhas.length) return { clusters: [], total: 0, totalOffline: 0 };
@@ -186,7 +148,6 @@ async function calcularRompimentos() {
     const janelaMs = ROMP_JANELA_MIN * 60000;
     const limiteRecente = Date.now() - ROMP_RECENCIA_H * 3600000;
 
-    // só Ativos (tira bloqueio/financeiro), queda RECENTE e com OLT + hora
     const grupos = new Map();
     let ativos = 0;
     for (const r of linhas) {
@@ -195,8 +156,8 @@ async function calcularRompimentos() {
         const olt = (r.olt || "").trim();
         if (!olt) continue;
         const t = ixcDataBR(r.ultima_conexao);
-        if (!t) continue;                       // sem hora não dá pra confirmar coincidência
-        if (t.getTime() < limiteRecente) continue;   // offline há muito = crônico, não rompimento
+        if (!t) continue;
+        if (t.getTime() < limiteRecente) continue;
         const pon = (r.interface_pon || "").trim();
         const bucket = Math.floor(t.getTime() / janelaMs);
         const chave = `${olt}¦${pon}¦${bucket}`;
@@ -224,19 +185,14 @@ async function calcularRompimentos() {
         }
         const rel = (cats.energia || 0) + (cats.rompimento || 0);
         const spreadMin = (maxT - minT) / 60000;
-        // Queda em massa de verdade: ou já tem causa real suficiente (energia/rompimento),
-        // OU os logins caíram praticamente juntos (mesma janela apertada). Numa queda real
-        // muitas ONUs somem SEM reportar causa (causa vazia) — então NÃO dá pra exigir que a
-        // MAIORIA tenha causa: isso perdia rompimento (ex. real: 18 logins caídos no mesmo
-        // segundo numa PON, só 4 com causa). O recorte por OLT+PON + recência de 24h já segura
-        // o ruído crônico; a simultaneidade confirma o resto.
+
         const simultaneo = spreadMin <= 8 && g.membros.length >= ROMP_LIMIAR;
         if (rel < 2 && !simultaneo) continue;
         let cat;
-        if (!rel) cat = "outro";   // caíram juntos, mas nenhuma ONU reportou a causa
+        if (!rel) cat = "outro";
         else if ((cats.rompimento || 0) && (cats.energia || 0) && Math.min(cats.rompimento, cats.energia) >= rel * 0.25) cat = "misto";
         else cat = (cats.rompimento || 0) >= (cats.energia || 0) ? "rompimento" : "energia";
-        // urgência do membro: sem OS (0) < OS sem agenda (1) < OS agendada (2)
+
         const rank = m => !m.temOs ? 0 : (m.os && m.os.agendada ? 2 : 1);
         g.membros.sort((a, b) => (rank(a) - rank(b)) || (a.quando - b.quando));
         clusters.push({
@@ -245,11 +201,10 @@ async function calcularRompimentos() {
             inicio: new Date(minT), fim: new Date(maxT), membros: g.membros
         });
     }
-    // mais urgente primeiro: rompimento > energia, depois mais "sem OS", depois maiores
+
     const peso = { rompimento: 3, misto: 2, energia: 1, reset: 0, outro: 0 };
     clusters.sort((a, b) => (peso[b.cat] - peso[a.cat]) || (b.semOs - a.semOs) || (b.total - a.total));
 
-    // nomes dos clientes (só dos clusters)
     const nomes = await rompNomesPorLogin(clusters.flatMap(c => c.membros.map(m => m.login)));
     clusters.forEach(c => c.membros.forEach(m => { if (!m.cliente) m.cliente = nomes.get(m.login) || null; }));
 
@@ -257,7 +212,6 @@ async function calcularRompimentos() {
     return { clusters, total: clusters.length, totalOffline: ativos, temRompimento };
 }
 
-// --- chip do cabeçalho ----------------------------------------------------
 async function renderizarRompimentos() {
     const chip = document.getElementById("btnRompimentos");
     if (!chip) return;
@@ -287,7 +241,6 @@ function rompJanelaTexto(c) {
     return ini === fim ? `${dia} ${ini}` : `${dia} ${ini}–${fim}`;
 }
 
-/** Selo da OS do cliente: nº da OS + se está agendada (📅 data) ou sem OS. */
 function rompOsBadge(m) {
     if (!m.os) return '<span class="romp-os-sem">sem OS</span>';
     const dt = m.os.agendamento;
@@ -362,7 +315,6 @@ function abrirPopupRompimentos() {
     fundo.querySelector(".ixc-popup-fechar").focus();
 }
 
-// --- poll leve: robô trouxe dado offline novo? ----------------------------
 let rompUltimoSync = null;
 async function rompChecarNovidade() {
     if (typeof supabaseClient === "undefined") return;
@@ -370,7 +322,7 @@ async function rompChecarNovidade() {
         const { data } = await supabaseClient.from("clientes_offline").select("sincronizado_em").order("sincronizado_em", { ascending: false }).limit(1);
         const s = data && data[0] && data[0].sincronizado_em;
         if (s && s !== rompUltimoSync) { rompUltimoSync = s; await renderizarRompimentos(); }
-    } catch (e) { /* silencioso */ }
+    } catch (e) {  }
 }
 
 function registrarRompimentos() {

@@ -1,24 +1,3 @@
-/**
- * ==========================================================
- * Escala do dia (regras compartilhadas)
- * ==========================================================
- * Como fica cada técnico numa data, a partir da linha do Supabase que a
- * escala.html edita (escala_tecnicos_dados, ver database/patch-14).
- *
- * Usado por:
- * - js/ui/escalahoje.js (tela "Escala de hoje");
- * - agendador.html (pré-agendamento, sem precisar exportar a escala);
- * - supabase/functions/publicar-agenda (publicação automática da agenda).
- *
- * As regras são as da escala.html (getDiaData, horarioEfetivo,
- * ehFolgaPadraoNaoEditado, getTempCidadeEfetiva, getSetorEfetivo,
- * getDuplaInfo) — lá elas vivem presas dentro de um IIFE. Mudou uma regra
- * lá? Muda aqui também.
- *
- * Datas: sempre "meia-noite local" (new Date(ano, mes, dia)); o dia da
- * semana e o ISO saem dos campos locais, então funciona igual no navegador
- * e no servidor (que roda em UTC).
- */
 (function (global) {
     "use strict";
 
@@ -79,12 +58,6 @@
             return !!(exc && Object.prototype.hasOwnProperty.call(exc, "duplaOverride"));
         },
 
-        /**
-         * Mesma precedência de getDuplaInfo na escala.html. Devolve
-         * { parceiro, papel } — quem TEM o parceiro configurado (no dia ou no
-         * cadastro) é o "auxiliar"; quem foi ESCOLHIDO é o "principal", o nome
-         * que vale pras OS. Sem dupla: null.
-         */
         dupla(tech, techs, dataIso) {
             const porId = id => techs.find(t => t.id === id);
             const exc = tech.excecoes?.[dataIso];
@@ -109,7 +82,6 @@
             return this.dupla(tech, techs, dataIso)?.parceiro ?? null;
         },
 
-        /** { situacao, cidade, temporaria, inicio, fim } do técnico na data. */
         resumo(tech, data) {
             const diaKey = DIAS_JS[data.getDay()];
             const dataIso = isoData(data);
@@ -137,7 +109,6 @@
 
     const trabalhaNoDia = resumo => resumo.situacao === "instalador" || resumo.situacao === "manutencao";
 
-    /** Lista { tech, resumo, trabalha, parceiro, papel } de todos os técnicos na data. */
     function montarDia(techs, data) {
         const dataIso = isoData(data);
         return techs.map(tech => {
@@ -149,11 +120,6 @@
         });
     }
 
-    /**
-     * Equipes do dia no formato que o motor do agendador usa (o mesmo que
-     * ele lia do HTML exportado da escala): uma linha por equipe — a dupla
-     * entra pelo técnico principal, com o auxiliar em "dupla".
-     */
     function equipesParaAgendador(techs, data) {
         return montarDia(techs, data)
             .filter(d => d.trabalha && d.papel !== "auxiliar")

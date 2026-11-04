@@ -1,63 +1,13 @@
-/**
- * ==========================================================
- * Serviço de Armazenamento (Supabase)
- * ==========================================================
- * Busca APP.referencias e APP.dados.ordens do banco compartilhado
- * (Supabase) — substitui o antigo IndexedDB local por navegador.
- * Qualquer usuário autenticado (admin ou leitor) vê os mesmos
- * dados; só admin consegue escrever (RLS, ver
- * database/schema-supabase.sql).
- *
- * "ref_operadores"/"ref_eventos"/"ref_diagnosticos" guardam a
- * linha bruta da planilha inteira em JSONB — reconstruímos
- * APP.referencias.* exatamente como antes (Map<chave, linhaBruta>),
- * então resolverReferencia/encontrarColuna continuam funcionando
- * sem nenhuma mudança. "ordens"/"movimentacoes" já são tipadas, e
- * reconstruímos "new OrdemServico(...)"/"new Movimentacao(...)"
- * igual o restante do sistema já espera.
- *
- * Duas coisas exigem cuidado especial por causa do volume de dados
- * (dezenas de milhares de movimentações não é incomum aqui):
- * - LEITURA: o PostgREST do Supabase limita cada resposta a um teto de
- *   linhas (1000 por padrão) — um único .select("*") silenciosamente
- *   devolveria só a primeira página, sem erro nenhum. buscarTodasLinhas
- *   pagina com .range() até esgotar.
- * - ESCRITA: mandar dezenas de milhares de linhas numa upsert/insert só
- *   trava o navegador por muito tempo sem feedback nenhum (parece
- *   travado, mesmo funcionando). enviarEmLotes quebra em pedaços
- *   menores e reporta progresso.
- */
-
-// Pedido por página — quanto maior, menos ida-e-voltas de rede (que é o
-// gargalo real numa tabela com dezenas de milhares de linhas). O Supabase
-// pode silenciosamente cortar isso num teto menor (config "Max Rows" do
-// projeto, 1000 por padrão) — buscarTodasLinhas abaixo não depende desse
-// número bater com o que realmente volta, então aumentar aqui é seguro
-// mesmo que o projeto ainda não tenha esse teto elevado.
 const TAMANHO_PAGINA_LEITURA = 5000;
 const TAMANHO_LOTE_ESCRITA = 500;
 
-/**
- * Paginação por "keyset" (WHERE chave > última_vista ORDER BY chave
- * LIMIT n), não por .range()/OFFSET — com OFFSET, cada página fica mais
- * lenta que a anterior, porque o Postgres precisa varrer e descartar
- * todas as linhas de trás antes de chegar na página pedida; numa tabela
- * grande (dezenas de milhares de movimentações não é incomum aqui) isso
- * é lento o bastante pra estourar o tempo limite da consulta. Keyset usa
- * o índice da chave direto, então toda página é igualmente rápida,
- * não importa o tamanho da tabela.
- * Para quando uma página vem VAZIA — não quando vem menor que
- * TAMANHO_PAGINA_LEITURA — porque o Supabase pode entregar menos do que
- * foi pedido (teto "Max Rows" do projeto) sem avisar; comparar com o
- * pedido faria a leitura parar cedo demais e perder o resto silenciosamente.
- */
 async function buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir, aplicarFiltro) {
     const linhas = [];
     let ultimoValor = null;
 
     while (true) {
         let consulta = supabaseClient.from(tabela).select(colunas).order(colunaOrdem).limit(TAMANHO_PAGINA_LEITURA);
-        if (aplicarFiltro) consulta = aplicarFiltro(consulta);   // filtro extra (ex.: atualizado_em>marca d'água)
+        if (aplicarFiltro) consulta = aplicarFiltro(consulta);
         if (ultimoValor !== null) consulta = consulta.gt(colunaOrdem, ultimoValor);
 
         const { data, error } = await consulta;
@@ -74,22 +24,13 @@ async function buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir, apli
     return linhas;
 }
 
-const CONCORRENCIA_LEITURA = 6;   // o navegador faz ~6 requisições simultâneas por host
+const CONCORRENCIA_LEITURA = 6;
 
-/**
- * Igual à buscarTodasLinhas, mas puxa as páginas EM PARALELO (por offset),
- * pra tabelas grandes (ordens/movimentações/os_pendentes) — o cold load de
- * ~108 mil linhas sequencial era o maior gargalo. Pega a contagem primeiro e
- * dispara as páginas em lotes de CONCORRENCIA_LEITURA. Se a contagem falhar,
- * cai no método sequencial (keyset). Uma escrita concorrente pode deslocar o
- * offset no limite de uma página, mas a reconstrução dedup por id e o "ao vivo"
- * corrigem — e o cold load dura poucos segundos.
- */
 async function buscarTodasLinhasParalelo(tabela, colunas, colunaOrdem, aoProgredir) {
     const { count, error } = await supabaseClient.from(tabela).select(colunaOrdem, { count: "exact", head: true });
     if (error || count == null) return buscarTodasLinhas(tabela, colunas, colunaOrdem, aoProgredir);
 
-    const TAM = 1000;   // o Supabase entrega no máximo 1000 por requisição (teto do projeto)
+    const TAM = 1000;
     const totalPaginas = Math.ceil(count / TAM);
     const linhas = [];
 
@@ -110,20 +51,6 @@ async function buscarTodasLinhasParalelo(tabela, colunas, colunaOrdem, aoProgred
     return linhas;
 }
 
-/**
- * Igual em volume à buscarTodasLinhasParalelo, mas por KEYSET (id > último)
- * dentro de FAIXAS de id — NÃO por offset. Offset fundo (ex.: linha 150 mil)
- * faz o Postgres varrer e descartar tudo que vem antes a CADA página; com a
- * RLS de movimentacoes (que junta "ordens" linha a linha pra checar o setor) o
- * custo multiplica e estoura o tempo limite da consulta, derrubando o
- * Promise.all da carga inteira — o site cai pro cache e mostra só um punhado de
- * ordens (sintoma real: "semana passada só 18 ordens", porque sem as
- * movimentações nenhuma OS tem fechamento calculável e sai do filtro de
- * período). Keyset usa o índice da PK direto: toda página é rápida em qualquer
- * profundidade. Só vale pra id NUMÉRICO (particiona [min,max] em faixas e cada
- * faixa pagina por keyset); id texto cai no keyset sequencial (buscarTodasLinhas).
- * As faixas correm concorrentes — o próprio navegador limita a ~6 conexões/host.
- */
 async function buscarTodasLinhasKeysetParalelo(tabela, colunas, colunaId, aoProgredir) {
     const { count, error } = await supabaseClient.from(tabela).select(colunaId, { count: "exact", head: true });
     if (error || !count) return buscarTodasLinhas(tabela, colunas, colunaId, aoProgredir);
@@ -133,19 +60,19 @@ async function buscarTodasLinhasKeysetParalelo(tabela, colunas, colunaId, aoProg
         supabaseClient.from(tabela).select(colunaId).order(colunaId, { ascending: false }).limit(1)
     ]);
     const minId = extMin.data?.[0]?.[colunaId], maxId = extMax.data?.[0]?.[colunaId];
-    // id não numérico (ex.: ordens.id é texto) → keyset sequencial simples.
+
     if (typeof minId !== "number" || typeof maxId !== "number") {
         return buscarTodasLinhas(tabela, colunas, colunaId, aoProgredir);
     }
 
-    const LINHAS_POR_FAIXA = 8000;   // ~8 páginas de 1000 por faixa; ~20 faixas em 160k linhas
+    const LINHAS_POR_FAIXA = 8000;
     const nFaixas = Math.max(1, Math.ceil(count / LINHAS_POR_FAIXA));
     const passo = Math.max(1, Math.ceil((maxId - minId + 1) / nFaixas));
 
     let carregadas = 0;
     async function puxarFaixa(lo, hi) {
         const out = [];
-        let ultimo = lo - 1;   // 1ª página da faixa: id > lo-1 && id <= hi  ==  [lo, hi]
+        let ultimo = lo - 1;
         while (true) {
             const { data, error: e } = await supabaseClient.from(tabela).select(colunas)
                 .gt(colunaId, ultimo).lte(colunaId, hi).order(colunaId).limit(TAMANHO_PAGINA_LEITURA);
@@ -168,11 +95,6 @@ async function buscarTodasLinhasKeysetParalelo(tabela, colunas, colunaId, aoProg
     return linhas;
 }
 
-/**
- * Executa "operacao" em pedaços de "linhas", chamando aoProgredir(feitas,
- * total) depois de cada lote — pra UI conseguir mostrar progresso em vez
- * de parecer travada numa importação grande.
- */
 async function enviarEmLotes(linhas, operacao, aoProgredir) {
     if (linhas.length === 0) return;
 
@@ -184,17 +106,6 @@ async function enviarEmLotes(linhas, operacao, aoProgredir) {
     }
 }
 
-/**
- * Apaga TODAS as linhas de uma tabela, em lotes — usado por
- * limparDadosImportados() pras tabelas grandes (ordens/movimentacoes).
- * Um único "delete tudo" nelas (o que o código fazia antes) pode
- * estourar o tempo limite de execução do Supabase numa tabela com
- * centenas de milhares de linhas — e um delete que falha por timeout
- * NÃO lança erro pro cliente, só devolve 0 linhas afetadas, então o
- * código antigo "funcionava" sem avisar nada e não apagava nada. Aqui,
- * cada lote é pequeno o bastante pra não estourar, e o erro de
- * qualquer lote é verificado e relançado de verdade.
- */
 async function apagarTodasLinhas(tabela, colunaId, aoProgredir) {
     let totalApagado = 0;
 
@@ -218,7 +129,6 @@ async function apagarTodasLinhas(tabela, colunaId, aoProgredir) {
     return totalApagado;
 }
 
-/** Busca as linhas brutas de referência do Supabase — sem reconstruir nada ainda (ver reconstruirReferencias). */
 async function buscarLinhasReferencias(aoProgredir) {
     const [operadores, eventos, diagnosticos, colaboradoresResponsaveis] = await Promise.all([
         buscarTodasLinhas("ref_operadores", "chave, dados", "chave", n => aoProgredir?.(`operadores: ${n}`)),
@@ -230,7 +140,6 @@ async function buscarLinhasReferencias(aoProgredir) {
     return { operadores, eventos, diagnosticos, colaboradoresResponsaveis };
 }
 
-/** Linhas brutas -> Map<chave, dadosBrutos> por referência. Mesmo formato tanto vindo do Supabase quanto do cache local. */
 function reconstruirReferencias({ operadores, eventos, diagnosticos, colaboradoresResponsaveis }) {
     return {
         operadores: new Map(operadores.map(linha => [linha.chave, linha.dados])),
@@ -240,20 +149,17 @@ function reconstruirReferencias({ operadores, eventos, diagnosticos, colaborador
     };
 }
 
-/** Busca as linhas brutas de ordens/movimentações do Supabase — sem reconstruir nada ainda (ver reconstruirOrdens). */
 async function buscarLinhasOrdens(aoProgredir) {
     const [linhasOrdens, linhasMovimentacoes] = await Promise.all([
-        // ordens.id é TEXTO e a tabela é pequena (RLS barata, sem join) → offset tá ok.
+
         buscarTodasLinhasParalelo("ordens", "*", "id", n => aoProgredir?.(`ordens: ${n}`)),
-        // movimentacoes.id é BIGINT e a tabela é grande com RLS que junta ordens
-        // linha a linha → offset fundo estoura o tempo; keyset por faixa resolve.
+
         buscarTodasLinhasKeysetParalelo("movimentacoes", "*", "id", n => aoProgredir?.(`movimentações: ${n}`))
     ]);
 
     return { linhasOrdens, linhasMovimentacoes };
 }
 
-/** Linhas brutas -> Map<id, OrdemServico>. Mesmo formato tanto vindo do Supabase quanto do cache local. */
 function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
     const movimentacoesPorOrdem = new Map();
     for (const linha of linhasMovimentacoes) {
@@ -304,7 +210,6 @@ function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
     return ordens;
 }
 
-/** Reconstrói linhas brutas (Supabase ou cache local) e aplica direto em APP.referencias/APP.dados.ordens. */
 function aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas) {
     const referencias = reconstruirReferencias(referenciasBrutas);
     const ordens = reconstruirOrdens(ordensBrutas);
@@ -315,22 +220,11 @@ function aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas) {
     APP.referencias.colaboradoresResponsaveis = referencias.colaboradoresResponsaveis;
     APP.dados.ordens = ordens;
 
-    // Só em memória — o Supabase continua guardando o bairro cru da
-    // planilha. Roda sempre com o conjunto INTEIRO de OS, pra agrupar
-    // grafias parecidas de forma consistente mesmo entre OS importadas
-    // em arquivos diferentes (ver BairroEngine).
     BairroEngine.normalizarBairros(APP.dados.ordens);
 
-    // Idem pra assunto (ex.: "X - Terceirizado" -> "X") — ver
-    // js/config/assuntosequivalentes.js.
     AssuntoEngine.normalizarAssuntos(APP.dados.ordens);
 }
 
-/**
- * Registra no log qual arquivo foi importado, por quem e um resumo —
- * mostrado no popup de Importar Dados ("Arquivos no banco"). Não
- * interrompe a importação se falhar (log é informativo, não crítico).
- */
 async function registrarLogImportacao(nomeArquivo, tipo, estatisticas) {
     try {
         const { error } = await supabaseClient.from("logs_importacao").insert({
@@ -345,7 +239,6 @@ async function registrarLogImportacao(nomeArquivo, tipo, estatisticas) {
     }
 }
 
-/** Últimos logs de importação, mais recente primeiro — pro popup de Importar Dados. */
 async function buscarLogsImportacao(limite = 30) {
     const { data, error } = await supabaseClient
         .from("logs_importacao")
@@ -361,12 +254,6 @@ async function buscarLogsImportacao(limite = 30) {
     return data;
 }
 
-/**
- * Registra no log quem entrou no sistema e quando — mostrado no popup
- * de Logs, aba "Logins". Só em login de verdade (envio do formulário),
- * não em toda sessão restaurada por F5 (ver js/ui/login.js). Não
- * interrompe o login se falhar (log é informativo, não crítico).
- */
 async function registrarLogLogin(emailUsuario) {
     try {
         const { error } = await supabaseClient.from("logs_login").insert({ usuario_email: emailUsuario });
@@ -376,7 +263,6 @@ async function registrarLogLogin(emailUsuario) {
     }
 }
 
-/** Últimos logins, mais recente primeiro — pro popup de Logs. */
 async function buscarLogsLogin(limite = 30) {
     const { data, error } = await supabaseClient
         .from("logs_login")
@@ -392,35 +278,11 @@ async function buscarLogsLogin(limite = 30) {
     return data;
 }
 
-/**
- * Substitui as referências (Base.xlsx) no Supabase — chamado por
- * importarBase() em js/services/importador.js. Guarda a linha bruta
- * inteira em JSONB, exatamente como já vem de ReferenceEngine.carregar.
- * Em lotes (ver enviarEmLotes) — Base.xlsx costuma ser pequena, mas não
- * custa nada ficar consistente com o resto.
- *
- * SUBSTITUI, não agrega: primeiro faz upsert de quem veio na planilha
- * (atualiza quem já existia, insere quem é novo), depois apaga do
- * banco quem NÃO veio nessa importação — assim um ID removido da
- * Base.xlsx (ex.: operador desligado) some de verdade, em vez de
- * ficar "preso" pra sempre. Nessa ordem (upsert antes de apagar) uma
- * falha no meio do caminho no pior caso deixa registro antigo demais
- * no banco (como já era antes), nunca a tabela vazia. Diferente de
- * Ordens.xlsx (persistirOrdensNoSupabase), que continua acumulando de
- * propósito — Base.xlsx é subida inteira e esporadicamente, então faz
- * sentido cada importação refletir o estado atual da planilha; Ordens
- * é grande demais pra caber num arquivo só e é importada aos pedaços.
- */
 async function persistirReferenciasNoSupabase(referencias, aoProgredir) {
     const paraLinhas = mapa => [...mapa.entries()].map(([chave, dados]) => ({ chave: String(chave), dados }));
 
     const substituir = async (tabela, linhas, rotulo) => {
-        // Guarda de segurança: um arquivo sem NENHUMA linha pra essa
-        // referência (aba vazia, aba não encontrada — ver
-        // ReferenceEngine.carregar, Colaborador Responsável é opcional)
-        // não deve apagar o que já estava salvo. Sem isso, subir uma
-        // Base.xlsx mais antiga (sem aquela aba) apagaria a tabela
-        // inteira em vez de simplesmente não mexer nela.
+
         if (linhas.length === 0) {
             console.warn(`Nenhuma linha de "${rotulo}" veio nesse arquivo — mantendo o que já estava salvo.`);
             return;
@@ -455,23 +317,6 @@ async function persistirReferenciasNoSupabase(referencias, aoProgredir) {
     await substituir("ref_colaboradores_responsaveis", paraLinhas(referencias.colaboradoresResponsaveis), "colaboradores responsáveis");
 }
 
-/**
- * Chave de comparação de uma movimentação, usada só pra detectar
- * duplicata (mesma OS + mesmo evento real) entre o que já está no
- * banco e o que acabou de ser lido do Excel — não é um ID de verdade,
- * é uma "impressão digital" dos campos que identificam um evento real
- * (reimportar o mesmo arquivo, ou um arquivo com linhas sobrepostas,
- * gera a mesma chave e cai fora).
- *
- * Data arredondada pro segundo (não getTime() exato): a origem nunca
- * grava fração de segundo, mas dois caminhos de importação diferentes
- * (Excel binário real via SheetJS x planilha HTML disfarçada de xlsx,
- * usada por importações grandes divididas em partes — ver
- * js/utils/planilha.js) calculam a mesma data por fórmulas distintas,
- * e erro de arredondamento de ponto flutuante de 1ms entre elas já é
- * suficiente pra essa chave achar que são duas movimentações diferentes
- * e duplicar a OS inteira.
- */
 function chaveMovimentacao(mov) {
     return [
         mov.data instanceof Date ? Math.round(mov.data.getTime() / 1000) : mov.data,
@@ -483,27 +328,6 @@ function chaveMovimentacao(mov) {
     ].join("|");
 }
 
-/**
- * Upsert das OS + insert das movimentações NOVAS no Supabase —
- * chamado por importarOrdens() depois do merge local
- * (DataEngine.mesclarOrdens). "ordensNovas" é o resultado cru dessa
- * importação (antes do merge) — usamos ele pra saber quais IDs foram
- * tocados. "movimentacoesExistentesPorOrdem" é um snapshot (Map id ->
- * array de Movimentacao) de como cada uma dessas OS estava ANTES do
- * merge, ou seja, o que já estava persistido no banco — usamos pra
- * pular (ignorar) qualquer movimentação que já exista, em vez de
- * duplicar. Isso é o que permite reimportar o mesmo arquivo, ou um mês
- * já coberto, sem inflar a tabela: só entra o que é genuinamente novo
- * (ex.: uma OS aberta em um mês que só fecha no mês seguinte continua
- * ganhando as movimentações novas normalmente).
- * O snapshot da OS em si (cliente/status/etc.) vem do estado JÁ
- * mesclado em APP.dados.ordens, que é o mais atualizado. Em lotes (ver
- * enviarEmLotes) — um Ordens.xlsx grande facilmente passa de dezenas de
- * milhares de movimentações, e mandar tudo numa chamada só trava o
- * navegador por muito tempo sem dar nenhum retorno visual.
- * Retorna { inseridas, ignoradas } (contagem de movimentações), pra
- * importador.js poder mostrar "tantas carregadas, tantas ignoradas".
- */
 async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPorOrdem, aoProgredir) {
     const idsTocados = [...ordensNovas.keys()];
 
@@ -520,10 +344,7 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
             data_fechamento: ordem.dataFechamento,
             status_atual: ordem.statusAtual,
             tecnico_responsavel: ordem.tecnicoResponsavel,
-            // Setor de acesso (RLS — ver database/patch-06-terceiros-por-setor.sql):
-            // do técnico responsável ATUAL, não do fechamento (diferente do
-            // "Setor" do Filtro Global) — assim uma OS ainda aberta já fica
-            // visível pro setor certo, sem esperar ela fechar.
+
             setor: AuditEngine.resolverReferencia(
                 APP.referencias.operadores, ordem.tecnicoResponsavel, CONFIG_BASE.operadores.setor
             ),
@@ -583,17 +404,6 @@ async function persistirOrdensNoSupabase(ordensNovas, movimentacoesExistentesPor
     return { inseridas: linhasMovimentacoes.length, ignoradas };
 }
 
-/**
- * Aplica na hora o que estiver salvo no cache local (IndexedDB, ver
- * js/services/cachelocal.js), sem esperar rede nenhuma — chamado antes
- * de atualizarDoSupabase() pra a tela já poder desenhar algo
- * imediatamente (sensação de instantâneo) enquanto a versão atual
- * continua sendo buscada por trás. Se não houver cache (primeiro
- * acesso neste navegador, ou depois de limparDadosImportados()),
- * simplesmente não faz nada e devolve false.
- */
-// Guarda o último snapshot BRUTO (do cache ou da última busca) pra o
-// carregamento incremental mesclar só o que mudou, sem rebaixar tudo.
 let _ultimoCacheBruto = null;
 
 async function restaurarDoCacheLocal() {
@@ -624,36 +434,10 @@ async function restaurarDoCacheLocal() {
     }
 }
 
-/**
- * Busca tudo do Supabase, aplica em APP.referencias/APP.dados.ordens e
- * atualiza o cache local pra próxima vez. Chamado uma vez ao logar/F5
- * (ver js/core/app.js) — a partir daí o app trabalha em memória, igual
- * sempre fez. "tinhaCache" é o retorno de restaurarDoCacheLocal(),
- * chamado logo antes disso por quem orquestra o carregamento: só
- * importa se a busca der ERRO de verdade (rede caiu etc.) — nesse caso
- * cai de volta pro que já estava mostrado em vez de esvaziar a tela.
- * Uma resposta vazia BEM-SUCEDIDA (sem erro) nunca fica presa no cache
- * antigo pra sempre: tenta de novo 1x depois de 500ms (cobre a corrida
- * entre a sessão recém-restaurada no F5 e o token de autenticação ainda
- * não anexado às consultas, que faria a RLS filtrar tudo em silêncio) e,
- * se continuar vazia, aceita como o estado real — inclusive pra refletir
- * um "Limpar dados" feito por um admin em outro navegador, que sem isso
- * ficaria escondido atrás do cache local de quem já tinha entrado antes.
- */
-const IDADE_MAX_INCREMENTAL_MS = 24 * 3600 * 1000;   // acima disso, faz o completo (pega exclusões/novas referências)
+const IDADE_MAX_INCREMENTAL_MS = 24 * 3600 * 1000;
 
 function _emLotes(arr, n) { const r = []; for (let i = 0; i < arr.length; i += n) r.push(arr.slice(i, i + n)); return r; }
 
-/**
- * Carregamento INCREMENTAL: em vez de rebaixar as ~100k linhas toda vez
- * (egress!), baixa só as ORDENS mudadas desde o cache (atualizado_em > marca
- * d'água) + as movimentações dessas ordens, e mescla no snapshot do cache.
- * Referências (pequenas) são reaproveitadas do cache. Devolve o snapshot bruto
- * mesclado, ou null quando não dá pra incremental (sem cache, cache velho>24h,
- * sem marca d'água) — aí o chamador faz o completo. NUNCA remove ordens do
- * cache (sem perda de dado); no máximo fica 24h desatualizado quanto a exclusões,
- * corrigido pelo completo diário. Ver atualizarDoSupabase.
- */
 async function atualizarIncremental(cache, aoProgredir) {
     if (!cache || !cache.linhasOrdens || !cache.linhasOrdens.length) return null;
     if (cache.salvoEm && Date.now() - new Date(cache.salvoEm).getTime() > IDADE_MAX_INCREMENTAL_MS) return null;
@@ -687,8 +471,7 @@ async function atualizarIncremental(cache, aoProgredir) {
 }
 
 async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
-    // Incremental primeiro (corta egress): só o que mudou desde o último snapshot
-    // (vale tanto no 1º load com cache quanto nos refreshes do aovivo).
+
     if (_ultimoCacheBruto) {
         try {
             const inc = await atualizarIncremental(_ultimoCacheBruto, aoProgredir);
@@ -734,8 +517,8 @@ async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
             aplicarLinhasAoEstado(referenciasBrutas, ordensBrutas);
             APP.status.baseCarregada = !vazio;
 
-            salvarCacheLocal(referenciasBrutas, ordensBrutas); // best-effort, não bloqueia o retorno
-            _ultimoCacheBruto = {   // marca d'água pro incremental da próxima vez
+            salvarCacheLocal(referenciasBrutas, ordensBrutas);
+            _ultimoCacheBruto = {
                 ...referenciasBrutas,
                 linhasOrdens: ordensBrutas.linhasOrdens, linhasMovimentacoes: ordensBrutas.linhasMovimentacoes,
                 salvoEm: new Date().toISOString()
@@ -752,15 +535,6 @@ async function atualizarDoSupabase(aoProgredir, tinhaCache = false) {
     return tinhaCache;
 }
 
-/**
- * Apaga Base + Ordens compartilhadas (banco Supabase — pra TODO MUNDO
- * que usa o sistema, não só quem clicou) pra recomeçar do zero. Só
- * admin chega a essa função (botão escondido pra leitor, ver
- * js/ui/login.js -> aplicarGateDePapel; e a RLS recusaria a escrita de
- * qualquer forma). NÃO mexe em configurações (colunas, assuntos p/
- * recorrência, funil de assuntos, tema) — isso é preferência local do
- * navegador de cada um, não dado compartilhado.
- */
 async function limparDadosImportados() {
     if (!podeEditarOperacao()) {
         alert("Só administradores e editores podem apagar os dados compartilhados.");
@@ -778,10 +552,7 @@ async function limparDadosImportados() {
     mostrarCarregandoDados();
 
     try {
-        // movimentacoes/ordens em lotes — tabela grande de mais pra um
-        // "delete tudo" só (ver apagarTodasLinhas). As demais são
-        // pequenas (centenas de linhas), um delete só de cada resolve,
-        // mas com o erro checado de verdade (não dava antes).
+
         await apagarTodasLinhas("movimentacoes", "id", n =>
             atualizarTextoCarregando(`Apagando movimentações: ${n}...`)
         );
@@ -816,9 +587,6 @@ async function limparDadosImportados() {
     APP.indicadores = {};
     APP.status.baseCarregada = false;
 
-    // Senão o cache local ressuscitaria tudo isso no próximo F5/login.
-    // Aguarda terminar antes de seguir — sem isso, um F5 bem rápido logo
-    // em seguida podia ganhar a corrida da transação do IndexedDB.
     await limparCacheLocal();
 
     atualizarBadgeAlertas();

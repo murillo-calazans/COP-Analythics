@@ -1,32 +1,9 @@
-/**
- * ==========================================================
- * Produção por Operador
- * ==========================================================
- * Quantas ações cada operador fez num período, contadas pelas
- * movimentações das OS (o Operador da movimentação é quem fez a
- * ação — ver IndicatorEngine.nomeResponsavelFechamento pro caso
- * do Fechamento, que aqui NÃO interessa: o que conta é quem
- * clicou, porque é a produção do COP e não o crédito do técnico).
- *
- * - abertura: a movimentação mais antiga da OS (é quem a abriu);
- * - agendamento / reagendamento / fechamento: pelo evento.
- *
- * Usado na tela inicial ("você já fez X este mês") e na aba
- * Gestão COP. Não respeita o Filtro Global de propósito: é a
- * produção do mês, independente do recorte que estiver na tela.
- */
-
 const ProducaoEngine = {
 
     inicioDoMes(data = new Date()) {
         return new Date(data.getFullYear(), data.getMonth(), 1);
     },
 
-    /**
-     * Map<nomeDoOperador, { codigo, nome, setor, aberturas,
-     * agendamentos, reagendamentos, fechamentos }> das ações com data
-     * em [inicio, fim).
-     */
     calcularPorOperador(ordens, inicio, fim) {
         const alvoAgendamento = normalizarTexto(IndicatorEngine.NOME_EVENTO_AGENDAMENTO);
         const alvoReagendamento = normalizarTexto(IndicatorEngine.NOME_EVENTO_REAGENDAMENTO);
@@ -97,12 +74,6 @@ const ProducaoEngine = {
         return this.calcularPorOperador(APP.dados.ordens, inicio, fim);
     },
 
-    /**
-     * Acha o operador do usuário logado pelo nome. Os nomes da Base
-     * vêm do sistema de OS (ex.: "MURILLO CALAZANS"), então compara
-     * normalizado e aceita quando todas as palavras do nome do perfil
-     * aparecem no do operador.
-     */
     encontrarOperador(producao, nomeUsuario) {
         if (!nomeUsuario) return null;
         const alvo = normalizarTexto(nomeUsuario);

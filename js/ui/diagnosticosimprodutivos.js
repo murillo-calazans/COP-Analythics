@@ -1,15 +1,3 @@
-/**
- * ==========================================================
- * UI de Diagnósticos Improdutivos (Produtivo x Improdutivo)
- * ==========================================================
- * Abre num modal com busca: digita pra filtrar a lista, clica num
- * diagnóstico pra alternar (marcar/desmarcar como improdutivo) — ver
- * IndicatorEngine.calcularProdutividade. Lista negra: por padrão nada
- * está marcado (o indicador fica em "Não classificada" até então).
- * Cada clique já salva e recalcula os indicadores na hora — sem botão
- * "Salvar". Mesmo padrão de js/ui/diagnosticosexcluidos.js.
- */
-
 function coletarDiagnosticosDistintosImprodutivos() {
     const diagnosticos = new Set();
 

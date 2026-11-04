@@ -1,23 +1,9 @@
-/**
- * ==========================================================
- * Agendador IA — aba "Em aberto" (backlog de OS de campo)
- * ==========================================================
- * Retrato do que está EM ABERTO no pré-agendamento (os_pendentes), só OS
- * de campo (via Motor.campo — fora COP/infra/faturamento): total em aberto,
- * quantas já estão agendadas, quantas estão há mais de 3 dias em aberto, e a
- * quebra por assunto. Cada número abre a lista; cada OS abre a timeline.
- * "Bairros em aberto": o bairro EXATAMENTE como está na OS, conferido com o
- * histórico de OS da cidade e o mapa de regiões (desenharBairrosBacklog) —
- * aponta bairro em branco, que nunca apareceu, raro na cidade, que é de outra
- * cidade ou escrito diferente do jeito de sempre.
- */
-
 let agendaBacklogCache = null;
 let agendaBacklogCarregando = false;
-let backlogCidade = "";   // filtro de cidade atual ("" = todas)
+let backlogCidade = "";
 
 const BACKLOG_DIAS_ANTIGA = 3;
-const BACKLOG_TETO = 300;   // teto de OS listadas por popup
+const BACKLOG_TETO = 300;
 
 function montarBacklog(linhas) {
     const rows = linhas.map(l => l.dados);
@@ -39,12 +25,11 @@ function montarBacklog(linhas) {
 
     const { os } = Motor.montarOS(rows, hoje, Motor.PADRAO_PARAMS);
     const itens = os
-        .filter(o => o.campo && ixcNorm(o.status) !== "finalizada")   // campo + em aberto
+        .filter(o => o.campo && ixcNorm(o.status) !== "finalizada")
         .map(o => {
             const id = String(o.id);
             const abertura = aberturaDate[id] || null;
-            // o ÚLTIMO status manda: se a OS foi assumida, o agendamento/reagendamento
-            // anteriores não valem mais (não é mais "agendada" nem "reagendada").
+
             const assumida = ixcNorm(o.status) === "assumida";
             return {
                 id: o.id, cliente: o.cliente, cidade: o.cidade, bairro: o.bairro, assunto: o.assunto, status: o.status,
@@ -55,7 +40,6 @@ function montarBacklog(linhas) {
             };
         });
 
-    // cidades (todas as OS em aberto) pro filtro, ordenadas por quantidade
     const contaCidade = new Map();
     for (const i of itens) { const c = i.cidade || "—"; contaCidade.set(c, (contaCidade.get(c) || 0) + 1); }
     const cidades = [...contaCidade.entries()]
@@ -70,7 +54,6 @@ function montarBacklog(linhas) {
     };
 }
 
-/** Recorta o backlog pela cidade escolhida (vazio = todas) e refaz KPIs + assuntos. */
 function recorteBacklog(model) {
     const itens = backlogCidade ? model.itens.filter(i => (i.cidade || "—") === backlogCidade) : model.itens;
     const porAssunto = new Map();
@@ -102,16 +85,11 @@ function backlogHaDias(data) {
     return `há ${dias} ${dias === 1 ? "dia" : "dias"}`;
 }
 
-// Junta o assunto "- Terceirizado/a" com o interno: "INSTALAÇÃO NOVO CLIENTE" e
-// "INSTALAÇÃO NOVO CLIENTE - TERCEIRIZADO" viram um card só. O sufixo de
-// terceira é quem executa (ver [[equipe-pelo-nome-do-tecnico]]), não um tipo de
-// OS diferente — pra agenda, interessa o ASSUNTO, não quem faz. Também tira os
-// códigos "(70)" pra o mesmo assunto não quebrar por código diferente.
 function assuntoUnificado(a) {
     return String(a || "—")
-        .replace(/\s*\(\d+\)/g, "")                    // tira os códigos "(70)" etc.
-        .replace(/\s*[-–]\s*terceiriza\w*\b/gi, "")    // "- TERCEIRIZADO/A" no fim/meio
-        .replace(/\s+terceiriza\w*\b/gi, "")           // "TERCEIRIZADA" solta no texto
+        .replace(/\s*\(\d+\)/g, "")
+        .replace(/\s*[-–]\s*terceiriza\w*\b/gi, "")
+        .replace(/\s+terceiriza\w*\b/gi, "")
         .replace(/\s{2,}/g, " ")
         .trim()
         .toUpperCase() || "—";
@@ -127,7 +105,6 @@ function backlogCidadeCurta(c) {
     return s.length > 16 ? s.slice(0, 15) + "…" : s;
 }
 
-/** Gráfico de colunas (série única) das cidades com mais OS em aberto. */
 function graficoCidades(cidades) {
     const dados = (cidades || []).slice(0, 15);
     if (!dados.length) return "";
@@ -135,8 +112,8 @@ function graficoCidades(cidades) {
     const W = 820, H = 300, mL = 46, mR = 12, mT = 20, mB = 96;
     const pw = W - mL - mR, ph = H - mT - mB;
     const max = Math.max(...dados.map(d => d.n)) || 1;
-    const passo = pw / dados.length;                     // slot de cada coluna
-    const larg = Math.max(10, Math.min(46, passo - 10)); // largura da barra, com respiro
+    const passo = pw / dados.length;
+    const larg = Math.max(10, Math.min(46, passo - 10));
     const base = mT + ph;
     const y = v => mT + ph - (v / max) * ph;
 
@@ -187,10 +164,9 @@ function desenharBacklog(model) {
         return;
     }
 
-    // cidade escolhida sumiu numa recarga? volta pra "todas"
     if (backlogCidade && !model.cidades.some(c => c.cidade === backlogCidade)) backlogCidade = "";
 
-    const rec = recorteBacklog(model);   // banner "atualizado em" agora é global (acima das seções)
+    const rec = recorteBacklog(model);
     const sufixo = backlogCidade ? ` · ${escaparHtml(backlogCidade)}` : "";
 
     const opcoes = `<option value="">Todas as cidades (${model.total.toLocaleString("pt-BR")})</option>` +
@@ -243,23 +219,18 @@ function desenharBacklog(model) {
         }));
 }
 
-// ---------- Bairros em aberto (nome como está na OS × histórico da cidade) ----------
-let backlogMapaIdx = null;          // índice do mapa de regiões (Motor.indiceMapa), carregado 1x
+let backlogMapaIdx = null;
 let backlogSoBairrosEstranhos = false;
-let backlogHistorico = null;        // { tamanho, porCidade } — cache do histórico de bairros
+let backlogHistorico = null;
 
-// Bairro com pelo menos isso de OS no histórico da cidade é "comum".
 const BACKLOG_BAIRRO_COMUM = 5;
 
-/** Mesmo mapa de regiões do Mapa de calor (site do mapa logístico; sem ele, a cópia do Agendador). */
 async function mapaBairrosBacklog() {
     if (backlogMapaIdx) return backlogMapaIdx;
     if (typeof carregarRegioesMapaCalor === "function") backlogMapaIdx = (await carregarRegioesMapaCalor()).idx;
     return backlogMapaIdx;
 }
 
-// Chave pra juntar grafias do mesmo bairro ("Jardim Ouro Preto" = "OURO PRETO", "COSTAZUL" =
-// "Costa Azul"): sem acento, sem prefixos que variam, sem pontuação e sem espaço.
 function chaveGrafiaBairro(nome) {
     return Motor.norm(nome).replace(/\(.*?\)/g, " ")
         .replace(/(^|\s)(jardim|jd|parque|pq|vila|vl|loteamento|lot|condominio|cond|bairro|residencial)\.?(?=\s|$)/g, " ")
@@ -267,11 +238,6 @@ function chaveGrafiaBairro(nome) {
         .replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * Histórico de bairros por cidade, das OS já carregadas no COP Analytics
- * (APP.dados.ordens, bairro EXATAMENTE como veio do IXC): cidade -> chave do
- * bairro -> { total, grafias: grafia normalizada -> { nome, n } }.
- */
 function historicoBairrosBacklog() {
     const ordens = APP?.dados?.ordens;
     if (!ordens || !ordens.size) return null;
@@ -295,14 +261,6 @@ function historicoBairrosBacklog() {
     return porCidade;
 }
 
-/**
- * Situação de um bairro (cidade + nome como veio na OS). O que manda é o
- * HISTÓRICO da cidade (o mapa de regiões não tem todos os bairros):
- * comum (≥ BACKLOG_BAIRRO_COMUM OS na cidade, ou achado no mapa da cidade) ·
- * variacao (o bairro é comum, mas escrito diferente) · raro (poucas OS na
- * cidade) · outra-cidade (nunca apareceu na cidade, mas é comum em outra) ·
- * novo (nunca apareceu em lugar nenhum) · branco.
- */
 function situacaoBairroBacklog(hist, idx, cidade, bairro) {
     const nome = String(bairro || "").trim();
     if (!nome) return { tipo: "branco" };
@@ -334,7 +292,6 @@ function situacaoBairroBacklog(hist, idx, cidade, bairro) {
     return { tipo: "novo", qtd: 0 };
 }
 
-/** Grafia "bonita" de uma cidade normalizada, a partir das OS carregadas. */
 function nomeCidadeHistorico(cidadeNorm) {
     for (const o of APP?.dados?.ordens?.values?.() ?? []) if (Motor.norm(o.cidade) === cidadeNorm) return o.cidade;
     return cidadeNorm;
@@ -354,10 +311,9 @@ async function desenharBairrosBacklog(itens, sufixo) {
     if (!alvo) return;
     let idx = null;
     try { idx = await mapaBairrosBacklog(); } catch (e) { console.warn("Mapa de regiões:", e); }
-    if (!document.body.contains(alvo)) return;   // redesenhou enquanto carregava
+    if (!document.body.contains(alvo)) return;
     const hist = historicoBairrosBacklog();
 
-    // agrupa por cidade + bairro EXATAMENTE como está na OS
     const grupos = new Map();
     for (const o of itens) {
         const cidade = o.cidade || "—";

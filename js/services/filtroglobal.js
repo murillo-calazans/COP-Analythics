@@ -1,19 +1,3 @@
-/**
- * ==========================================================
- * Serviço de Filtro Global
- * ==========================================================
- * Persiste, no localStorage, quais "assuntos" devem CONTAR
- * para os indicadores (recorrência hoje, outros no futuro —
- * ex.: MTTR, SLA). É uma lista branca: por padrão nenhum
- * assunto conta, inclusive um assunto novo nunca visto antes
- * — alguém precisa incluir manualmente. Existe porque nem todo
- * assunto é uma visita técnica de manutenção (ex.: "Conferência
- * de Contrato" não deve contar como recorrência).
- *
- * Os valores são guardados normalizados (ver js/utils/texto.js)
- * pra não depender de acento/caixa na hora de comparar.
- */
-
 const FILTRO_GLOBAL_CHAVE_STORAGE = "cop_analytics_assuntos_incluidos";
 
 function carregarAssuntosIncluidos() {

@@ -1,17 +1,3 @@
-/**
- * ==========================================================
- * Infográficos — Gestão do COP
- * ==========================================================
- * - cop-abertas: retrato das OS do COP em aberto, do MESMO modelo da aba
- *   (montarCopAbertas em js/ui/gestaocop.js, cache copAbertasCache; sem
- *   cache, buscarOsPendentesCacheado — que já reaproveita a consulta em
- *   andamento da aba). Clique num assunto abre a mesma lista da aba
- *   (abrirPopupCop).
- * - gestao-cop (Produção · TMR): fechamentos feitos por administrativos
- *   (tipoDono "Administrativo" — COP, suporte, atendimento…) sobre as OS
- *   finalizadas do recorte do Filtro Global (montarLinhasDetalheOS).
- */
-
 const IG_COP_FAIXAS_IDADE = [
     { rotulo: "Hoje", ate: 0, cor: "ciano" },
     { rotulo: "1 dia", ate: 1, cor: "ciano" },
@@ -21,7 +7,6 @@ const IG_COP_FAIXAS_IDADE = [
     { rotulo: "+10 dias", ate: Infinity, cor: "vermelho" }
 ];
 
-/** Dias desde a abertura (mesma conta de copHaDias); null sem data. */
 function igCopIdadeDias(abertura) {
     if (!abertura) return null;
     return Math.max(0, Math.floor((Date.now() - abertura.getTime()) / 86400000));
@@ -34,7 +19,6 @@ function igCopCarimbo(iso) {
     return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-// ---------- COP em aberto ----------
 registrarInfografico("cop-abertas", async () => {
     let model = typeof copAbertasCache !== "undefined" ? copAbertasCache : null;
     if (!model) {
@@ -105,7 +89,6 @@ registrarInfografico("cop-abertas", async () => {
     ];
 });
 
-// ---------- Produção · TMR ----------
 function igCopNomeCurto(nome) {
     return String(nome ?? "").toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, esp, l) => esp + l.toUpperCase())
         .replace(/\s(Da|De|Do|Das|Dos|E)(?=\s)/g, m => m.toLowerCase());

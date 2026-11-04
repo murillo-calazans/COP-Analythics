@@ -1,25 +1,3 @@
-/**
- * ==========================================================
- * UI da Seção Indicadores
- * ==========================================================
- * Tendências ao longo do tempo + comparativos que complementam
- * o Dashboard (que só mostra fotos estáticas, sem histórico).
- * Não calcula nada aqui — tudo vem pronto do IndicatorEngine.
- *
- * Duas partes:
- * - "Indicadores gerais": volume, reabertura, motivos de
- *   reagendamento, assuntos/diagnósticos mais usados, solo x dupla,
- *   abandono/reagendamento por técnico — tudo que não é um tempo
- *   médio (TMS/TMA/TMR/TME).
- * - "Indicadores de Tempo": uma coluna por métrica (TMS/TMA/TMR/TME),
- *   cada uma com a mesma bateria de quebras (mês, cidade, setor,
- *   técnico, assunto, diagnóstico) — ver METRICAS_TEMPO/
- *   FUNCOES_POR_DIMENSAO abaixo. TMR não tem quebra por técnico de
- *   propósito: mede a velocidade da empresa em agendar, não o
- *   trabalho do técnico em campo (por isso também nunca entrou na
- *   ficha individual dele — ver IndicatorEngine.calcularTMR).
- */
-
 const ROTULOS_DIMENSAO_TEMPO = {
     mes: "por Mês",
     cidade: "por Cidade",
@@ -75,7 +53,6 @@ const FUNCOES_TEMPO_POR_DIMENSAO = {
     }
 };
 
-// Clicar numa barra de uma quebra de tempo filtra a tela por aquele valor (ver js/ui/filtrointerativo.js).
 const CAMPO_FILTRO_POR_DIMENSAO_TEMPO = {
     cidade: "cidades",
     setor: "setores",
@@ -84,7 +61,6 @@ const CAMPO_FILTRO_POR_DIMENSAO_TEMPO = {
     diagnostico: "diagnosticos"
 };
 
-/** HTML de uma coluna (TMS/TMA/TMR/TME): título + um grafico-card por dimensão (mês + o que a métrica tiver). */
 function construirColunaTempo(metrica) {
     const dimensoes = ["mes", "cidade", "setor", ...(metrica.temTecnico ? ["tecnico"] : []), "assunto", "diagnostico"];
 
@@ -111,7 +87,6 @@ function construirColunaTempo(metrica) {
     `;
 }
 
-/** Desenha os gráficos de uma coluna depois do HTML já estar no DOM (mês vem de "meses", o resto do IndicatorEngine). */
 function renderizarColunaTempo(metrica, ordensFiltradas, meses) {
     const dadosMes = meses
         .filter(m => m[`${metrica.chave}Horas`] !== null)
@@ -139,11 +114,6 @@ function renderizarColunaTempo(metrica, ordensFiltradas, meses) {
     }
 }
 
-/**
- * Desenha as três abas de indicadores da Gestão de Ordens de uma vez
- * (Indicadores, Tempos e Gestão COP) — saem dos mesmos cálculos, e os
- * gráficos são achados por id, então não importa qual aba está aberta.
- */
 function renderizarSecaoIndicadores() {
     const container = document.getElementById("indicadoresConteudo");
     const containerTempos = document.getElementById("temposConteudo");
@@ -366,7 +336,6 @@ function renderizarSecaoIndicadores() {
 
     renderizarProducaoCop();
 
-    // Esconde os meses com valor 0 (só mostra os que têm movimento).
     renderizarGraficoBarras("mensalVolume",
         meses.map(m => ({ rotulo: m.rotulo, valor: m.totalFinalizadas })).filter(m => m.valor > 0),
         { serie: "serie-1", limite: meses.length, formatoValor: v => v.toLocaleString("pt-BR") }
@@ -466,14 +435,9 @@ function renderizarSecaoIndicadores() {
 
 const MESES_CURTOS_PRIORIDADE = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-/**
- * Pedidos de prioridade/urgência escritos nas mensagens (PrioridadeEngine)
- * nas OS finalizadas do recorte: % por mês de fechamento, tempo do 1º
- * pedido até a finalização (em dias de calendário) e cidades com mais pedidos.
- */
 function renderizarIndicadoresPrioridade(ordensFiltradas) {
     if (typeof PrioridadeEngine === "undefined") return;
-    const porMes = new Map();            // "aaaa-mm" -> { total, comPedido }
+    const porMes = new Map();
     const faixas = { "No mesmo dia": 0, "No dia seguinte": 0, "2 a 3 dias": 0, "Mais de 3 dias": 0 };
     const porCidade = new Map();
     const horas = [];
@@ -529,7 +493,6 @@ function renderizarIndicadoresPrioridade(ordensFiltradas) {
         { serie: "serie-2", limite: 5, titulo: "Cidades com mais pedidos de prioridade", formatoValor: v => v.toLocaleString("pt-BR") });
 }
 
-/** Tabela da produção do mês de quem é do(s) setor(es) do COP. */
 function renderizarProducaoCop() {
     const container = document.getElementById("producaoCopConteudo");
     if (!container) return;

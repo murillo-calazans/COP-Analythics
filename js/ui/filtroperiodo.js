@@ -1,26 +1,3 @@
-/**
- * ==========================================================
- * UI do Filtro Global
- * ==========================================================
- * Modal com período (único, filtra pela data de FINALIZAÇÃO da OS) +
- * assunto/cidade/bairro/operador/setor/diagnóstico — cada campo é um
- * botão que abre um popup compartilhado (modalSeletorFiltro) com
- * busca por nome e caixa de marcação, igual pros seis campos.
- * Operador e setor consideram só quem FECHOU a OS (ver
- * js/engine/filtroengine.js). Ao aplicar, recalcula tudo que depende do
- * recorte filtrado — Dashboard, Técnicos, Indicadores e a busca de
- * Auditoria (se houver uma ativa). Alertas é a única tela independente
- * disso (ver js/ui/alertas.js). Não decide regra nenhuma aqui — só lê o
- * formulário e chama FiltroEngine/IndicatorEngine.
- *
- * Diagnóstico é o único campo "invertido" (chave "diagnosticos",
- * invertido:true): guarda as CHAVES normalizadas dos diagnósticos
- * ESCONDIDOS, não dos mostrados — tudo que não estiver na lista de
- * ocultos continua visível (padrão: nada escondido, caixa vem
- * marcada). Os demais campos são lista branca normal: guardam os
- * valores SELECIONADOS, caixa começa desmarcada.
- */
-
 const CAMPOS_MULTIPLOS_FILTRO = [
     { chave: "assuntos", rotulo: "Assunto" },
     { chave: "cidades", rotulo: "Cidade" },
@@ -34,7 +11,6 @@ let _filtrosPendentes = { assuntos: [], cidades: [], bairros: [], operadores: []
 let _opcoesFiltroGlobal = { assuntos: [], cidades: [], bairros: [], operadores: [], setores: [], diagnosticos: [] };
 let _diagnosticosOcultosPendentes = [];
 
-// Campo atualmente aberto no popup compartilhado (modalSeletorFiltro) — null quando nenhum está aberto.
 let _campoPopupAtivo = null;
 
 function registrarFiltroGlobal() {
@@ -56,7 +32,6 @@ function registrarFiltroGlobal() {
     atualizarBadgeFiltroGlobal();
 }
 
-/** Um botão por campo (não mais dropdown+chips inline) — clicar abre o popup compartilhado com busca e checkbox. */
 function montarCamposMultiplos() {
     const container = document.getElementById("filtrosMultiplosContainer");
     if (!container) return;
@@ -101,7 +76,6 @@ function abrirFiltroGlobal() {
     abrirModal("modalFiltroGlobal");
 }
 
-/** Abre o popup compartilhado (modalSeletorFiltro) já carregado pro campo clicado. */
 function abrirSeletorFiltro(campo) {
     _campoPopupAtivo = campo;
 
@@ -186,7 +160,6 @@ function alternarValorSeletorFiltro(valor) {
     renderizarListaSeletorFiltro(busca ? busca.value : "");
 }
 
-/** "Selecionar/Mostrar todos" age só sobre as opções que a busca atual está mostrando, não a lista inteira. */
 function selecionarTodosVisiveisSeletorFiltro() {
     if (!_campoPopupAtivo) return;
     const campo = _campoPopupAtivo;
@@ -226,7 +199,6 @@ function limparSelecaoSeletorFiltro() {
     renderizarListaSeletorFiltro(busca ? busca.value : "");
 }
 
-/** Texto curto no botão do campo, na tela principal do Filtro Global (ex.: "3 selecionados", "Todos", "2 ocultos"). */
 function atualizarResumoCampo(campo) {
     const resumo = document.getElementById(`resumo-${campo.chave}`);
     if (!resumo) return;
@@ -301,7 +273,7 @@ function atualizarBadgeFiltroGlobal() {
     badge.textContent = total;
     badge.hidden = total === 0;
 
-    renderizarFiltrosAtivos(); // etiquetas fora do popup (ver js/ui/filtrointerativo.js)
+    renderizarFiltrosAtivos();
 }
 
 function atualizarTodasAsTelas() {
@@ -309,9 +281,6 @@ function atualizarTodasAsTelas() {
 
     const ordensFiltradas = FiltroEngine.ordensFiltradas();
 
-    // APP.indicadores.recorrencia (Dashboard) respeita o Filtro Global
-    // normalmente. Alertas é independente disso — atualizarAlertas() usa
-    // sua própria fonte de dados (ver js/ui/alertas.js -> ordensParaAlertas).
     APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(ordensFiltradas);
     atualizarAlertas();
 
@@ -325,6 +294,5 @@ function atualizarTodasAsTelas() {
         executarBuscaAuditoria();
     }
 
-    // Infográficos do topo da aba aberta (js/ui/infograficos.js) também seguem o filtro.
     if (typeof renderizarInfografico === "function" && typeof secaoAtiva === "function") renderizarInfografico(secaoAtiva());
 }

@@ -1,16 +1,3 @@
-/**
- * ==========================================================
- * Botão "Atualizar banco agora" (força o robô)
- * ==========================================================
- * O robô roda no PC de quem opera (C:\cop-robo) e não dá pra chamá-lo
- * direto do navegador. Então o botão (só admin/editor — ver
- * aplicarGateDePapel) insere um pedido na tabela robo_comandos; o robô
- * fica checando essa tabela a cada ~30s, abre o IXC e atualiza na hora,
- * e marca o pedido como concluído. Aqui a gente acompanha o status e,
- * quando concluir, dispara o refresh "ao vivo" pra tela mostrar o novo.
- * Precisa do robô ligado (iniciar.cmd aberto) — senão avisa que não respondeu.
- */
-
 let roboComandoEmAndamento = false;
 
 function roboToast(mensagem, tipo = "info") {
@@ -46,8 +33,7 @@ async function solicitarAtualizacaoRobo() {
         if (error) throw error;
 
         const id = data.id;
-        // Espera até 6 min: a 1ª rodada do dia faz os retratos completos (529 +
-        // base de CTOs) e pode levar ~4-5 min; as rodadas incrementais são rápidas.
+
         const limite = Date.now() + 360000;
         let viuProcessando = false;
 
@@ -57,12 +43,12 @@ async function solicitarAtualizacaoRobo() {
                 .from("robo_comandos").select("status, resultado").eq("id", id).maybeSingle();
 
             if (row?.status === "processando" && !viuProcessando) {
-                viuProcessando = true;   // o robô pegou o pedido e está trabalhando
+                viuProcessando = true;
                 roboToast("O robô está atualizando… (pode demorar na 1ª rodada do dia)");
             }
             if (row?.status === "concluido") {
                 roboToast("Banco atualizado pelo robô ✓", "ok");
-                if (typeof aovivoVerificar === "function") await aovivoVerificar(); // puxa o novo pra tela
+                if (typeof aovivoVerificar === "function") await aovivoVerificar();
                 if (typeof carregarAgendaIxc === "function" && !document.getElementById("agendaIxcConteudo")?.hidden) carregarAgendaIxc(true);
                 return;
             }
@@ -71,8 +57,7 @@ async function solicitarAtualizacaoRobo() {
                 return;
             }
         }
-        // estourou o tempo: se o robô chegou a "processando", ele está vivo e só
-        // demorando (rodada pesada) — não é erro; os dados entram sozinhos ao fim.
+
         if (viuProcessando) roboToast("O robô ainda está processando (rodada pesada). Os dados aparecem sozinhos quando terminar.", "info");
         else roboToast("O robô não respondeu. Verifique se o 'iniciar.cmd' está aberto no PC.", "erro");
     } catch (e) {

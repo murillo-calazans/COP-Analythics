@@ -1,21 +1,3 @@
-/**
- * ==========================================================
- * Serviço de Importação
- * ==========================================================
- * Fluxo em duas etapas encadeadas por gerarRelatorio():
- *  1. importarBase()   -> lê Base.xlsx, popula APP.referencias
- *  2. importarOrdens() -> lê Ordens.xlsx, popula APP.dados.ordens
- * Nenhuma outra camada acessa o Excel diretamente.
- *
- * A leitura/parse do Excel em si não muda nada (XLSX.read,
- * ReferenceEngine, DataEngine) — só o passo final de cada etapa, que
- * agora persiste no Supabase (js/services/armazenamento.js) em vez de
- * IndexedDB local, pra ficar compartilhado entre todo mundo que usa o
- * sistema. Só chega até aqui quem tem papel "admin" (botão escondido
- * pra "leitor" — ver js/ui/login.js -> aplicarGateDePapel), e a RLS
- * do banco recusaria a escrita de qualquer forma.
- */
-
 async function importarBase() {
 
     const input = document.getElementById("arquivoBase");
@@ -92,13 +74,11 @@ async function importarOrdens() {
         let nomeAba, linhas;
 
         if (tipoArquivo === "html") {
-            // "Excel" gerado por sistema (ex.: IXC) que na verdade é uma
-            // tabela HTML com extensão .xlsx — lida à parte do SheetJS.
+
             nomeAba = "(tabela HTML)";
             linhas = lerTabelaHtml(buffer);
         } else if (tipoArquivo === "zip" && planilhaGrandeDemaisParaSheetJS(buffer)) {
-            // Aba grande demais pro SheetJS (ver lerXlsxEmStreaming em
-            // js/utils/planilha.js) — lida aos pedaços.
+
             status.textContent = "Planilha grande, lendo em partes...";
             ({ nomeAba, linhas } = await lerXlsxEmStreaming(buffer, total => {
                 status.textContent = `Planilha grande, lendo em partes... ${total.toLocaleString("pt-BR")} linhas lidas`;
@@ -130,11 +110,6 @@ async function importarOrdens() {
 
         const { ordens, estatisticas } = DataEngine.processarOrdens(linhas);
 
-        // Snapshot (cópia — mesclarOrdens abaixo altera o array original em
-        // memória) de como cada OS tocada por esse arquivo estava ANTES do
-        // merge, ou seja, o que já estava no banco. Usado logo abaixo pra
-        // não duplicar movimentações já persistidas (reimportar o mesmo
-        // arquivo, ou um mês já coberto, não deve inflar a tabela).
         const movimentacoesExistentesPorOrdem = new Map();
         for (const id of ordens.keys()) {
             const existente = APP.dados.ordens.get(id);
@@ -152,10 +127,6 @@ async function importarOrdens() {
             mensagem => { status.textContent = mensagem; }
         );
 
-        // Depois de persistir (o Supabase guarda o bairro cru da
-        // planilha) — só em memória, pra já mostrar a grafia canônica
-        // sem esperar um F5. Roda no conjunto INTEIRO acumulado, não só
-        // no que acabou de ser importado (ver BairroEngine).
         BairroEngine.normalizarBairros(APP.dados.ordens);
         AssuntoEngine.normalizarAssuntos(APP.dados.ordens);
 
@@ -204,15 +175,6 @@ async function importarOrdens() {
 
 }
 
-/**
- * Orquestra o fluxo do popup de importação: Base e/ou Ordens, o que
- * tiver sido selecionado — não exige mais os dois juntos. Faz sentido
- * agora que os dados são compartilhados (Supabase): a Base já
- * importada por alguém continua valendo, então reimportar só um
- * Ordens.xlsx novo (ex.: mais um mês) não deveria pedir a Base nunca
- * de novo. Ao final, fecha o modal e leva pro Dashboard já com os
- * gráficos.
- */
 async function gerarRelatorio() {
     const inputBase = document.getElementById("arquivoBase");
     const inputOrdens = document.getElementById("arquivoOrdens");

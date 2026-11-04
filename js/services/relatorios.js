@@ -1,20 +1,3 @@
-/**
- * ==========================================================
- * Relatórios HTML (Geral + Técnicos)
- * ==========================================================
- * Gera um arquivo .html autocontido (CSS + JS embutidos, sem
- * dependência externa nenhuma) a partir dos mesmos indicadores já
- * usados no Dashboard/Técnicos — nenhum cálculo novo aqui, só
- * formatação pra download. Respeita o Filtro Global ativo (a mesma
- * fatia de OS que a tela está mostrando na hora do clique).
- *
- * Tabelas de {rotulo, valor} viram tabelas ordenáveis (clique no
- * cabeçalho) com barra de proporção e, quando têm mais de
- * LIMIAR_ITENS_BUSCA itens, um campo de busca — tudo via um único
- * script embutido no final do documento (SCRIPT_RELATORIO), sem
- * nenhuma dependência de biblioteca externa.
- */
-
 function baixarHtml(nomeArquivo, html) {
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -27,20 +10,14 @@ function baixarHtml(nomeArquivo, html) {
     URL.revokeObjectURL(url);
 }
 
-/**
- * ";" como separador (não ","): planilhas brasileiras usam vírgula como
- * separador decimal, então é o "," que confunde o Excel em pt-BR — ";"
- * é o que abre certinho, cada valor na própria coluna, sem configurar nada.
- */
 function celulaCsv(valor) {
     const texto = valor === null || valor === undefined ? "" : String(valor);
     return /[;"\n\r]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
 }
 
-/** linhas: array de arrays (cada array é uma linha, primeira linha = cabeçalho). */
 function baixarCsv(nomeArquivo, linhas) {
     const conteudo = linhas.map(linha => linha.map(celulaCsv).join(";")).join("\r\n");
-    const BOM = String.fromCharCode(0xFEFF); // força o Excel a ler como UTF-8 — sem isso, acento vira caractere estranho.
+    const BOM = String.fromCharCode(0xFEFF);
     const blob = new Blob([BOM + conteudo], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -58,9 +35,6 @@ function carimboDataHora() {
     return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-// Tabelas com mais itens que isso ganham campo de busca; abaixo disso
-// (ex.: motivos de reagendamento, top 5 cidade/setor) a lista já é curta
-// o bastante pra não precisar.
 const LIMIAR_ITENS_BUSCA = 15;
 
 const ESTILO_RELATORIO = `
@@ -211,7 +185,6 @@ const ESTILO_RELATORIO = `
     }
 `;
 
-/** Ordenação por clique no cabeçalho + busca com campo de texto + link ativo no menu ao rolar — tudo num script só, reaproveitado nos dois relatórios. */
 const SCRIPT_RELATORIO = `
 (function () {
     "use strict";
@@ -323,7 +296,6 @@ function secaoAbre(id, titulo, primeira = false) {
     `;
 }
 
-/** Linha de uma tabela ordenável a partir de {rotulo, valor}. */
 function linhaTabelaOrdenavel(item, formatarValor, maxValor) {
     const valorNum = Number(item.valor) || 0;
     const larguraPct = maxValor > 0 ? (valorNum / maxValor) * 100 : 0;
@@ -339,13 +311,6 @@ function linhaTabelaOrdenavel(item, formatarValor, maxValor) {
     `;
 }
 
-/**
- * Tabela ordenável (clique no cabeçalho) a partir de uma lista
- * {rotulo, valor} — com barra de proporção e, acima de
- * LIMIAR_ITENS_BUSCA itens, campo de busca. Usada pra toda lista
- * simples de duas colunas do relatório (motivos, assuntos,
- * diagnósticos, ranking de técnico, top cidade/setor etc.).
- */
 function tabelaOrdenavel(idTabela, titulo, itens, rotuloColuna = "Item", valorColuna = "Quantidade", formatarValor = v => v) {
     if (!itens || itens.length === 0) {
         return `<p class="subtable-title">${escaparHtml(titulo)} (0)</p><p style="color:var(--text-muted);font-size:13px;">Sem dados.</p>`;
@@ -376,7 +341,6 @@ function tabelaOrdenavel(idTabela, titulo, itens, rotuloColuna = "Item", valorCo
     `;
 }
 
-/** Gráfico de barras simples (CSS puro) de OS finalizadas por mês. */
 function graficoMensal(meses) {
     if (!meses || meses.length === 0) return "";
     const max = Math.max(...meses.map(m => m.totalFinalizadas), 1);
@@ -401,7 +365,6 @@ function graficoMensal(meses) {
     `;
 }
 
-/** Tabela (não-ordenável, é uma série temporal — a ordem natural já é a única que faz sentido) da visão mensal. */
 function tabelaMensal(meses, horas) {
     return `
         <table class="data-table">
@@ -424,21 +387,11 @@ function tabelaMensal(meses, horas) {
     `;
 }
 
-// Limiares que definem o que vira "Ponto de Atenção" no Relatório Geral —
-// arbitrários (sem benchmark oficial do setor), ajustáveis aqui se a
-// realidade operacional pedir outro corte.
 const LIMIAR_REABERTURA_PERCENTUAL = 10;
 const LIMIAR_REAGENDAMENTO_PERCENTUAL = 15;
-const FATOR_TMS_TECNICO_ATENCAO = 1.5; // técnico "lento" = TMS acima de 1,5x a média geral
-const MINIMO_FINALIZADAS_TECNICO_ATENCAO = 3; // ignora quem tem poucas OS (amostra pequena demais pra significar algo)
+const FATOR_TMS_TECNICO_ATENCAO = 1.5;
+const MINIMO_FINALIZADAS_TECNICO_ATENCAO = 3;
 
-/**
- * Achados automáticos a partir dos mesmos números já calculados pro
- * resto do relatório — nenhuma OS é lida de novo aqui, só aplica
- * limiares (ver constantes acima) em cima do que "painel"/"fichas" já
- * trazem. Sempre um texto pronto, pra não exigir que quem lê saiba o
- * que é "normal" pra cada indicador.
- */
 function calcularPontosDeAtencao(ordens, painel, fichas, totalCancelados) {
     const pontos = [];
 
@@ -504,7 +457,6 @@ function calcularPontosDeAtencao(ordens, painel, fichas, totalCancelados) {
     return pontos;
 }
 
-/** Uma linha por técnico: Nome, Finalizadas, Reagendadas, TMS, Deslocamento abandonado, Reabertura, Recorrência gerada. */
 function tabelaTecnicosPorLinha(fichas) {
     if (fichas.length === 0) return `<p class="subtable-title">Técnicos (0)</p><p style="color:var(--text-muted);font-size:13px;">Sem dados.</p>`;
 
@@ -551,13 +503,6 @@ function tabelaTecnicosPorLinha(fichas) {
     `;
 }
 
-/**
- * Uma OS -> um registro plano (id, cliente, login, cidade, bairro, assunto,
- * técnico e diagnóstico do fechamento, datas, status) — usado pelo botão
- * "Baixar planilha (.csv)" do Dashboard (gerarPlanilhaDetalheOS). O
- * relatório HTML não tem mais uma tabela com todas as OS (trocada por
- * tabelaOsTempoAlto, só as com TMS/TMA fora do padrão).
- */
 function coletarLinhasDetalheOS(ordens) {
     const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
 
@@ -584,18 +529,9 @@ function coletarLinhasDetalheOS(ordens) {
     });
 }
 
-// Limiares do relatório "OS com tempo alto" (ver tabelaOsTempoAlto) —
-// acima disso o atendimento saiu do padrão e vale olhar caso a caso.
-const LIMIAR_TMS_HORAS_TEMPO_ALTO = 1.5; // 1h30
-const LIMIAR_TMA_HORAS_TEMPO_ALTO = 1; // 1h
+const LIMIAR_TMS_HORAS_TEMPO_ALTO = 1.5;
+const LIMIAR_TMA_HORAS_TEMPO_ALTO = 1;
 
-/**
- * OS com TMS acima de 1h30 e/ou TMA acima de 1h — mesma regra
- * segmentada de calcularTMS/calcularTMA (IndicatorEngine), só que
- * aqui reportando cada OS individualmente em vez da média geral.
- * OS excluída do tempo (diagnóstico configurado) fica de fora, igual
- * ao resto do sistema.
- */
 function coletarOsTempoAlto(ordens) {
     const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
     const registros = [];
@@ -627,7 +563,6 @@ function coletarOsTempoAlto(ordens) {
     return registros;
 }
 
-/** Uma linha por OS com TMS/TMA fora do padrão — ordenável e com busca, igual ao resto do relatório. */
 function tabelaOsTempoAlto(ordens) {
     const registros = coletarOsTempoAlto(ordens)
         .sort((a, b) => (b.tmsHoras ?? 0) + (b.tmaHoras ?? 0) - ((a.tmsHoras ?? 0) + (a.tmaHoras ?? 0)));
@@ -669,18 +604,9 @@ function tabelaOsTempoAlto(ordens) {
     `;
 }
 
-// Limiar do relatório "OS com tempo baixo" (ver tabelaOsTempoBaixo) —
-// abaixo disso o atendimento foi rápido demais pro tipo de tarefa, vale
-// desconfiar (ex.: técnico marcou Finalizada sem executar de verdade).
-const LIMIAR_TMS_HORAS_TEMPO_BAIXO = 0.25; // 15 min
-const LIMIAR_TMA_HORAS_TEMPO_BAIXO = 0.25; // 15 min
+const LIMIAR_TMS_HORAS_TEMPO_BAIXO = 0.25;
+const LIMIAR_TMA_HORAS_TEMPO_BAIXO = 0.25;
 
-/**
- * OS com TMS e/ou TMA abaixo de 15 min — mesma base de
- * coletarOsTempoAlto, só que no extremo oposto: segmento existiu (não
- * é OS sem Deslocamento/Execução) mas durou pouco demais pra ser um
- * atendimento real. OS excluída do tempo fica de fora, igual ao resto.
- */
 function coletarOsTempoBaixo(ordens) {
     const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
     const registros = [];
@@ -712,7 +638,6 @@ function coletarOsTempoBaixo(ordens) {
     return registros;
 }
 
-/** Uma linha por OS com TMS/TMA suspeito de rápido demais — ordenável e com busca, igual ao resto do relatório. As mais rápidas (mais suspeitas) primeiro. */
 function tabelaOsTempoBaixo(ordens) {
     const somaPositiva = r => (r.tmsHoras ?? Infinity) + (r.tmaHoras ?? Infinity);
     const registros = coletarOsTempoBaixo(ordens).sort((a, b) => somaPositiva(a) - somaPositiva(b));
@@ -760,8 +685,6 @@ const ROTULO_RESULTADO_AUDITORIA = {
     "inconsistencia": "Erro - Próxima Tarefa incompatível"
 };
 
-// Setores (aba Operadores) que são parceiros externos mesmo quando o nome
-// do técnico vem SEM sufixo de terceirizada (ex.: Recolhimento Terceirizado).
 const EQUIPE_POR_SETOR_TERCEIRO = {
     "AZUL": "Azul",
     "CONECT VELOZ": "Veloz",
@@ -774,11 +697,6 @@ const EQUIPE_POR_SETOR_TERCEIRO = {
     "PJ NETWORK": "PJ Network"
 };
 
-/**
- * Equipe de quem fechou: sufixo do nome ("- AZUL", "- MOTOEXPRESS"...)
- * primeiro; sem sufixo, o setor do Operador de mesmo nome decide se é
- * parceiro externo; senão "Interna".
- */
 function equipeDoColaborador(nome, setor) {
     const terceira = TerceirasEngine.terceiraDoNome(nome);
     if (terceira) return TerceirasEngine.nomeTerceira(terceira);
@@ -792,23 +710,14 @@ const ROTULO_MOTIVO_REABERTURA = {
     erro_processo: "Erro de processo"
 };
 
-/**
- * Mensagem do fechamento sem o "esqueleto" do modelo de resposta padrão
- * (ex.: SEM CONEXÃO traz CABOS:/CABO DROP ( )/CONECTOR ( )/POTÊNCIA:...)
- * — sobra só o que o técnico escreveu ou marcou. Item marcado ("(x)") e
- * campo com valor ("POTÊNCIA: -19") ficam; item vazio, cabeçalho sem
- * nada depois dos dois-pontos e a frase fixa de "CERTIFIQUE-SE" saem.
- * Linhas juntadas com " / " pra caber numa célula do CSV. Também conta
- * quantos itens do checklist foram marcados.
- */
 function limparMensagemFechamento(mensagem) {
     const linhas = String(mensagem ?? "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const marcados = (String(mensagem ?? "").match(/\(\s*x\s*\)/gi) ?? []).length;
 
     const uteis = linhas.filter(linha => {
         const n = normalizarTexto(linha);
-        if (/\(\s*\)\s*$/.test(linha) && !/\(\s*x\s*\)/i.test(linha)) return false; // item do checklist não marcado
-        if (/^[^:]{1,60}:\s*$/.test(linha)) return false;                          // cabeçalho/campo vazio ("CABOS:", "POTÊNCIA:")
+        if (/\(\s*\)\s*$/.test(linha) && !/\(\s*x\s*\)/i.test(linha)) return false;
+        if (/^[^:]{1,60}:\s*$/.test(linha)) return false;
         if (n.startsWith("CONFIGURACOES DE REDE - CERTIFIQUE-SE")) return false;
         if (/^POTENCIA\s*$/.test(n)) return false;
         return true;
@@ -817,13 +726,6 @@ function limparMensagemFechamento(mensagem) {
     return { texto: uteis.join(" / "), marcados };
 }
 
-/**
- * Resultado da Auditoria (Diagnóstico x Próxima Tarefa) de UMA OS, no
- * fechamento efetivo — mesma sequência de AuditoriaOperacionalEngine.auditar
- * (estrutura -> sem regra -> ok/erro -> corrigido), só que devolvendo o
- * rótulo por OS em vez do resumo agregado. Usado pela planilha de
- * detalhamento (gerarPlanilhaDetalheOS), que vai pro auditor externo.
- */
 function resultadoAuditoriaOS(ordem, info) {
     const fechamento = info?.fechamentoEfetivo;
     if (!fechamento) return { rotulo: "Sem fechamento", esperado: "" };
@@ -845,8 +747,6 @@ function resultadoAuditoriaOS(ordem, info) {
     return { rotulo: ROTULO_RESULTADO_AUDITORIA[r.achado.tipo] ?? "Erro", esperado };
 }
 
-// Setores de quem vai ao cliente (técnico interno ou parceiro). Fechamento de
-// alguém de outro setor conhecido (COP, suporte, atendimento…) é administrativo.
 const SETORES_DE_CAMPO = new Set([
     "TECNICO MANUTENCAO", "TECNICO INSTALACAO", "FTTH", "TECNICO INFRAESTRUTURA K2", "AZUL", "CONECT VELOZ",
     "TECHNOMAIS", "RECOLHIMENTO TERCEIRIZADO", "CLICKPLAY", "INFINITE", "INFOVIAS", "INOVA - EXPANSAO TERCEIRIZADA", "PJ NETWORK"
@@ -854,13 +754,6 @@ const SETORES_DE_CAMPO = new Set([
 
 let _cacheLinhasDetalhe = { chave: null, linhas: null };
 
-/**
- * Uma linha por OS com tudo o que o detalhamento sabe: o que vai no CSV do
- * Dashboard (gerarPlanilhaDetalheOS) e o que os infográficos das abas usam
- * (js/ui/infograficos.js). Datas como Date, tempos em minutos (null = sem
- * dado), flags como boolean. `tipoDono` = "Campo" | "Administrativo" | "" pelo
- * setor de quem fechou. Cacheado pelo recorte (base carregada + Filtro Global).
- */
 function montarLinhasDetalheOS(ordens) {
     const chave = `${APP?.dados?.ordens?.size ?? 0}|${ordens.size}|${JSON.stringify(APP?.filtrosGlobais ?? {})}|${APP?.status?.ultimaCarga ?? ""}`;
     if (_cacheLinhasDetalhe.chave === chave) return _cacheLinhasDetalhe.linhas;
@@ -884,8 +777,7 @@ function montarLinhasDetalheOS(ordens) {
         const coluna = linha ? encontrarColuna(linha, CONFIG_BASE.operadores.setor) : null;
         return coluna ? (linha[coluna] ?? "") : "";
     };
-    // Setor por NOME (não por ID): o Colaborador Responsável tem cadastro
-    // próprio, sem setor, e os IDs dele não batem com os de Operadores.
+
     const setorPorNome = new Map();
     for (const linha of APP.referencias.operadores.values()) {
         const colNome = encontrarColuna(linha, CONFIG_BASE.operadores.nome);
@@ -903,10 +795,7 @@ function montarLinhasDetalheOS(ordens) {
         const setorDono = setorPorNome.get(normalizarTexto(nomeDono)) ?? "";
         const terceira = nomeDono && equipeDoColaborador(nomeDono, setorDono) !== "Interna";
         const auditado = ordem ? resultadoAuditoriaOS(ordem, info) : { rotulo: "", esperado: "" };
-        // Direto das movimentações (1ª com o status), não dos segmentos de
-        // TMS/TMA — esses só existem quando o par fecha certinho, e o caso
-        // que mais interessa aqui (COP pôs em Deslocamento, técnico
-        // executou) às vezes não vira segmento.
+
         const primeiraComStatus = alvo => ordem?.movimentacoes
             .filter(m => m.data && normalizarTexto(m.status ?? "") === normalizarTexto(alvo))
             .sort((a, b) => a.data - b.data)[0];
@@ -947,16 +836,6 @@ function montarLinhasDetalheOS(ordens) {
     return linhas;
 }
 
-/**
- * Botão "Baixar planilha (.csv)" (Dashboard) — detalhamento por OS, sem
- * passar pelo relatório em HTML. As 11 primeiras colunas são as de
- * sempre; as demais trazem o que um auditor de fora (ex.: Projeto do
- * Claude que gera a auditoria semanal) precisa e não tem como calcular só
- * com uma linha por OS: Próxima Tarefa e resultado da Auditoria do
- * fechamento efetivo, quem pôs em Deslocamento/Execução, reabertura,
- * TMS/TMA, recorrência do login dentro do filtro e o texto que o
- * técnico escreveu no fechamento (sem o esqueleto do modelo).
- */
 function gerarPlanilhaDetalheOS() {
     const ordens = FiltroEngine.ordensFiltradas();
     const cabecalho = [
@@ -981,13 +860,6 @@ function gerarPlanilhaDetalheOS() {
     baixarCsv(`detalhamento-os-${carimboDataHora()}.csv`, [cabecalho, ...linhas]);
 }
 
-/**
- * Botão "Baixar planilha (.csv)" (Alertas) — só os dados de recorrência
- * (clientes ativos + cancelados), nada mais. Recalcula na hora com
- * ordensParaAlertas() (independente do Filtro Global, respeita só o
- * período próprio da aba — ver js/ui/alertas.js) pra refletir
- * exatamente o que está sendo mostrado ali.
- */
 function gerarPlanilhaRecorrencia() {
     const recorrentes = IndicatorEngine.calcularRecorrencia(ordensParaAlertas());
     const lista = [...recorrentes.values()].sort((a, b) => b.totalOS - a.totalOS);
@@ -1010,7 +882,6 @@ function gerarPlanilhaRecorrencia() {
     baixarCsv(`relatorio-recorrencia-${carimboDataHora()}.csv`, [cabecalho, ...linhas]);
 }
 
-/** Botão "Relatório geral" (Dashboard). */
 function gerarRelatorioGeral() {
     const ordens = FiltroEngine.ordensFiltradas();
     const painel = IndicatorEngine.calcularPainelDashboard(ordens);
@@ -1174,7 +1045,6 @@ function gerarRelatorioGeral() {
     baixarHtml(`relatorio-geral-${carimboDataHora()}.html`, html);
 }
 
-/** Uma linha por cliente (Ativos ou Cancelados) — ordenável e com busca, igual ao resto do relatório. */
 function tabelaClientesAlertas(idTabela, itens, ehCancelados) {
     const linhas = itens.map(item => `
         <tr>
@@ -1211,13 +1081,6 @@ function tabelaClientesAlertas(idTabela, itens, ehCancelados) {
     `;
 }
 
-/**
- * Botão "Relatório de recorrência" (Alertas) — só os dados de
- * recorrência, nada mais (sem TMS/TMA/diagnósticos/etc. do Relatório
- * Geral). De propósito independente do Filtro Global — mesma fonte de
- * dados (ordensParaAlertas) que a própria aba usa, então o relatório
- * bate exatamente com o que está na tela no momento do clique.
- */
 function gerarRelatorioRecorrencia() {
     const recorrentes = IndicatorEngine.calcularRecorrencia(ordensParaAlertas());
     const lista = [...recorrentes.values()];
@@ -1291,7 +1154,6 @@ function gerarRelatorioRecorrencia() {
     baixarHtml(`relatorio-recorrencia-${carimboDataHora()}.html`, html);
 }
 
-/** Botão "Relatório de técnicos" (seção Técnicos). */
 function gerarRelatorioTecnicos() {
     const ordens = FiltroEngine.ordensFiltradas();
     const fichas = IndicatorEngine.calcularFichasTecnicos(ordens);
@@ -1367,14 +1229,6 @@ function gerarRelatorioTecnicos() {
     baixarHtml(`relatorio-tecnicos-${carimboDataHora()}.html`, html);
 }
 
-/**
- * Tabela com N colunas (não só {rotulo,valor}) — mesmo padrão visual/
- * comportamento de tabelaOrdenavel (busca acima de LIMIAR_ITENS_BUSCA,
- * ordenação por clique via data-sort em cada <td>, ver SCRIPT_RELATORIO),
- * só parametrizada pra não repetir o bloco de busca/tabela a cada
- * relatório novo (ver gerarRelatorioAuditoria/Ordens/Indicadores).
- * `linhaHtml` recebe 1 item e devolve as <td> daquela linha (sem <tr>).
- */
 function tabelaMultiColuna(idTabela, titulo, colunas, itens, linhaHtml) {
     if (!itens || itens.length === 0) {
         return `<p class="subtable-title">${escaparHtml(titulo)} (0)</p><p style="color:var(--text-muted);font-size:13px;">Sem dados.</p>`;
@@ -1401,7 +1255,6 @@ function tabelaMultiColuna(idTabela, titulo, colunas, itens, linhaHtml) {
     `;
 }
 
-/** "Status" de um achado, em texto puro (sem botão — o relatório é só leitura). Ver celulaStatusAchado em js/ui/auditoriaoperacional.js pro equivalente vivo/clicável. */
 function statusAchadoRelatorioTexto(achado) {
     if (!achado.corrigido) return "Pendente";
     if (!achado.corrigidoPor) return "Corrigida na reabertura";
@@ -1409,7 +1262,6 @@ function statusAchadoRelatorioTexto(achado) {
     return `Corrigido${quando}${achado.corrigidoPor ? ` (${achado.corrigidoPor})` : ""}`;
 }
 
-/** Botão "Relatório de auditoria" (seção Auditoria). */
 function gerarRelatorioAuditoria() {
     const ordens = FiltroEngine.ordensFiltradas();
     const resultado = AuditoriaOperacionalEngine.auditar(ordens);
@@ -1495,7 +1347,6 @@ function gerarRelatorioAuditoria() {
     baixarHtml(`relatorio-auditoria-${carimboDataHora()}.html`, html);
 }
 
-/** Botão "Relatório das ordens filtradas" (seção Ordens) — reflete o filtro PRÓPRIO da aba (Diagnóstico/período/busca), igual Alertas/Recorrência. */
 function gerarRelatorioOrdens() {
     const linhas = linhasOrdensFiltradas();
 
@@ -1549,7 +1400,6 @@ function gerarRelatorioOrdens() {
     baixarHtml(`relatorio-ordens-${carimboDataHora()}.html`, html);
 }
 
-/** Botão "Relatório de indicadores" (seção Indicadores) — só o que NÃO está no Relatório Geral: bateria completa de TMS/TMA/TMR/TME por dimensão, TMR do COP e Funil de Assuntos. */
 function gerarRelatorioIndicadores() {
     const ordens = FiltroEngine.ordensFiltradas();
     const horas = v => formatarDuracaoHoras(v);

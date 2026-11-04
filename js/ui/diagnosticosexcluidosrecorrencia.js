@@ -1,15 +1,3 @@
-/**
- * ==========================================================
- * UI de Diagnósticos Excluídos da Recorrência
- * ==========================================================
- * Abre num modal com busca: digita pra filtrar a lista, clica
- * num diagnóstico pra alternar (excluir/manter na recorrência).
- * Lista negra: por padrão nada está excluído. Cada clique já
- * salva e recalcula os indicadores na hora — sem botão "Salvar".
- * Reaproveita coletarDiagnosticosDistintos() de
- * js/ui/diagnosticosexcluidos.js (mesma fonte de diagnósticos).
- */
-
 function registrarDiagnosticosExcluidosRecorrencia() {
     const botaoAbrir = document.getElementById("btnAbrirDiagnosticosExcluidosRecorrencia");
     const inputBusca = document.getElementById("buscaDiagnosticoExcluidoRecorrencia");

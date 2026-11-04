@@ -1,22 +1,3 @@
-/**
- * ==========================================================
- * Infográficos — Gestão de Relatórios
- * ==========================================================
- * Painéis no topo das abas Dashboard, Tempos, Indicadores, Ordens,
- * Técnicos e Mapa de calor (desenho em js/ui/infograficos.js). Tudo
- * calculado ao vivo sobre as OS FINALIZADAS do recorte do Filtro Global
- * (igLinhasDoRecorte -> montarLinhasDetalheOS).
- *
- * Cliques: barra/linha de assunto, cidade, diagnóstico e técnico aplicam
- * o filtro interativo (cliqueFiltroInterativo, o mesmo dos gráficos);
- * faixas de tempo e contagens abrem a lista das OS (igrListaOS), e cada
- * OS da lista abre o modal da ordem (abrirModalOS).
- */
-
-/**
- * Popup com a lista de OS (mesmo visual dos popups da tela inicial).
- * Global: também usado por js/ui/info-auditoria.js.
- */
 function igrListaOS(titulo, descricao, linhas) {
     if (typeof document === "undefined" || !document.body) return;
     if (typeof fecharPopupPainel === "function") fecharPopupPainel();
@@ -60,7 +41,7 @@ function igrListaOS(titulo, descricao, linhas) {
 }
 
 (() => {
-    // ---------- base comum ----------
+
     const norm = s => (typeof normalizarTexto === "function" ? normalizarTexto(String(s ?? "")) : String(s ?? "").toUpperCase().trim());
     const ehErro = l => String(l.resultadoAuditoria ?? "").startsWith("Erro");
     const ehAuditada = l => ehErro(l) || l.resultadoAuditoria === "OK";
@@ -68,7 +49,6 @@ function igrListaOS(titulo, descricao, linhas) {
     const minTxt = v => v === null || v === undefined ? "—" : `${IG.fmt(Math.round(v))} min`;
     const nomeDono = l => l.tecnicoAuditado || l.tecnico || "";
 
-    /** Só as finalizadas do recorte (mesma base do CSV do Dashboard que gerou os protótipos). */
     function finalizadas() {
         const linhas = igLinhasDoRecorte();
         if (!linhas) return null;
@@ -93,7 +73,6 @@ function igrListaOS(titulo, descricao, linhas) {
     ];
     const ROTULO_TIPO = { Campo: "Técnico de campo", Administrativo: "COP / suporte" };
 
-    // ---------- cartões reaproveitados ----------
     function cartaoAssuntos(fin, titulo, sub) {
         const top = IG.contar(fin, "assunto", 8);
         return {
@@ -111,7 +90,6 @@ function igrListaOS(titulo, descricao, linhas) {
         return IG.contar(fin, l => l.cidade || "Sem cidade", topo);
     }
 
-    // ---------- Dashboard ----------
     registrarInfografico("dashboard", async () => {
         const fin = finalizadas();
         if (!fin) return [];
@@ -126,7 +104,6 @@ function igrListaOS(titulo, descricao, linhas) {
         const tma = IG.mediana(fin.map(l => l.tmaMin));
         const tms = IG.mediana(fin.map(l => l.tmsMin));
 
-        // fechamentos por dia (ordem cronológica)
         const dias = new Map();
         for (const l of fin) {
             const d = l.fechamento instanceof Date && !Number.isNaN(l.fechamento.getTime()) ? l.fechamento : null;
@@ -204,7 +181,6 @@ function igrListaOS(titulo, descricao, linhas) {
         ];
     });
 
-    // ---------- Tempos ----------
     registrarInfografico("tempos", async () => {
         const fin = finalizadas();
         if (!fin) return [];
@@ -273,7 +249,6 @@ function igrListaOS(titulo, descricao, linhas) {
         ];
     });
 
-    // ---------- Indicadores ----------
     registrarInfografico("indicadores", async () => {
         const fin = finalizadas();
         if (!fin) return [];
@@ -330,7 +305,6 @@ function igrListaOS(titulo, descricao, linhas) {
         ];
     });
 
-    // ---------- Ordens ----------
     registrarInfografico("ordens", async () => {
         const fin = finalizadas();
         if (!fin) return [];
@@ -345,7 +319,6 @@ function igrListaOS(titulo, descricao, linhas) {
         ];
     });
 
-    // ---------- Técnicos ----------
     registrarInfografico("tecnicos", async () => {
         const fin = finalizadas();
         if (!fin) return [];
@@ -391,7 +364,6 @@ function igrListaOS(titulo, descricao, linhas) {
         ];
     });
 
-    // ---------- Mapa de calor ----------
     registrarInfografico("mapa-calor", async () => {
         const fin = finalizadas();
         if (!fin) return [];

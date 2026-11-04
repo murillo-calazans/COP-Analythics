@@ -1,40 +1,18 @@
-/**
- * ==========================================================
- * UI de Cadastro na CTO (módulo Gestão de Clientes)
- * ==========================================================
- * Toda a base de clientes do IXC (tabela clientes_cto, retrato diário
- * puxado pelo robô de uma visão do Query Builder — ver
- * sincronizarClientesCto em robo-ordens/robo.js e o patch-25): cliente,
- * login, CTO, porta e lacre, e o que falta cadastrar em cada um.
- *
- * Cards: com CTO e porta / sem cadastro / sem lacre (clicar filtra a
- * lista). Busca por cliente, login, CTO ou lacre direto no banco — a
- * base tem dezenas de milhares de logins, então a contagem e a busca
- * rodam no Supabase e só as primeiras LIMITE_LINHAS_CLIENTES_CTO linhas
- * descem pro navegador.
- */
-
 const LIMITE_LINHAS_CLIENTES_CTO = 200;
 
-let _clientesCtoFiltro = "todos"; // todos | completo | incompleto | semLacre | inativoCadastrado
+let _clientesCtoFiltro = "todos";
 let _clientesCtoToken = 0;
 let _clientesCtoBuscaTimer = null;
-// A visão do IXC pode vir sem nome do cliente e/ou sem lacre: coluna/card
-// sem nenhum valor some.
+
 let _clientesCtoTemCliente = true;
 let _clientesCtoTemLacre = true;
-// Coluna ativo (patch-26). Sem ela a tabela só tem ativos e não há alerta.
+
 let _clientesCtoTemAtivo = true;
 
 function erroFaltaPatch25(erro) {
     return /clientes_cto/.test(erro?.message ?? "") || erro?.code === "42P01" || erro?.code === "PGRST205";
 }
 
-/**
- * Aplica o filtro do card escolhido numa consulta do Supabase. Todos os
- * cards contam só login ATIVO; o alerta é o contrário: login inativo que
- * ainda tem CTO e porta (porta ocupada que devia ter sido liberada).
- */
 function aplicarFiltroCardClientesCto(consulta, filtro) {
     if (filtro === "inativoCadastrado") return consulta.eq("ativo", false).eq("completo", true);
     if (_clientesCtoTemAtivo) consulta = consulta.eq("ativo", true);
@@ -45,7 +23,6 @@ function aplicarFiltroCardClientesCto(consulta, filtro) {
     return consulta;
 }
 
-/** Termo da busca seguro pro .or() do PostgREST (vírgula, parêntese e * quebram o filtro). */
 function termoBuscaClientesCto() {
     return (document.getElementById("buscaClientesCto")?.value ?? "").replace(/[,()*%"\\]/g, " ").trim();
 }
@@ -65,7 +42,7 @@ async function renderizarClientesCto() {
     if (!cards || !lista) return;
 
     try {
-        // patch-26 ainda não rodado: segue sem a coluna ativo (e sem o alerta)
+
         const teste = await supabaseClient.from("clientes_cto").select("ativo").limit(1);
         _clientesCtoTemAtivo = !teste.error;
         if (!_clientesCtoTemAtivo && _clientesCtoFiltro === "inativoCadastrado") _clientesCtoFiltro = "todos";
@@ -119,7 +96,7 @@ function renderizarCardsClientesCto({ total, completos, semLacre, inativosCadast
         </button>`;
 
     const cards = document.getElementById("cardsClientesCto");
-    // Alerta primeiro: só aparece quando há login inativo ocupando CTO/porta.
+
     cards.innerHTML =
         (inativosCadastrados > 0
             ? card("inativoCadastrado", "⚠ Inativos ainda cadastrados na CTO", inativosCadastrados,
@@ -151,7 +128,7 @@ async function buscarListaClientesCto(token) {
         supabaseClient.from("clientes_cto").select("cliente, login, cto, porta, lacre, completo", { count: "exact" }),
         _clientesCtoFiltro);
     if (termo) {
-        const like = `"*${termo}*"`; // entre aspas: nome com espaço não quebra o filtro
+        const like = `"*${termo}*"`;
         consulta = consulta.or(`cliente.ilike.${like},login.ilike.${like},cto.ilike.${like},lacre.ilike.${like}`);
     }
     const { data, count, error } = await consulta.order("login", { ascending: true }).limit(LIMITE_LINHAS_CLIENTES_CTO);

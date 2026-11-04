@@ -1,13 +1,3 @@
-/**
- * ==========================================================
- * Tela Inicial
- * ==========================================================
- * Primeira tela depois do login: hero de saudação + stats do dia, o
- * painel de operação, o "Seu mês" (pelas OS — ver ProducaoEngine) e um
- * "hoje no COP" curto (escala, agenda, alertas) que leva pros módulos.
- * Visual moderno: cards com ícone/cor (.op-card, CSS em agendaixc.css).
- */
-
 function saudacaoDoHorario(data = new Date()) {
     const hora = data.getHours();
     if (hora < 12) return "Bom dia";
@@ -15,7 +5,6 @@ function saudacaoDoHorario(data = new Date()) {
     return "Boa noite";
 }
 
-// Ícones (SVG paths) usados nos cards/títulos da tela inicial.
 const ICONES_INICIO = {
     plus: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
     cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>',
@@ -28,12 +17,10 @@ const ICONES_INICIO = {
 };
 const svgIcone = n => `<svg viewBox="0 0 24 24" class="op-svg">${ICONES_INICIO[n] || ""}</svg>`;
 
-/** Título de seção com ícone (visual novo). */
 function secTitulo(texto, icone) {
     return `<div class="sec-titulo">${icone ? svgIcone(icone) : ""}<span>${escaparHtml(texto)}</span></div>`;
 }
 
-/** Card com ícone + cor. Clicável (vai pro módulo) se "secao" for passado. */
 function cardInicio(rotulo, valor, cor, icone, secao) {
     const inner = `<span class="op-ic">${svgIcone(icone)}</span><span class="op-txt"><small>${rotulo}</small><strong>${valor}</strong></span>`;
     return secao
@@ -41,7 +28,6 @@ function cardInicio(rotulo, valor, cor, icone, secao) {
         : `<div class="op-card op-card-estatico" style="--c:${cor}">${inner}</div>`;
 }
 
-/** Nº de OS finalizadas hoje (pro stat do hero). */
 function fechamentosDeHoje() {
     const ords = APP?.dados?.ordens;
     if (!ords) return 0;
@@ -100,11 +86,6 @@ function renderizarInicio() {
     if (typeof renderizarPainelOperacao === "function") renderizarPainelOperacao();
 }
 
-/**
- * Resumo do dia no hero: pendências de reagendamento (OS de dias anteriores
- * ainda em aberto) + equipes que já saíram pra campo (em deslocamento agora).
- * Dados reais; cada número é clicável e leva pra Gestão de Ordens.
- */
 async function preencherResumoHero() {
     const alvo = document.getElementById("inicioHeroResumo");
     if (!alvo) return;
@@ -137,10 +118,6 @@ async function preencherResumoHero() {
     }
 }
 
-/**
- * Card do painel: técnicos que começaram o dia com OS de dias anteriores
- * ainda em aberto (ninguém reagendou). Visível a todos os logados (inclusive leitor).
- */
 async function preencherAtrasadas() {
     const alvo = document.getElementById("inicioAtrasadas");
     if (!alvo || typeof calcularAtrasadas !== "function") return;

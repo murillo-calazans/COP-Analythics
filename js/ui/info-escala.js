@@ -1,19 +1,6 @@
-/**
- * ==========================================================
- * Infográfico — Escala (seção "escala-hoje")
- * ==========================================================
- * Equipe do dia (trabalhando × folga/outras × férias, duplas), semana
- * (técnicos trabalhando por dia, seg–dom) e cidades (manutenção × instalação).
- *
- * Mesma fonte e mesmas regras da tela (js/ui/escalahoje.js +
- * js/agendador/escala-dia.js): a linha única da escala_tecnicos_dados, lida
- * uma vez e guardada em escalaTecnicosCache. O painel espera a tela carregar
- * (não dispara uma segunda leitura em paralelo).
- */
-
 async function igeTecnicos() {
     if (typeof carregarEscalaTecnicos !== "function") return [];
-    // a tela já está lendo a escala: espera o cache dela (até ~5 s) em vez de ler de novo
+
     for (let i = 0; i < 25 && !escalaTecnicosCache; i++) await new Promise(r => setTimeout(r, 200));
     return carregarEscalaTecnicos();
 }
@@ -24,7 +11,6 @@ registrarInfografico("escala-hoje", async () => {
     const techs = await igeTecnicos();
     if (!techs?.length || typeof EscalaDia === "undefined") return [];
 
-    // o dia que a tela está mostrando (setas ‹ › mudam escalaHojeData)
     const hoje = hojeMeiaNoite();
     const data = escalaHojeData ?? hoje;
     const ehHoje = isoDataLocal(data) === isoDataLocal(hoje);
@@ -42,7 +28,6 @@ registrarInfografico("escala-hoje", async () => {
 
     const cartoes = [];
 
-    // 1) Equipe do dia
     cartoes.push({
         titulo: ehHoje ? "Equipe hoje" : `Equipe em ${nomeDia}`, sub: feriado ? `Feriado: ${feriado}` : "Técnicos da escala no dia", cor: "verde", icone: "equipe",
         blocos: [
@@ -66,7 +51,6 @@ registrarInfografico("escala-hoje", async () => {
         ]
     });
 
-    // 2) Semana (seg–dom) da data exibida
     const seg = new Date(data.getFullYear(), data.getMonth(), data.getDate() - ((data.getDay() + 6) % 7));
     const semana = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(seg.getFullYear(), seg.getMonth(), seg.getDate() + i);
@@ -84,7 +68,6 @@ registrarInfografico("escala-hoje", async () => {
         ]
     });
 
-    // 3) Por cidade (cidade do dia — conta quem está temporariamente em outra cidade lá)
     const porCidade = new Map();
     for (const d of trabalhando) {
         const c = d.resumo.cidade || "Sem cidade";

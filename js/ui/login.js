@@ -1,13 +1,3 @@
-/**
- * ==========================================================
- * UI de Login/Logout
- * ==========================================================
- * Tela cheia (não é um modal) — sem sessão válida, é a única
- * coisa visível (ver body.nao-autenticado em css/layout.css).
- * Não decide regra nenhuma aqui: só chama js/services/auth.js e
- * reage ao resultado.
- */
-
 function registrarLogin() {
     const form = document.getElementById("formLogin");
     const botaoSair = document.getElementById("btnSair");
@@ -59,10 +49,6 @@ async function tentarEntrar() {
     APP.usuario = usuario;
     APP.status.autenticado = true;
 
-    // Best-effort, sem await — não faz sentido atrasar a entrada do
-    // usuário esperando o log gravar. Só aqui (entrada de verdade pelo
-    // formulário), não numa sessão restaurada por F5, senão todo
-    // refresh viraria um "login" novo no histórico.
     registrarLogLogin(usuario.email);
 
     botao.disabled = false;
@@ -85,19 +71,16 @@ function mostrarAppAutenticado() {
 
     aplicarGateDePapel();
     if (typeof atualizarMenuLateralAdmin === "function") atualizarMenuLateralAdmin();
-    // Notificações puxam a os_pendentes inteira (pesada) — adia pra não competir
-    // com o carregamento principal (deixa a tela abrir primeiro).
+
     if (typeof renderizarNotificacoes === "function") {
         const adiar = window.requestIdleCallback || (fn => setTimeout(fn, 3500));
         adiar(() => renderizarNotificacoes());
         if (typeof renderizarRompimentos === "function") adiar(() => renderizarRompimentos());
     }
 
-    // Saudação já aparece; os números do mês entram quando os dados chegarem.
     if (secaoAtiva() === "inicio") renderizarInicio();
 }
 
-/** Nome (curto, clicável) + papel no canto direito do cabeçalho. */
 function atualizarRotuloUsuario() {
     const rotulo = document.getElementById("usuarioLogado");
     if (!rotulo || !APP.usuario) return;
@@ -132,7 +115,6 @@ function configurarMinhaConta() {
     _minhaContaConfigurada = true;
     if (typeof registrarModal === "function") registrarModal("modalMinhaConta");
 
-    // Nome de exibição
     const salvarNome = () => {
         salvarNomePreferido(document.getElementById("inputMeuNome")?.value || "");
         aplicarNomeExibicao();
@@ -147,7 +129,6 @@ function configurarMinhaConta() {
         if (typeof fecharModal === "function") fecharModal("modalMinhaConta");
     });
 
-    // Troca de senha
     const salvarSenha = async () => {
         const s1 = document.getElementById("inputNovaSenha")?.value || "";
         const s2 = document.getElementById("inputNovaSenha2")?.value || "";
@@ -165,17 +146,11 @@ function configurarMinhaConta() {
     document.getElementById("inputNovaSenha2")?.addEventListener("keydown", e => { if (e.key === "Enter") salvarSenha(); });
 }
 
-/** Reaplica o nome escolhido no cabeçalho e na saudação do Início. */
 function aplicarNomeExibicao() {
     atualizarRotuloUsuario();
     if (typeof secaoAtiva === "function" && secaoAtiva() === "inicio" && typeof renderizarInicio === "function") renderizarInicio();
 }
 
-/**
- * Esconde ações restritas conforme o papel (ver js/services/auth.js):
- * Importar, Apagar Dados, Logs de Importação e o card de Diagnósticos
- * Não Resolvidos liberam pra admin+editor (patch-17).
- */
 function aplicarGateDePapel() {
     const botaoImportar = document.getElementById("btnAbrirImportar");
     const botaoLimpar = document.getElementById("btnLimparDados");

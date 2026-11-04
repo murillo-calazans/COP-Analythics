@@ -1,32 +1,8 @@
-/**
- * ==========================================================
- * Publicação automática da agenda (rotina)
- * ==========================================================
- * Gera o pré-agendamento de um dia e grava em agenda_publicada, sem
- * ninguém abrir o agendador.html. Mesmo caminho do botão "Gerar" +
- * "Publicar agenda":
- *   OS em aberto (os_pendentes, que o robô atualiza de hora em hora)
- *   + escala do dia (escala_tecnicos_dados, a mesma da escala.html)
- *   + mapa de regiões + histórico das OS (ordens)
- *   -> Motor.planejar -> AgendaPublicacao.montarAgenda -> agenda_publicada.
- *
- * Quem chama: supabase/functions/publicar-agenda (todo dia no fim da
- * tarde, pelo pg_cron, para o dia seguinte). A função baixa este arquivo e
- * o motor do próprio site, então melhorias no agendador já valem aqui.
- *
- * Regra: agenda publicada à mão (botão "Publicar agenda") NUNCA é
- * substituída — a automática só grava se o dia estiver vazio ou se a
- * agenda existente também for automática.
- *
- * Não usa supabase-js: fala com o REST do Supabase via fetch, então roda
- * igual no servidor (Deno) e num teste local (Node).
- */
 (function (global) {
     "use strict";
 
     const DIA_MS = 864e5;
 
-    /** "AAAA-MM-DD" de amanhã no horário de Brasília (o servidor roda em UTC). */
     function amanhaEmBrasilia(agora = new Date()) {
         const brasilia = new Date(agora.getTime() - 3 * 3600e3);
         const amanha = new Date(brasilia.getTime() + DIA_MS);
@@ -65,7 +41,6 @@
 
     const listaIn = valores => `(${valores.map(v => `"${String(v).replace(/"/g, "")}"`).join(",")})`;
 
-    /** Histórico das OS dos clientes (últimos 60 dias), com o nome do técnico — igual buscarHistorico do agendador. */
     async function buscarHistorico(rest, logins, ref, norm) {
         const desde = new Date(ref.getTime() - 60 * DIA_MS).toISOString();
         const todos = [];
@@ -88,11 +63,6 @@
         return todos;
     }
 
-    /**
-     * Gera e (a menos que simular) publica a agenda de "data" (AAAA-MM-DD;
-     * padrão: amanhã em Brasília). mods = { Motor, EscalaDia, AgendaPublicacao }.
-     * Devolve um resumo do que fez.
-     */
     async function publicarAgenda({ url, chave, data, simular = false, mods }) {
         const { Motor, EscalaDia, AgendaPublicacao } = mods;
         const rest = criarRest(url, chave);
@@ -119,7 +89,7 @@
             const r = await fetch(AgendaPublicacao.URL_MAPA_REGIOES, { cache: "no-store" });
             const dados = r.ok ? Motor.lerMapaRegioes(await r.text()) : null;
             if (dados) { idxMapa = Motor.indiceMapa(dados); fonteMapa = "site"; }
-        } catch (e) { /* segue sem o mapa: o motor usa só o GPS das OS */ }
+        } catch (e) {  }
 
         const params = { ...Motor.PADRAO_PARAMS };
         const { os } = Motor.montarOS(linhasOS, ref, params, idxMapa);
@@ -129,7 +99,7 @@
             const hist = await buscarHistorico(rest, logins, ref, Motor.norm);
             Motor.aplicarHistorico(os, hist, ref);
             historico = hist.length;
-        } catch (e) { /* sem histórico o plano sai igual, só sem "último atendimento" */ }
+        } catch (e) {  }
 
         const equipes = EscalaDia.equipesParaAgendador(escala, ref);
         const plano = Motor.planejar(os, equipes, AgendaPublicacao.MAPA_PADRAO, params, ref, AgendaPublicacao.REGIOES_PADRAO);

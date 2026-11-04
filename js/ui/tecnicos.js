@@ -1,15 +1,3 @@
-/**
- * ==========================================================
- * UI da Seção Técnicos
- * ==========================================================
- * Lista/busca fichas de técnicos calculadas pelo IndicatorEngine
- * e abre o detalhe individual num modal. A ficha em si fica
- * enxuta (só números); qualquer item com uma lista por trás
- * (TMS, TMA, reaberturas, recorrências) abre num popup à parte
- * (modalTecnicoDetalhe), com retorno pra ficha ao fechar. Não
- * calcula nada aqui.
- */
-
 let _fichasTecnicosCache = [];
 
 function registrarBuscaTecnicos() {
@@ -41,10 +29,6 @@ function renderizarSecaoTecnicos() {
     renderizarResultadosTecnicos(input ? input.value.trim() : "");
     renderizarRegiaoAtuacao(input ? input.value.trim() : "");
 }
-
-/* ---------------------------------------------------------
- * Região de atuação (calculada pelo RegiaoAtuacaoEngine)
- * ------------------------------------------------------- */
 
 let _regiaoAtuacaoCache = [];
 
@@ -210,7 +194,6 @@ function renderizarFichaTecnico(ficha) {
     ligarItemResumo("itemAbandonos", () => abrirDetalheAbandonos("Deslocamentos abandonados", ficha.deslocamentosAbandonadosDetalhes));
 }
 
-/** Item do resumo-grid, clicável só quando há uma lista pra abrir por trás dele. */
 function construirItemResumoClicavel(id, rotulo, valor, temDetalhe) {
     return `
         <div class="${temDetalhe ? "resumo-item-clicavel" : ""}" id="${id}" ${temDetalhe ? 'role="button" tabindex="0"' : ""}>

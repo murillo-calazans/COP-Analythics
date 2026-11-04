@@ -1,40 +1,3 @@
-/**
- * ==========================================================
- * UI da Auditoria Operacional (aba Auditoria)
- * ==========================================================
- * Indicadores + lista de achados calculados pelo
- * AuditoriaOperacionalEngine — nenhuma regra vive aqui, só desenho.
- * Pra adicionar/ajustar uma regra, ver js/config/regrasauditoria.js.
- * Respeita o Filtro Global, igual Dashboard/Técnicos/Indicadores
- * (diferente de Alertas, que é independente dele).
- *
- * Coluna "Status": um achado de Diagnóstico x Próxima Tarefa é
- * considerado corrigido de DUAS formas, que se somam (ver
- * AuditoriaOperacionalEngine.auditar):
- * - AUTOMATICAMENTE: a OS foi reaberta e o fechamento mais recente (o
- *   que está valendo hoje no sistema de origem) já resolve o mesmo
- *   Diagnóstico x Próxima Tarefa — comum quando o dado é reimportado
- *   depois de já ter sido corrigido lá, antes de alguém marcar por
- *   aqui. Não precisa de ação nenhuma, nem tem "Desfazer" (não tem o
- *   que desfazer, é reflexo direto do dado).
- * - MANUALMENTE: qualquer usuário logado (inclusive leitor) marca "já
- *   corrigido" (ex.: soube por fora que foi ajustado, ou julgou que não
- *   precisa de ação) — ver js/services/auditoriacorrecoes.js. Tem
- *   "Desfazer".
- * Duplicidade e Reabertura por outro colaborador só usam a marcação
- * MANUAL — são fatos históricos que não "se resolvem sozinhos" só por
- * reabrir de novo. Em qualquer um dos casos, o achado sai da contagem
- * "Com erro"/"Possíveis duplicidades" e entra em "Já corrigidos".
- *
- * Os cards de indicador (Reaberturas, Com erro, Possíveis duplicidades,
- * Já corrigidos) são clicáveis — abrem um popup com a lista daquela
- * categoria em duas colunas (operador de fechamento correto/incorreto,
- * cruzando com a categoria de reabertura por outro colaborador — ver
- * abrirCategoriaAuditoria), reaproveitando o modal genérico de "lista
- * completa" (js/ui/graficos.js) e o mesmo item visual usado na ficha do
- * cliente recorrente (.item-recorrencia, ver js/ui/alertas.js).
- */
-
 const ROTULOS_TIPO_ACHADO_AUDITORIA = {
     "inconsistencia": "Diagnóstico × Próxima Tarefa incompatível",
     "proxima-tarefa-ausente": "Próxima Tarefa não informada",
@@ -45,9 +8,6 @@ const ROTULOS_TIPO_ACHADO_AUDITORIA = {
 
 let _achadosAuditoriaOperacionalCache = [];
 
-// Como reabrir, com dado fresco, o popup que estiver aberto no momento
-// — usado depois de marcar/desfazer corrigido de DENTRO do popup (ver
-// alternarCorrecaoAchadoNoPopup), sem precisar fechar e reabrir na mão.
 let _reabrirPopupAuditoriaAtual = null;
 
 function renderizarPainelAuditoriaOperacional() {
@@ -69,7 +29,6 @@ function renderizarPainelAuditoriaOperacional() {
     const resultado = AuditoriaOperacionalEngine.auditar(ordensFiltradas);
     _achadosAuditoriaOperacionalCache = resultado.achados;
 
-    // Seções informativas (etapas 2 e 3) — calculadas 1x sobre o mesmo recorte.
     const analiseAuditoria = IndicatorEngine.analisarEventosDeTodas(ordensFiltradas);
     _gruposLoginAuditoria = AuditoriaOperacionalEngine.loginsEmVariasOrdens(ordensFiltradas, analiseAuditoria);
 
@@ -200,11 +159,6 @@ function renderizarPainelAuditoriaOperacional() {
     renderizarListaAchadosAuditoria("");
 }
 
-/**
- * Seção (etapa 3): instalação de terceira seguida de manutenção da nossa
- * equipe em até 15 dias, sem reparo real. Mesma função de cálculo e mesma
- * tabela usadas no relatório de Terceiras (htmlTabelaInstalManutSuspeita).
- */
 function renderizarSecaoInstalManutAuditoria() {
     const alvo = document.getElementById("tabelaInstalManutAuditoria");
     if (!alvo) return;
@@ -212,11 +166,6 @@ function renderizarSecaoInstalManutAuditoria() {
     alvo.innerHTML = htmlTabelaInstalManutSuspeita(alertas);
 }
 
-// ==========================================================
-// Seção: Logins em várias OS no período (etapa 2) — grupo por login,
-// filtro local por empresa (terceira / nossa equipe). Período = o do
-// Filtro Global (já aplicado em ordensFiltradas).
-// ==========================================================
 let _gruposLoginAuditoria = [];
 let _filtroEmpresaLoginsAuditoria = "__todas__";
 
@@ -268,14 +217,6 @@ function renderizarSecaoLoginsAuditoria() {
         </div>`).join("");
 }
 
-/**
- * Definição de cada card clicável: título do popup e o filtro (sobre
- * _achadosAuditoriaOperacionalCache) que decide o que entra na
- * categoria. "corrigidos" reúne achado de QUALQUER tipo já marcado —
- * os outros são só os ainda pendentes (mesma régua do KPI). "erros" não
- * abre a lista direto — vai pro popup de subcategorias primeiro (ver
- * abrirSubcategoriasErro).
- */
 const DEFINICAO_CATEGORIAS_AUDITORIA = {
     duplicidades: {
         titulo: "Possíveis duplicidades",
@@ -284,9 +225,7 @@ const DEFINICAO_CATEGORIAS_AUDITORIA = {
     corrigidos: {
         titulo: "Já corrigidos",
         filtro: achado => achado.corrigido,
-        // Aqui não faz sentido separar por operador correto/incorreto —
-        // tudo já está resolvido; se alguma OS ainda tivesse um operador
-        // "incorreto" de verdade, ela não deveria estar corrigida.
+
         duasColunas: false
     },
     reaberturas: {
@@ -295,21 +234,6 @@ const DEFINICAO_CATEGORIAS_AUDITORIA = {
     }
 };
 
-/**
- * "Com erro" hoje engloba 3 tipos bem diferentes (ver
- * ROTULOS_TIPO_ACHADO_AUDITORIA) — em vez de jogar tudo junto na mesma
- * lista, o card abre primeiro um resumo por subcategoria
- * (abrirSubcategoriasErro), e só ao escolher uma delas é que aparece a
- * lista de OS (mesmo popup de duas colunas dos outros cards).
- *
- * "erro_diagnostico"/"erro_proxima_tarefa" são as duas metades do tipo
- * "inconsistencia" (Diagnóstico x Próxima Tarefa incompatível) — ver
- * AuditoriaOperacionalEngine.subcategoriaErroInconsistencia: se a OS foi
- * reaberta com uma mensagem tipo "acerto de próxima tarefa", isso
- * confirma que o problema era a Próxima Tarefa, não o Diagnóstico.
- * "diagnostico-ausente"/"proxima-tarefa-ausente" já são categorias
- * fechadas em si (o campo simplesmente não foi preenchido).
- */
 const DEFINICAO_SUBCATEGORIAS_ERRO = {
     erro_diagnostico: {
         titulo: "Erro de Diagnóstico",
@@ -338,16 +262,12 @@ function abrirCategoriaAuditoria(categoria) {
     const definicao = DEFINICAO_CATEGORIAS_AUDITORIA[categoria];
     if (!definicao) return;
 
-    // Guardado pra dar pra redesenhar o MESMO popup, com dado fresco, ao
-    // marcar/desfazer corrigido de dentro dele (ver
-    // alternarCorrecaoAchadoNoPopup) — sem precisar fechar e reabrir.
     _reabrirPopupAuditoriaAtual = () => abrirCategoriaAuditoria(categoria);
 
     const itens = _achadosAuditoriaOperacionalCache.filter(definicao.filtro);
     renderizarPopupDuasColunasAuditoria(definicao.titulo, itens, { duasColunas: definicao.duasColunas !== false });
 }
 
-/** Popup nível 1 do card "Com erro" — um resumo clicável por subcategoria (ver DEFINICAO_SUBCATEGORIAS_ERRO). */
 function abrirSubcategoriasErro() {
     const itensComErro = _achadosAuditoriaOperacionalCache.filter(
         achado => achado.tipo !== "duplicidade" && achado.tipo !== "reabertura-outro-colaborador" && !achado.corrigido
@@ -379,7 +299,6 @@ function abrirSubcategoriasErro() {
     abrirModal("modalGraficoCompleto");
 }
 
-/** Popup nível 2 de uma subcategoria de erro — separado pra poder ser rechamado (ver _reabrirPopupAuditoriaAtual). */
 function abrirSubcategoriaErro(chave) {
     const definicaoSub = DEFINICAO_SUBCATEGORIAS_ERRO[chave];
     if (!definicaoSub) return;
@@ -397,25 +316,6 @@ function abrirSubcategoriaErro(chave) {
     );
 }
 
-/**
- * Popup de detalhamento (nível 2, ou direto pros outros 3 cards) — duas
- * colunas cruzando com o MOTIVO da reabertura por troca de colaborador
- * (ver js/config/motivosreabertura.js): coluna 1 é quem NÃO tem uma
- * reabertura classificada como "serviço não executado" — inclui tanto
- * quem nunca reabriu quanto quem reabriu só por "erro de processo"
- * (correção administrativa, o 1º Fechamento continua valendo); coluna 2
- * é só quem tem uma reabertura "serviço não executado" (o 1º técnico
- * não foi a campo de verdade — operador de fechamento "incorreto", já
- * que o crédito passa a ser de quem realmente atendeu por último).
- *
- * `opcoes.duasColunas === false` desliga essa separação e mostra uma
- * lista única (usado por "Já corrigidos": tudo ali já está resolvido,
- * então "operador incorreto" não tem sentido — se tivesse algo
- * incorreto de verdade, não estaria corrigido). `opcoes.aoVoltar`, se
- * vier, desenha um botão "← Voltar" que chama de volta a tela anterior
- * (nível 1) no MESMO modal. Reaproveita o modal genérico "lista
- * completa" (js/ui/graficos.js) em vez de um modal novo.
- */
 function renderizarPopupDuasColunasAuditoria(titulo, itens, opcoes = {}) {
     document.getElementById("modalGraficoCompletoTitulo").textContent = `${titulo} (${itens.length})`;
 
@@ -461,7 +361,7 @@ function renderizarPopupDuasColunasAuditoria(titulo, itens, opcoes = {}) {
 
     conteudo.querySelectorAll("[data-acao-correcao]").forEach(botao => {
         botao.addEventListener("click", evento => {
-            evento.stopPropagation(); // não abre o modal da OS ao clicar no botão
+            evento.stopPropagation();
             alternarCorrecaoAchadoNoPopup(botao, botao.dataset.ordemId, botao.dataset.tipoAchado, botao.dataset.acaoCorrecao === "desfazer");
         });
     });
@@ -473,15 +373,6 @@ function renderizarPopupDuasColunasAuditoria(titulo, itens, opcoes = {}) {
     abrirModal("modalGraficoCompleto");
 }
 
-/**
- * Igual alternarCorrecaoAchado, mas pra quando o botão "Marcar como
- * corrigido"/"Desfazer" é clicado de DENTRO de um popup da Auditoria
- * (ver itensCategoriaAuditoriaHtml) — depois de salvar, atualiza a tela
- * de trás (KPIs/tabela/cache) e redesenha o MESMO popup no lugar, com
- * dado fresco, em vez de fechar. Some da lista quando o filtro daquele
- * popup não bate mais (ex.: corrigir dentro de "Com erro" faz o item
- * desaparecer de lá).
- */
 async function alternarCorrecaoAchadoNoPopup(botao, ordemId, tipoAchado, desfazer) {
     botao.disabled = true;
 
@@ -499,13 +390,6 @@ async function alternarCorrecaoAchadoNoPopup(botao, ordemId, tipoAchado, desfaze
     _reabrirPopupAuditoriaAtual?.();
 }
 
-/**
- * Achados da Auditoria Operacional de UMA OS, dentro do próprio modal
- * de detalhe da OS (ver js/ui/timeline.js -> renderizarDetalhesOS) —
- * pra poder marcar/desfazer corrigido sem precisar ir até a aba
- * Auditoria ou o popup de categoria. Não mostra nada quando a OS não
- * tem achado nenhum (a maioria dos casos).
- */
 function renderizarAuditoriaOperacionalOS(ordem) {
     const container = document.getElementById("modalAuditoriaOperacionalOS");
     if (!container) return;
@@ -515,11 +399,6 @@ function renderizarAuditoriaOperacionalOS(ordem) {
         return;
     }
 
-    // Reaproveita o cache já calculado pela aba Auditoria (ver
-    // renderizarPainelAuditoriaOperacional) quando possível — só
-    // calcula do zero se ainda não tiver sido calculado nessa sessão
-    // (ex.: abriu o modal de uma OS sem nunca ter entrado na aba
-    // Auditoria Operacional antes).
     if (_achadosAuditoriaOperacionalCache.length === 0) {
         const ordensFiltradas = FiltroEngine.ordensFiltradas();
         if (ordensFiltradas.size > 0) {
@@ -557,7 +436,6 @@ function renderizarAuditoriaOperacionalOS(ordem) {
     });
 }
 
-/** Igual alternarCorrecaoAchadoNoPopup, mas pro modal de detalhe da OS (ver renderizarAuditoriaOperacionalOS). */
 async function alternarCorrecaoAchadoNoModalOS(botao, ordemId, tipoAchado, desfazer, ordem) {
     botao.disabled = true;
 
@@ -571,9 +449,9 @@ async function alternarCorrecaoAchadoNoModalOS(botao, ordemId, tipoAchado, desfa
         return;
     }
 
-    renderizarPainelAuditoriaOperacional(); // atualiza cache/KPIs/tabela por trás
-    _reabrirPopupAuditoriaAtual?.();        // se tiver um popup de categoria aberto por trás, atualiza junto
-    renderizarAuditoriaOperacionalOS(ordem); // redesenha esse bloco, no mesmo modal da OS
+    renderizarPainelAuditoriaOperacional();
+    _reabrirPopupAuditoriaAtual?.();
+    renderizarAuditoriaOperacionalOS(ordem);
 }
 
 const ROTULOS_MOTIVO_REABERTURA = {
@@ -588,10 +466,6 @@ function itensCategoriaAuditoriaHtml(itens) {
     return itens.map(achado => {
         const ehReaberturaOutroColaborador = achado.tipo === "reabertura-outro-colaborador";
 
-        // "Corrigida em": automática usa a data do fechamento mais
-        // recente (o que resolveu o problema sozinho); manual usa
-        // quando alguém marcou por aqui (ver
-        // AuditoriaOperacionalEngine.auditar).
         const dataCorrigida = achado.corrigidoAutomaticamente
             ? achado.dataUltimoFechamento
             : (achado.corrigidoPor ? achado.corrigidoEm : null);
@@ -706,20 +580,12 @@ function renderizarListaAchadosAuditoria(termo) {
 
     container.querySelectorAll("[data-acao-correcao]").forEach(botao => {
         botao.addEventListener("click", evento => {
-            evento.stopPropagation(); // não abre o modal da OS ao clicar no botão
+            evento.stopPropagation();
             alternarCorrecaoAchado(botao, botao.dataset.ordemId, botao.dataset.tipoAchado, botao.dataset.acaoCorrecao === "desfazer");
         });
     });
 }
 
-/**
- * Etiqueta "Corrigido" + botão de desfazer (marcação manual), etiqueta
- * "Corrigida na reabertura" sem botão nenhum (detecção automática — o
- * fechamento mais recente já resolve o achado sozinho, não tem o que
- * desfazer), ou botão de marcar (ainda pendente). Ver
- * AuditoriaOperacionalEngine.auditar (corrigidoAutomaticamente) e
- * js/services/auditoriacorrecoes.js (marcação manual).
- */
 function celulaStatusAchado(achado) {
     if (!achado.corrigido) {
         return `
@@ -751,7 +617,6 @@ function celulaStatusAchado(achado) {
     `;
 }
 
-/** Marca/desmarca um achado como corrigido (qualquer usuário logado, ver patch-12) e recarrega a lista. */
 async function alternarCorrecaoAchado(botao, ordemId, tipoAchado, desfazer) {
     botao.disabled = true;
 

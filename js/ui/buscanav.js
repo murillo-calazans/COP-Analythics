@@ -1,14 +1,3 @@
-/**
- * ==========================================================
- * Busca de abas (command palette) — só no index.html
- * ==========================================================
- * Botão de lupa no cabeçalho (ou Ctrl+K / "/") abre um campo de busca que
- * lista todas as abas/telas navegáveis; digitar filtra, Enter/clique pula
- * pra ela via mostrarSecao(). Respeita permissões (podeVerSecao, terceiras
- * só admin/editor, Usuários só admin). Componente autocontido (injeta o
- * próprio botão, overlay e CSS), pra não depender de editar o cabeçalho.
- */
-
 (function () {
 
     function pronto() {
@@ -53,7 +42,6 @@
                 });
         }
 
-        // ---- CSS ----
         const estilo = document.createElement("style");
         estilo.textContent = `
 .buscanav-fundo{position:fixed;inset:0;z-index:9500;background:rgba(2,6,23,.45);display:none;align-items:flex-start;justify-content:center;padding:12vh 16px 16px}
@@ -71,7 +59,6 @@
 .buscanav-vazio{padding:20px;text-align:center;color:var(--cor-texto-suave)}`;
         document.head.appendChild(estilo);
 
-        // ---- Botão no cabeçalho ----
         const botao = document.createElement("button");
         botao.id = "btnBuscaNav";
         botao.type = "button";
@@ -81,7 +68,6 @@
         botao.innerHTML = '<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
         host.prepend(botao);
 
-        // ---- Overlay ----
         const fundo = document.createElement("div");
         fundo.className = "buscanav-fundo";
         fundo.innerHTML = `
@@ -148,7 +134,6 @@
         });
         fundo.addEventListener("click", e => { if (e.target === fundo) fechar(); });
 
-        // Atalhos globais: Ctrl/Cmd+K abre; "/" abre quando não está digitando em outro campo.
         document.addEventListener("keydown", e => {
             const digitando = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") || document.activeElement?.isContentEditable;
             if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); abrir(); }

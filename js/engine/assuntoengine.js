@@ -1,17 +1,3 @@
-/**
- * ==========================================================
- * Assunto Engine
- * ==========================================================
- * Normaliza ordem.assunto pra unificar categorias equivalentes (ex.:
- * "Terceirizado" x sua contraparte própria) — ver
- * js/config/assuntosequivalentes.js pra tabela de mapeamentos.
- *
- * NÃO persiste nada — roda em cima de APP.dados.ordens já em memória
- * (depois de carregar do Supabase/cache local, e depois de cada
- * import novo), mesmo padrão do BairroEngine. O Supabase continua
- * guardando sempre o assunto cru da planilha; ordem.assuntoOriginal
- * guarda esse valor original antes da troca.
- */
 const AssuntoEngine = {
 
     normalizarAssuntos(ordens) {

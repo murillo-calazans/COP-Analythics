@@ -1,12 +1,3 @@
-/**
- * ==========================================================
- * UI do Dashboard
- * ==========================================================
- * Monta stat tiles + gráficos a partir do painel calculado
- * pelo IndicatorEngine. Não calcula nada aqui — só desenha o
- * que o Engine devolve.
- */
-
 function renderizarDashboard() {
     const container = document.getElementById("dashboardConteudo");
     if (!container) return;
@@ -135,9 +126,6 @@ function renderizarDashboard() {
 
     const aoClicarTecnico = item => abrirModalTecnico(item.rotulo);
 
-    // campoFiltro: clicar na barra filtra a tela inteira; com o campo já
-    // filtrado, dadosComRealce recalcula sem ele pra manter as demais
-    // barras visíveis (opacas) — ver js/ui/graficos.js.
     renderizarGraficoBarras("graficoAssuntos",
         dadosComRealce("assuntos", painel.porAssunto, ordens => IndicatorEngine.calcularContagemPorAssunto(ordens)),
         { serie: "serie-1", limite: 5, titulo: "OS por Assunto", campoFiltro: "assuntos" });

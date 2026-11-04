@@ -1,25 +1,9 @@
-/**
- * ==========================================================
- * Menu em engrenagem (só no index.html)
- * ==========================================================
- * Substitui o hambúrguer + as abas do topo por uma engrenagem grande,
- * meio escondida na borda esquerda: os módulos giram em volta dela e o
- * selecionado para no "3 horas" (setinha dourada), com o nome embaixo.
- * Botão no topo recolhe/expande. O rodapé é a mesma roda, deitada, com
- * as sub-abas do módulo ativo.
- *
- * Reusa 100% da navegação existente: toda troca de tela passa por
- * mostrarSecao() (js/ui/navegacao.js), que é "embrulhado" aqui pra
- * manter o menu em sincronia a cada navegação (tile do Início, URL…).
- */
-
 (function () {
 
     function pronto() {
         if (typeof window.mostrarSecao !== "function" || !document.getElementById("conteudo")) return;
         if (document.querySelector(".gear-rail")) return;
 
-        // Ícones (espelham js/ui/menulateral.js).
         const ICONES = {
             inicio: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
             ordens: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
@@ -32,7 +16,6 @@
             admin: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'
         };
 
-        // Ordem dos módulos na engrenagem (+ dica curta mostrada embaixo).
         const MODULOS = [
             { id: "inicio", titulo: "Início", dica: "Resumo do dia" },
             { id: "ordens", titulo: "Gestão de Relatórios", dica: "Dashboard, indicadores e tempos" },
@@ -81,7 +64,6 @@
                 MODULO_DA_SECAO[s] === mod && (typeof podeVerSecao !== "function" || podeVerSecao(s)));
         }
 
-        // ---------- Estado de módulo ----------
         const railEl = document.createElement("nav");
         railEl.className = "gear-rail"; railEl.setAttribute("aria-label", "Módulos");
         let subroda = document.createElement("div");
@@ -93,18 +75,14 @@
         let gearItens = [], gearGo = null;
         let visAnterior = "", rodaSub = null, rodapeModulo = null, navTimer = null;
 
-        // No desktop, o hover expande/recolhe (puro CSS). No toque (sem hover),
-        // um tap abre e um tap fora recolhe.
         const temHover = window.matchMedia("(hover: hover)").matches;
         railEl.addEventListener("click", () => { if (!temHover) railEl.classList.add("aberta"); });
         document.addEventListener("click", e => { if (!railEl.contains(e.target)) railEl.classList.remove("aberta"); });
 
-        // ---------- Engrenagem ----------
         function construirEngrenagem(ids) {
             gearItens = MODULOS.filter(m => ids.indexOf(m.id) >= 0);
             if (!gearItens.length) { railEl.innerHTML = ""; gearGo = null; return; }
 
-            // Dentes da engrenagem (fixos, só estética).
             const dentes = 10, p = [];
             for (let i = 0; i < dentes; i++) {
                 const a = i * 360 / dentes;
@@ -133,7 +111,7 @@
             function spin() { elGb.style.setProperty("--rot", (th + sp) + "deg"); }
             function go(n, navegar) {
                 cur = ((n % N) + N) % N;
-                const d = ((-cur * step - th) % 360 + 540) % 360 - 180;   // menor giro até o alvo
+                const d = ((-cur * step - th) % 360 + 540) % 360 - 180;
                 th += d; elRing.style.setProperty("--th", th + "deg"); spin();
                 its.forEach((b, k) => b.setAttribute("aria-current", k === cur ? "true" : "false"));
                 const m = gearItens[cur];
@@ -145,7 +123,6 @@
             railEl.querySelector(".pv").onclick = () => go(cur - 1, true);
             railEl.querySelector(".nx").onclick = () => go(cur + 1, true);
 
-            // girar pela rolagem do mouse sobre a engrenagem (navega ao assentar)
             let acc = 0, trava = false;
             railEl.addEventListener("wheel", e => {
                 e.preventDefault(); acc += e.deltaY;
@@ -157,12 +134,11 @@
             }, { passive: false });
 
             elRing.style.setProperty("--th", "0deg");
-            // rotaciona (silencioso) até o módulo pedido
+
             gearGo = function (id) { const k = gearItens.findIndex(m => m.id === id); if (k >= 0) go(k, false); };
             go(0, false);
         }
 
-        // ---------- Roda do rodapé (sub-abas), giro infinito ----------
         function criarRoda(cont, itens, o, onCentro) {
             const N = itens.length, HALF = Math.floor(N / 2), els = [];
             let centro = 0;
@@ -217,7 +193,6 @@
             rodaSub.irSilencioso(secao);
         }
 
-        // ---------- Sincronização ----------
         let sincronizando = false;
         function sincronizar() {
             if (sincronizando) return;
@@ -232,11 +207,10 @@
             } finally { sincronizando = false; }
         }
 
-        // Embrulha mostrarSecao pra manter o menu em sincronia a cada navegação.
         const _mostrar = window.mostrarSecao;
         window.mostrarSecao = function (nome) { _mostrar(nome); sincronizar(); };
 
-        window.sincronizarMenuRoda = sincronizar;   // pra re-sincronizar depois do login/carga
+        window.sincronizarMenuRoda = sincronizar;
         sincronizar();
     }
 

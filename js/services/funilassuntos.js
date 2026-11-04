@@ -1,14 +1,3 @@
-/**
- * ==========================================================
- * Serviço de Configuração — Funil de Assuntos
- * ==========================================================
- * Persiste, no localStorage, quais assuntos contam como "origem"
- * e "destino" pro indicador de funil (ex.: Instalação Novo
- * Cliente/Transferência de Endereço → Verificar Conexão/Sem
- * Conexão LOS). Fica configurável porque o texto exato do
- * assunto varia — não dá pra fixar no código com segurança.
- */
-
 const FUNIL_ASSUNTOS_CHAVE_STORAGE = "cop_analytics_funil_assuntos";
 
 function carregarFunilAssuntos() {

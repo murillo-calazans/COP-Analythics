@@ -1,21 +1,3 @@
-/**
- * ==========================================================
- * Infográficos — Gestão de Terceiras
- * ==========================================================
- * Painéis no topo das abas terceiras, terceiras-fechamento, terceiras-lpu
- * e terceiras-qualidade (desenho: js/ui/infograficos.js).
- *
- * Tudo sai do que a própria Gestão de Terceiras já calcula, no MÊS da tela
- * (mesAtualTerceiras / seletor "Mês"), não do Filtro Global — pagamento
- * não depende do recorte (ver js/engine/terceirasengine.js):
- *   - OS e valor: TerceirasEngine.itensDoMes com a LPU salva no site
- *     (carregarConfigTerceiras); mês já fechado vale o congelado
- *     (carregarFechamentosDoMes), igual ao Painel da aba.
- *   - TMA, erro de fechamento e reabertura: da mesma análise de eventos
- *     (analiseTerceiras) + resultadoAuditoriaOS (js/services/relatorios.js).
- *   - Qualidade: TerceirasEngine.qualidadeDoMes. LPU: TerceirasEngine.catalogo.
- */
-
 const IG_TER_CORES = { AZUL: "azul", VELOZ: "laranja", TECHNOMAIS: "verde" };
 const IG_TER_CORES_EXTRA = ["roxo", "ciano", "rosa", "cinza"];
 let _igTerMemo = { chave: null, dados: null };
@@ -31,7 +13,6 @@ function igTerNomeMes(mes) {
     return typeof nomeMes === "function" ? nomeMes(mes) : mes;
 }
 
-/** "R$ 135 mil" pro centro da rosca (cabe no anel); abaixo de mil, o valor cheio. */
 function igTerRealCurto(v) {
     if (v >= 1000000) return `R$ ${(v / 1000000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
     if (v >= 1000) return `R$ ${Math.round(v / 1000).toLocaleString("pt-BR")} mil`;
@@ -49,10 +30,6 @@ function igTerBaseCarregada() {
     return !!(APP?.status?.baseCarregada && APP.dados?.ordens?.size);
 }
 
-/**
- * Dados do mês da tela, por terceirizada. Lê LPU e fechamentos pelos
- * mesmos carregadores (cacheados) da aba. null = sem base carregada.
- */
 async function igTerDadosDoMes() {
     if (!igTerBaseCarregada()) return null;
     const mes = mesAtualTerceiras();
@@ -65,7 +42,6 @@ async function igTerDadosDoMes() {
 
     const itens = TerceirasEngine.itensDoMes(mes, config, analise);
 
-    // OS "do mês" (abertas ou fechadas nele) por login — recorrência do cliente.
     const porLogin = new Map();
     let fechadasNoMes = 0;
     for (const ordem of ordens.values()) {
@@ -125,7 +101,6 @@ function igTerCartaoVazio(titulo, mes, texto) {
     return [{ titulo, sub: igTerNomeMes(mes), cor: "cinza", icone: "equipe", span: 3, blocos: [{ t: "nota", html: texto }] }];
 }
 
-// ---------- Painel ----------
 registrarInfografico("terceiras", async () => {
     const d = await igTerDadosDoMes();
     if (!d) return [];
@@ -161,7 +136,6 @@ registrarInfografico("terceiras", async () => {
     ];
 });
 
-// ---------- Fechamento ----------
 registrarInfografico("terceiras-fechamento", async () => {
     const d = await igTerDadosDoMes();
     if (!d) return [];
@@ -205,7 +179,6 @@ registrarInfografico("terceiras-fechamento", async () => {
     ];
 });
 
-// ---------- LPU ----------
 function igTerTextoPreco(config, assunto, terceira) {
     const p = (cat = null) => TerceirasEngine.precoLpu(config, assunto, terceira, cat);
     if (TerceirasEngine.assuntoDividido(config, assunto)) {
@@ -249,7 +222,6 @@ registrarInfografico("terceiras-lpu", async () => {
     }];
 });
 
-// ---------- Qualidade ----------
 registrarInfografico("terceiras-qualidade", async () => {
     const d = await igTerDadosDoMes();
     if (!d) return [];
@@ -278,9 +250,6 @@ registrarInfografico("terceiras-qualidade", async () => {
     });
 });
 
-// Trocar o mês numa aba de Terceiras redesenha a aba (terceiras.js), mas não
-// o painel — este ouvinte cuida disso. Roda depois do da aba (bolha), quando
-// terceirasMes já foi atualizado.
 if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
     document.addEventListener("change", e => {
         if (!e.target?.matches?.("[data-mes-terceiras]")) return;

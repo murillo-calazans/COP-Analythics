@@ -1,38 +1,3 @@
-/**
- * ==========================================================
- * Gestão de Terceiras — cálculo
- * ==========================================================
- * Quanto pagar a cada terceirizada no mês, pela LPU, e a qualidade
- * do serviço delas. Regras (confirmadas pelo usuário):
- *
- * - Quem executou = sufixo do NOME de quem ficou com o crédito do
- *   fechamento ("FULANO - AZUL"); sem sufixo = técnico interno. Nunca
- *   pelo setor nem pelo assunto "- TERCEIRIZADO".
- * - Mês e crédito = fechamentoEfetivo (o mesmo do resto do sistema:
- *   reabertura feita pelo COP pra corrigir processo não tira o crédito
- *   de quem foi a campo).
- * - Produtivo ou não = diagnóstico FINAL (ultimoFechamento), igual aos
- *   relatórios agrupados por diagnóstico. A classificação é a da aba
- *   LPU (terceiras_config.diagnosticos), compartilhada no banco.
- * - Valor = LPU[assunto][terceira]. Sem valor = "sem preço"
- *   (pendência, não paga); 0 = não paga de propósito.
- * - Assunto "dividido" (ex.: LOS): o preço depende da CATEGORIA do
- *   diagnóstico (verificação Externa ou Interna) —
- *   LPU[assunto].porCategoria[categoria][terceira]. Diagnóstico sem
- *   categoria num assunto dividido = pendência.
- *
- * Formato salvo (terceiras_config):
- *   lpu          { "ASSUNTO": { AZUL: 60, ... } }                         preço único
- *                { "ASSUNTO": { dividido: true, porCategoria: { EXTERNA: { AZUL: 90 }, INTERNA: {...} } } }
- *   diagnosticos { "DIAG": { produtivo: true, categoria: "EXTERNA" } }   (true/false sozinho = formato antigo)
- * - Só fechamento produtivo é pago. Reagendamento não é fechamento,
- *   então nem entra.
- * - Retrabalho só é MOSTRADO (aba Qualidade), não desconta nada.
- *
- * Não respeita o Filtro Global: pagamento não pode depender do
- * recorte que estiver na tela.
- */
-
 const TERCEIRAS = [
     { id: "AZUL", nome: "Azul", sufixos: ["AZUL"] },
     { id: "VELOZ", nome: "Veloz", sufixos: ["VELOZ"] },
@@ -48,17 +13,16 @@ const SITUACAO_PAGAMENTO = {
     PAGA: "paga",
     IMPRODUTIVA: "improdutiva",
     SEM_PRECO: "sem_preco",
-    NAO_PAGA: "nao_paga",            // LPU = 0
-    DIAG_PENDENTE: "diag_pendente",  // diagnóstico ainda não classificado na aba LPU
-    CAT_PENDENTE: "cat_pendente"     // assunto dividido e o diagnóstico sem categoria (Externa/Interna)
+    NAO_PAGA: "nao_paga",
+    DIAG_PENDENTE: "diag_pendente",
+    CAT_PENDENTE: "cat_pendente"
 };
 
 const TerceirasEngine = {
 
     DIAS_RETORNO: 30,
-    ASSUNTO_GARANTIA: "GARANTIA TERCEIRIZADA", // canônico de "REPARO PÓS INSTALAÇÃO TERCEIRIZADA" (assuntosequivalentes.js)
+    ASSUNTO_GARANTIA: "GARANTIA TERCEIRIZADA",
 
-    /** "JOÃO SILVA - AZUL" -> "AZUL"; sem sufixo de terceirizada -> null. */
     terceiraDoNome(nome) {
         const m = normalizarTexto(nome ?? "").match(/-\s*([A-Z]+)\s*$/);
         if (!m) return null;
@@ -82,7 +46,6 @@ const TerceirasEngine = {
         return CATEGORIAS_PRECO.find(c => c.id === id)?.nome ?? id;
     },
 
-    /** Linha da LPU do assunto (ignorando acento/maiúscula), ou undefined. */
     entradaLpu(config, assunto) {
         const alvo = normalizarTexto(assunto ?? "");
         for (const [chave, entrada] of Object.entries(config.lpu ?? {})) {
@@ -95,10 +58,6 @@ const TerceirasEngine = {
         return this.entradaLpu(config, assunto)?.dividido === true;
     },
 
-    /**
-     * Preço da terceirizada pro assunto. Em assunto dividido, depende da
-     * categoria (sem categoria = undefined). undefined = sem preço.
-     */
     precoLpu(config, assunto, terceira, categoria = null) {
         const entrada = this.entradaLpu(config, assunto);
         if (!entrada) return undefined;
@@ -108,10 +67,6 @@ const TerceirasEngine = {
         return valor === null || valor === undefined || valor === "" ? undefined : Number(valor);
     },
 
-    /**
-     * { produtivo: true|false|undefined, categoria: 'EXTERNA'|'INTERNA'|null }.
-     * Aceita o formato antigo (só true/false).
-     */
     infoDiagnostico(config, diagnostico) {
         const alvo = normalizarTexto(diagnostico ?? "");
         for (const [chave, valor] of Object.entries(config.diagnosticos ?? {})) {
@@ -125,16 +80,10 @@ const TerceirasEngine = {
         return { produtivo: undefined, categoria: null };
     },
 
-    /** true = produtivo, false = improdutivo, undefined = não classificado. */
     diagnosticoProdutivo(config, diagnostico) {
         return this.infoDiagnostico(config, diagnostico).produtivo;
     },
 
-    /**
-     * Todas as OS fechadas por terceirizada no mês, com a situação de
-     * pagamento de cada uma. analise = IndicatorEngine.analisarEventosDeTodas
-     * (passada de fora pra não recalcular a cada aba).
-     */
     itensDoMes(mes, config, analise) {
         const itens = [];
 
@@ -171,7 +120,7 @@ const TerceirasEngine = {
                 bairro: ordem.bairro,
                 assunto: ordem.assunto,
                 diagnostico,
-                categoria: dividido ? categoria : null, // só importa (e só aparece) em assunto dividido
+                categoria: dividido ? categoria : null,
                 situacao,
                 valor: situacao === SITUACAO_PAGAMENTO.PAGA ? preco : 0,
                 precoLpu: preco ?? null
@@ -181,13 +130,12 @@ const TerceirasEngine = {
         return itens.sort((a, b) => a.data.localeCompare(b.data));
     },
 
-    /** Totais de uma lista de itens (de uma terceirizada ou de todas). */
     resumir(itens) {
         const contar = situacao => itens.filter(i => i.situacao === situacao).length;
         const porAssunto = new Map();
 
         for (const item of itens.filter(i => i.situacao === SITUACAO_PAGAMENTO.PAGA)) {
-            // Assunto dividido vira uma linha por categoria ("LOS · Externa"), cada uma com o seu preço.
+
             const chave = `${item.assunto ?? "Sem assunto"}${item.categoria ? ` · ${this.nomeCategoria(item.categoria)}` : ""}`;
             const atual = porAssunto.get(chave) ?? { assunto: chave, quantidade: 0, valorUnitario: item.valor, subtotal: 0 };
             atual.quantidade++;
@@ -201,17 +149,13 @@ const TerceirasEngine = {
             improdutivas: contar(SITUACAO_PAGAMENTO.IMPRODUTIVA),
             naoPagas: contar(SITUACAO_PAGAMENTO.NAO_PAGA),
             semPreco: contar(SITUACAO_PAGAMENTO.SEM_PRECO),
-            // Pendência = tudo que fica fora do pagamento por falta de configuração.
+
             diagPendente: contar(SITUACAO_PAGAMENTO.DIAG_PENDENTE) + contar(SITUACAO_PAGAMENTO.CAT_PENDENTE),
             total: itens.reduce((s, i) => s + (i.valor || 0), 0),
             porAssunto: [...porAssunto.values()].sort((a, b) => b.subtotal - a.subtotal)
         };
     },
 
-    /**
-     * Técnicos ativos no mês (ativo = fechou ao menos 1 OS). Agrega os itens
-     * de itensDoMes por técnico: nº de OS, OS pagas e valor pago.
-     */
     tecnicosDoMes(itens) {
         const porTecnico = new Map();
         for (const item of itens) {
@@ -224,24 +168,13 @@ const TerceirasEngine = {
         return [...porTecnico.values()].sort((a, b) => b.os - a.os || a.tecnico.localeCompare(b.tecnico));
     },
 
-    /** Uma manutenção "sem reparo real" = fechamento com diagnóstico marcado como Improdutivo (Configurações). */
     manutencaoSemReparo(info, improdutivos) {
-        if (!info?.ultimoFechamento) return false;   // sem fechamento: não dá pra afirmar que não houve reparo
-        if (!improdutivos?.size) return false;       // sem config de improdutivos: não sinaliza nada
+        if (!info?.ultimoFechamento) return false;
+        if (!improdutivos?.size) return false;
         const diag = this.nomeDiagnostico(info.ultimoFechamento);
         return diag ? improdutivos.has(normalizarTexto(diag)) : false;
     },
 
-    /**
-     * Alerta de qualidade / provável erro de abertura: INSTALAÇÃO fechada
-     * por uma TERCEIRA seguida, em até `dias` (15) dias, de uma MANUTENÇÃO
-     * aberta pro mesmo cliente, feita pela NOSSA equipe, que NÃO teve
-     * reparo real (diagnóstico de fechamento Improdutivo — ver
-     * Configurações > Diagnósticos Improdutivos). Varre TODAS as OS
-     * (APP.dados.ordens) pra a janela de 15 dias não ser cortada por mês;
-     * `analise` deve cobrir APP.dados.ordens (use analiseTerceiras()).
-     * Reutilizada no relatório de Terceiras e na Auditoria.
-     */
     instalacoesComManutencaoSuspeita(analise, dias = 15) {
         const ehInstalacao = a => normalizarTexto(a).includes("INSTALA");
         const ehManutencao = a => normalizarTexto(a).includes("MANUTEN");
@@ -270,7 +203,7 @@ const TerceirasEngine = {
                     .filter(o =>
                         o.ordem.id !== inst.ordem.id &&
                         ehManutencao(o.ordem.assunto) &&
-                        !o.terceiraId &&                                 // feita pela nossa equipe
+                        !o.terceiraId &&
                         o.ordem.dataAbertura &&
                         o.ordem.dataAbertura.getTime() >= fim &&
                         o.ordem.dataAbertura.getTime() <= fim + janelaMs &&
@@ -292,7 +225,6 @@ const TerceirasEngine = {
         return alertas.sort((a, b) => b.instalacao.fechamento - a.instalacao.fechamento);
     },
 
-    /** Assuntos sem preço, diagnósticos sem classificação e sem categoria, com contagem. */
     pendencias(itens) {
         const assuntos = new Map();
         const diagnosticos = new Map();
@@ -324,10 +256,6 @@ const TerceirasEngine = {
         };
     },
 
-    /**
-     * Assuntos e diagnósticos que as terceirizadas fecharam nos dados
-     * carregados (todos os meses) — base das tabelas da aba LPU.
-     */
     catalogo(analise) {
         const assuntos = new Map();
         const diagnosticos = new Map();
@@ -348,7 +276,7 @@ const TerceirasEngine = {
             const diagnostico = this.nomeDiagnostico(info.ultimoFechamento ?? efetivo) ?? "Sem diagnóstico";
             const d = diagnosticos.get(diagnostico) ?? { diagnostico, total: 0, assuntos: new Set() };
             d.total++;
-            d.assuntos.add(normalizarTexto(assunto)); // pra saber se aparece em assunto dividido (precisa de categoria)
+            d.assuntos.add(normalizarTexto(assunto));
             diagnosticos.set(diagnostico, d);
         }
 
@@ -358,13 +286,6 @@ const TerceirasEngine = {
         };
     },
 
-    /**
-     * Qualidade no mês, por terceirizada:
-     * - reaberturas: OS do mês que tiveram Reabertura;
-     * - retornos: o mesmo cliente (login) abriu outra OS em até
-     *   DIAS_RETORNO dias depois do fechamento da terceirizada;
-     * - garantias: dos retornos, os que vieram como GARANTIA TERCEIRIZADA.
-     */
     qualidadeDoMes(mes, analise) {
         const fechadasNoMes = [];
         const porLogin = new Map();

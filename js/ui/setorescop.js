@@ -1,21 +1,5 @@
-/**
- * ==========================================================
- * UI de Configuração — Setor do COP
- * ==========================================================
- * Um único seletor de busca+chips (mesmo padrão visual do Filtro
- * Global / Funil de Assuntos) pra marcar qual(is) setor(es) da
- * Base.xlsx contam como "Controle de Operações" nos TMRs de
- * agendamento/reagendamento por colaborador.
- */
-
 let _setoresCopPendente = [];
 
-/**
- * Setor é atributo do OPERADOR de QUALQUER movimentação — diferente de
- * FiltroEngine.coletarOpcoes()/coletarAssuntosDistintos(), que só olham
- * quem FECHOU a OS. Um colaborador do COP que só agenda/reagenda e
- * nunca fecha ficaria invisível se reaproveitássemos aquelas listas.
- */
 function coletarSetoresDistintosOperadores() {
     const setores = new Set();
 
@@ -31,12 +15,6 @@ function coletarSetoresDistintosOperadores() {
     return [...setores].sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
-/**
- * Só cuida do que é permanente na página (o modal e seu campo de
- * busca) — o botão "Configurar" fica dentro da aba Indicadores, que é
- * remontada via innerHTML toda vez, então esse botão é religado em
- * cada renderizarSecaoIndicadores() (ver js/ui/indicadores.js).
- */
 function registrarSetoresCop() {
     const botaoSalvar = document.getElementById("btnSalvarSetoresCop");
     if (botaoSalvar) botaoSalvar.addEventListener("click", salvarSetoresCopDaTela);
@@ -236,25 +214,21 @@ function renderizarTmrAgendamentoCop() {
     });
 }
 
-/** Clique num colaborador do gráfico "Primeiro Agendamento" — abre as OS que ele agendou, com o tempo de cada uma. */
 function abrirDetalheAgendamentoCop(nome) {
     const detalhado = IndicatorEngine.calcularAgendamentosCopDetalhado(FiltroEngine.ordensFiltradas());
     abrirModalTmrCopDetalhe(`Primeiro agendamento do COP — ${nome}`, detalhado.get(nome) ?? []);
 }
 
-/** Clique num colaborador do gráfico "Reagendamento" — abre as OS que ele reagendou, com o tempo de cada uma. */
 function abrirDetalheReagendamentoCop(nome) {
     const detalhado = IndicatorEngine.calcularReagendamentosCopDetalhado(FiltroEngine.ordensFiltradas());
     abrirModalTmrCopDetalhe(`Reagendamento do COP — ${nome}`, detalhado.get(nome) ?? []);
 }
 
-/** Clique num colaborador do gráfico "Ordens Acertadas" — abre as OS que ele resolveu sozinho na própria reabertura. */
 function abrirDetalheOrdensAcertadasCop(nome) {
     const detalhado = AuditoriaOperacionalEngine.contarOrdensAcertadasCopDetalhado(FiltroEngine.ordensFiltradas());
     abrirModalOrdensAcertadasCopDetalhe(`Ordens acertadas pelo COP — ${nome}`, detalhado.get(nome) ?? []);
 }
 
-/** Mesmo modal genérico de detalhe do COP (título + lista), só que mostrando o tipo do achado em vez de um tempo. */
 function abrirModalOrdensAcertadasCopDetalhe(titulo, itens) {
     document.getElementById("modalTmrCopDetalheTitulo").textContent = titulo;
 

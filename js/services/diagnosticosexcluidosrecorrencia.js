@@ -1,17 +1,3 @@
-/**
- * ==========================================================
- * Serviço de Configuração — Diagnósticos Excluídos da Recorrência
- * ==========================================================
- * Persiste, no localStorage, quais diagnósticos (ex.: "Verificação
- * sem problema encontrado") NÃO devem contar como visita recorrente
- * de verdade — ver IndicatorEngine.diagnosticoExcluidoDaRecorrencia.
- * Lista negra independente da usada no TMS/TMA (diagnosticosexcluidos.js):
- * por padrão nada está excluído.
- *
- * Os valores são guardados normalizados (ver js/utils/texto.js)
- * pra não depender de acento/caixa na hora de comparar.
- */
-
 const DIAGNOSTICOS_EXCLUIDOS_RECORRENCIA_CHAVE_STORAGE = "cop_analytics_diagnosticos_excluidos_recorrencia";
 
 function carregarDiagnosticosExcluidosRecorrencia() {

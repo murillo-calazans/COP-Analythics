@@ -1,33 +1,18 @@
-/**
- * ==========================================================
- * Gestão do COP — OS do COP em aberto (por assunto)
- * ==========================================================
- * O COP (setor 52 no IXC) é o setor principal. As OS dele já vêm no
- * pré-agendamento (os_pendentes), mas o IXC não exporta o setor, só o
- * assunto — e como no IXC cada assunto pertence a um único setor, a OS do
- * COP é identificada pela lista de assuntos (ver carregarAssuntosCop /
- * assuntoEhDoCop). Aqui montamos o retrato das OS do COP em aberto,
- * agrupadas por assunto, reaproveitando a timeline da Agenda IXC.
- */
-
 let copAbertasCache = null;
 let copAbertasCarregando = false;
 
-/** Normaliza assunto p/ casar com a lista do COP: sem acento, sem "(14)", minúsculo. */
 function copNormAssunto(a) {
     return String(a || "")
         .normalize("NFD").replace(/\p{Diacritic}/gu, "")
         .toLowerCase().replace(/\(\s*\d+\s*\)/g, " ").replace(/\s+/g, " ").trim();
 }
 
-/** A OS é do COP? (assunto na lista configurável, ver js/services/setorescop.js) */
 function assuntoEhDoCop(assunto) {
     const lista = typeof carregarAssuntosCop === "function" ? carregarAssuntosCop() : [];
     const alvo = new Set(lista.map(copNormAssunto));
     return alvo.has(copNormAssunto(assunto));
 }
 
-/** "há 3 dias" / "hoje" a partir de uma data de abertura. */
 function copHaDias(data) {
     if (!data) return "—";
     const dias = Math.floor((Date.now() - data.getTime()) / 86400000);
@@ -36,17 +21,15 @@ function copHaDias(data) {
     return `há ${dias} dias`;
 }
 
-/** os_pendentes (linhas por evento) -> OS do COP únicas, agrupadas por assunto. */
 function montarCopAbertas(linhas) {
     const rows = linhas.map(l => l.dados);
-    // a rodada mais recente do robô: o max de capturado_em (NÃO a 1ª linha — as
-    // auditorias do COP quase nunca mudam e ficam com um carimbo velho).
+
     const capturadoEm = linhas.reduce((max, l) => (l.capturado_em && (!max || l.capturado_em > max) ? l.capturado_em : max), null);
     const parseData = typeof ixcDataBR === "function" ? ixcDataBR : (() => null);
 
-    const osMap = new Map();      // id -> OS representativa
-    const eventosPorOs = {};      // id -> [{data, evento, status, msg}] (timeline)
-    const osInfo = {};            // id -> {cliente, assunto, bairro, cidade}
+    const osMap = new Map();
+    const eventosPorOs = {};
+    const osInfo = {};
 
     for (const r of rows) {
         const id = String(r["ID OS"] || "");
@@ -79,7 +62,7 @@ function montarCopAbertas(linhas) {
     return { grupos, total: osMap.size, capturadoEm, eventosPorOs, osInfo };
 }
 
-const COP_OS_NO_POPUP = 300;   // teto de OS listadas por assunto (auditorias podem ter milhares)
+const COP_OS_NO_POPUP = 300;
 
 function copAssuntoCurto(assunto) {
     const s = String(assunto || "").replace(/\s*\(\d+\)/g, "").trim();
@@ -144,8 +127,7 @@ function abrirPopupCop(grupo) {
     document.body.classList.add("ixc-popup-aberto");
     fundo.addEventListener("click", e => { if (e.target === fundo) fecharPopupCop(); });
     fundo.querySelector(".ixc-popup-fechar").addEventListener("click", fecharPopupCop);
-    // o clique numa OS (data-ixc-os + data-ixc-fonte="cop") é tratado pelo
-    // handler delegado da Agenda IXC, que abre a timeline com o cache do COP.
+
     fundo.querySelector(".ixc-popup-fechar").focus();
 }
 

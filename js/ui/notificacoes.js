@@ -1,17 +1,3 @@
-/**
- * ==========================================================
- * Notificações (sino do cabeçalho)
- * ==========================================================
- * Mostra, SEM precisar clicar (badge com o total), as pendências que o
- * COP precisa agir: OS que os técnicos reagendaram hoje e OS de clientes
- * comerciais (PJ) em aberto. Clicar abre o painel com as listas; clicar
- * numa OS abre a ordem cronológica (reusa a timeline da Agenda IXC).
- *
- * Fonte: a mesma os_pendentes (via buscarOsPendentesCacheado). Comercial
- * é identificado pelo assunto ("… COMERCIAL"); o plano (PJ) não vem no
- * pré-agendamento ainda. Só admin/editor vê o sino (dado operacional).
- */
-
 let notifCache = null;
 
 const NOTIF_CSS = `
@@ -49,7 +35,7 @@ const NOTIF_GRUPOS = [
     { id: "reagendadas", rotulo: "Reagendadas hoje", icone: "↻", dica: "OS que os técnicos reagendaram hoje" },
     { id: "comerciais",  rotulo: "Comerciais em aberto", icone: "🏢", dica: "OS de clientes comerciais (PJ) ainda em aberto" }
 ];
-const NOTIF_PREVIA = 6;     // OS mostradas por grupo no painel; resto via "ver todas"
+const NOTIF_PREVIA = 6;
 const NOTIF_TETO = 300;
 
 async function calcularNotificacoes() {
@@ -111,7 +97,7 @@ function conteudoGrupoNotif(grupo, oss, novas = 0) {
 async function renderizarNotificacoes() {
     const botao = document.getElementById("btnNotificacoes");
     if (!botao) return;
-    botao.hidden = false;   // visível a todos os usuários logados (inclusive leitor)
+    botao.hidden = false;
 
     try {
         notifCache = await calcularNotificacoes();
@@ -120,17 +106,12 @@ async function renderizarNotificacoes() {
         return;
     }
 
-    notifProcessar(notifCache);   // badge (novidades) + pop-up do navegador (SÓ comerciais)
+    notifProcessar(notifCache);
 
     const painel = document.getElementById("notifPainel");
     if (painel && painel.classList.contains("aberto")) preencherPainelNotif();
 }
 
-// --- Estado de "visto" (localStorage) ------------------------------------
-// reag/com = OS já vistas no sino (zeram o badge; reag reseta por dia).
-// popped   = comerciais que já dispararam pop-up do navegador (não repete).
-// O pop-up do navegador é SÓ pra comerciais (reagendadas encheriam). As
-// reagendadas "avisam" pelo número de novas no badge/sino, sem pop-up.
 const NOTIF_VISTOS_CHAVE = "cop_notif_vistos";
 
 function carregarVistos() { try { return JSON.parse(localStorage.getItem(NOTIF_VISTOS_CHAVE)) || {}; } catch { return {}; } }
@@ -148,10 +129,9 @@ function dispararAviso(titulo, corpo, tag) {
     try {
         const n = new Notification(titulo, { body: corpo, tag, icon: "img/logo.png", renotify: true });
         n.onclick = () => { window.focus(); abrirPainelNotif(); n.close(); };
-    } catch (e) { /* alguns navegadores exigem service worker; ignora */ }
+    } catch (e) {  }
 }
 
-/** Quantas de cada grupo ainda não foram vistas no sino. */
 function notifNovos(cache) {
     const v = carregarVistos();
     const reag = v.reag || {}, com = v.com || {};
@@ -161,16 +141,13 @@ function notifNovos(cache) {
     };
 }
 
-/** Atualiza o badge (novidades não vistas) e dispara pop-up SÓ pras comerciais novas. */
 function notifProcessar(cache) {
     const v = carregarVistos();
-    if (v.dia !== diaIsoHoje()) { v.dia = diaIsoHoje(); v.reag = {}; }   // reag é do dia
+    if (v.dia !== diaIsoHoje()) { v.dia = diaIsoHoje(); v.reag = {}; }
     v.reag = v.reag || {}; v.com = v.com || {};
-    // migração do código antigo (sem `popped`): o que já foi visto conta como já popado,
-    // pra não disparar um monte de pop-up de comerciais antigas na 1ª carga do código novo.
+
     if (!v.popped) v.popped = { ...v.com };
 
-    // 1ª carga: marca tudo como visto/popado (sem avisar nada do que já existia)
     if (!v.baselineFeito) {
         cache.reagendadas.forEach(o => v.reag[o.id] = 1);
         cache.comerciais.forEach(o => { v.com[o.id] = 1; v.popped[o.id] = 1; });
@@ -183,7 +160,6 @@ function notifProcessar(cache) {
     const novos = notifNovos(cache);
     atualizarBadgeNotif(novos.reag.length + novos.com.length);
 
-    // pop-up do navegador: SÓ comerciais, uma vez por OS (dedup via popped)
     const popar = cache.comerciais.filter(o => !v.popped[o.id]);
     if (popar.length && ("Notification" in window) && Notification.permission === "granted") {
         if (popar.length === 1) { const o = popar[0]; dispararAviso("Ordem comercial em aberto", `#${o.id} · ${o.cliente || ""}`, `com-${o.id}`); }
@@ -193,7 +169,6 @@ function notifProcessar(cache) {
     salvarVistos(v);
 }
 
-/** Abriu o sino: marca reagendadas + comerciais atuais como vistas; badge zera. */
 function marcarSinoVisto(cache) {
     if (!cache) return;
     const v = carregarVistos();
@@ -204,8 +179,6 @@ function marcarSinoVisto(cache) {
     atualizarBadgeNotif(0);
 }
 
-/** Checagem leve de novidade: só 1 linha (capturado_em mais recente). Se o robô
- *  rodou de novo, invalida o cache e recalcula (aí notifProcessar atualiza badge/pop-up). */
 let notifUltimoCap = null;
 async function notifChecarNovidade() {
     if (typeof supabaseClient === "undefined") return;
@@ -217,7 +190,7 @@ async function notifChecarNovidade() {
             if (typeof invalidarCacheOsPendentes === "function") invalidarCacheOsPendentes();
             await renderizarNotificacoes();
         }
-    } catch (e) { /* silencioso */ }
+    } catch (e) {  }
 }
 
 function atualizarBotaoAtivarNotif() {
@@ -233,7 +206,7 @@ function preencherPainelNotif() {
     const painel = document.getElementById("notifPainel");
     if (!painel || !notifCache) return;
     const corpo = painel.querySelector(".notif-corpo");
-    const novos = notifNovos(notifCache);   // quantas novas desde a última vez que o sino foi aberto
+    const novos = notifNovos(notifCache);
     const reag = conteudoGrupoNotif(NOTIF_GRUPOS[0], notifCache.reagendadas, novos.reag.length);
     const com = conteudoGrupoNotif(NOTIF_GRUPOS[1], notifCache.comerciais, novos.com.length);
     corpo.innerHTML = (reag + com) || `<p class="notif-vazio">Nada pendente por aqui. 🎉</p>`;
@@ -273,8 +246,8 @@ function abrirPainelNotif() {
         });
     }
     atualizarBotaoAtivarNotif();
-    preencherPainelNotif();          // renderiza com o "X novas" de antes de marcar
-    marcarSinoVisto(notifCache);     // abriu: tudo vira "visto", badge zera
+    preencherPainelNotif();
+    marcarSinoVisto(notifCache);
     posicionarPainelNotif();
     requestAnimationFrame(() => painel.classList.add("aberto"));
     document.getElementById("btnNotificacoes")?.setAttribute("aria-expanded", "true");
@@ -292,7 +265,6 @@ function alternarPainelNotif() {
     else abrirPainelNotif();
 }
 
-/** "Ver todas" de um grupo: popup com a lista completa (reusa o estilo do pop-up da Agenda IXC). */
 function abrirPopupNotif(grupoId) {
     document.querySelector(".notif-popup-fundo")?.remove();
     const grupo = NOTIF_GRUPOS.find(g => g.id === grupoId);
@@ -340,7 +312,7 @@ function registrarNotificacoes() {
         botao.setAttribute("aria-expanded", "false");
         botao.addEventListener("click", e => { e.stopPropagation(); alternarPainelNotif(); });
     }
-    // fecha ao clicar fora / Esc / rolar / redimensionar
+
     document.addEventListener("click", e => {
         const painel = document.getElementById("notifPainel");
         if (painel && painel.classList.contains("aberto") && !painel.contains(e.target) && e.target.closest("#btnNotificacoes") === null) fecharPainelNotif();
@@ -348,8 +320,6 @@ function registrarNotificacoes() {
     document.addEventListener("keydown", e => { if (e.key === "Escape") fecharPainelNotif(); });
     window.addEventListener("resize", posicionarPainelNotif);
 
-    // Poll leve: de 5 em 5 min vê se o robô trouxe dado novo e, se sim, recalcula
-    // (disparando os avisos do navegador pros itens novos).
     setInterval(notifChecarNovidade, 5 * 60 * 1000);
 }
 

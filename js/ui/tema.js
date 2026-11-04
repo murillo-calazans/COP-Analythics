@@ -1,12 +1,3 @@
-/**
- * ==========================================================
- * UI de Tema (claro/escuro)
- * ==========================================================
- * O cabeçalho é sempre navy (cor de marca fixa); só o conteúdo
- * alterna, via atributo data-tema na <html> + variáveis CSS
- * (ver css/style.css). Escolha persistida no localStorage.
- */
-
 const TEMA_CHAVE_STORAGE = "cop_analytics_tema";
 
 const TEMA_ICONE_LUA =

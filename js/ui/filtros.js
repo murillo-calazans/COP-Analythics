@@ -1,11 +1,3 @@
-/**
- * ==========================================================
- * UI de Filtros — Busca de OS (Auditoria)
- * ==========================================================
- * Só lê o campo de busca e pede o resultado ao AuditEngine —
- * nenhuma lógica de busca vive aqui.
- */
-
 function registrarBuscaAuditoria() {
     const form = document.getElementById("formBuscaAuditoria");
     const input = document.getElementById("buscaAuditoria");

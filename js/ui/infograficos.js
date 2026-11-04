@@ -1,24 +1,3 @@
-/**
- * ==========================================================
- * Infográficos das abas (cartões no topo de cada seção)
- * ==========================================================
- * Mesmo esquema da tela inicial (js/ui/paineloperacao.js): grade de
- * cartões (3 → 2 → 1 coluna) com anel/rosca, barras, colunas, barra
- * empilhada, quadradinhos (waffle), mini-indicadores e tabela. O conteúdo
- * que já existia em cada aba continua embaixo, intacto.
- *
- * Cada área registra o seu painel em INFOGRAFICOS (arquivos
- * js/ui/info-*.js): registrarInfografico("dashboard", async () => [cartoes]).
- * mostrarSecao (js/ui/navegacao.js) chama renderizarInfografico(nome) depois
- * de desenhar a aba; o container #ig-<secao> é criado logo abaixo do
- * cabeçalho da seção.
- *
- * Cartão: { titulo, sub, cor, icone, selo, span (2|3), blocos: [...] }.
- * Blocos (campo `t`): destaque · linhas · kpis · colunas · empilhada ·
- * waffle · tabela · nota. Item de linha/coluna pode ter `acao: () => …`
- * (clique abre a lista/filtra) — vira um botão.
- */
-
 const IG_CORES = {
     azul: "#2563eb", verde: "#059669", laranja: "#d97706", roxo: "#7c3aed",
     ciano: "#0891b2", vermelho: "#dc2626", cinza: "#94a3b8", rosa: "#db2777",
@@ -53,7 +32,7 @@ const IG = {
     pctDe(n, total) { return IG.pct(total ? n / total * 100 : 0); },
     real(v) { return `R$ ${(v || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`; },
     esc(s) { return typeof escaparHtml === "function" ? escaparHtml(String(s ?? "")) : String(s ?? ""); },
-    /** Top N de uma contagem: Map/objeto -> [{ rotulo, n }] em ordem decrescente. */
+
     contar(lista, chave, topo = 8) {
         const m = new Map();
         for (const item of lista) { const k = typeof chave === "function" ? chave(item) : item[chave]; if (k === null || k === undefined || k === "") continue; m.set(k, (m.get(k) ?? 0) + 1); }
@@ -65,15 +44,14 @@ const IG = {
         const m = Math.floor(v.length / 2);
         return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
     },
-    /** "SEM CONEXÃO / LOS (14)" -> "Sem conexão / los" (tira códigos e normaliza caixa). */
+
     assuntoCurto(a) {
         const s = String(a ?? "—").replace(/\s*\(\d+\)/g, "").trim();
         return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
     }
 };
 
-// ---------- desenho ----------
-let _igAcoes = [];   // funções dos itens clicáveis da última renderização (por container)
+let _igAcoes = [];
 
 function igAcao(fn) {
     if (typeof fn !== "function") return "";
@@ -162,7 +140,6 @@ function igCartao(c) {
     </section>`;
 }
 
-// ---------- registro e encaixe nas abas ----------
 const INFOGRAFICOS = {};
 let _igToken = 0;
 
@@ -170,7 +147,6 @@ function registrarInfografico(secoes, fn) {
     for (const s of [].concat(secoes)) INFOGRAFICOS[s] = fn;
 }
 
-/** Container #ig-<secao>, criado logo abaixo do cabeçalho da seção (ou no topo dela). */
 function containerInfografico(nome) {
     let alvo = document.getElementById(`ig-${nome}`);
     if (alvo) return alvo;
@@ -200,7 +176,7 @@ async function renderizarInfografico(nome) {
         if (token === _igToken) alvo.innerHTML = "";
         return;
     }
-    if (token !== _igToken) return;   // trocou de aba enquanto calculava
+    if (token !== _igToken) return;
     if (!cartoes || !cartoes.length) { alvo.innerHTML = ""; return; }
     _igAcoes = [];
     alvo.innerHTML = `<div class="ig-grade">${cartoes.map(igCartao).join("")}</div>`;
@@ -208,7 +184,6 @@ async function renderizarInfografico(nome) {
     alvo.querySelectorAll("[data-ig-acao]").forEach(el => el.addEventListener("click", () => acoes[+el.dataset.igAcao]?.()));
 }
 
-/** Atalho pros painéis que leem as OS do recorte (Filtro Global): null se não há base carregada. */
 function igLinhasDoRecorte() {
     if (!APP?.status?.baseCarregada || !APP.dados?.ordens?.size) return null;
     const ordens = FiltroEngine.ordensFiltradas();

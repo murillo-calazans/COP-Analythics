@@ -1,22 +1,3 @@
-/**
- * ==========================================================
- * Mapa de calor das OS (Gestão de Relatórios)
- * ==========================================================
- * Onde estão as ordens de serviço do recorte do Filtro Global (período,
- * assunto, cidade, setor…). Cada OS vai pro mapa por, nesta ordem:
- *   0. a coordenada da própria OS no IXC (ordens.lat/lng, patch-30), se
- *      fizer sentido (não zerada e a menos de 60 km da cidade dela);
- *   1. a CTO do login no IXC (clientes_cto + posição da caixa em ctos,
- *      patch-29) — o ponto mais preciso;
- *   2. o bairro, pelo mapa de regiões do Agendador (mesma busca tolerante
- *      a grafia do Motor.localizarNoMapa);
- *   3. o centro da cidade (média dos bairros dela no mapa).
- * Ao lado, o ranking de regiões e bairros com mais OS; clicar centraliza.
- *
- * Leaflet + leaflet.heat vêm do cdnjs só quando a aba abre. A 1ª pintura
- * usa bairro/cidade (instantâneo) e depois refina com as CTOs.
- */
-
 const MAPA_CALOR_LIBS = {
     css: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
     js: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
@@ -24,8 +5,6 @@ const MAPA_CALOR_LIBS = {
 };
 const URL_MAPA_REGIOES_CALOR = "https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html";
 
-// Cidades atendidas que não estão no mapa de regiões (sem bairros): centro
-// aproximado da cidade, último recurso pra OS não ficar fora do mapa.
 const CENTRO_CIDADES_EXTRA = {
     "petropolis": [-22.5050, -43.1787], "teresopolis": [-22.4165, -42.9752],
     "guaratingueta": [-22.8164, -45.1925], "queluz": [-22.5372, -44.7744],
@@ -38,14 +17,14 @@ const CENTRO_CIDADES_EXTRA = {
     "armacao dos buzios": [-22.7469, -41.8817], "tangua": [-22.7423, -42.7202]
 };
 
-let mapaCalor = null;            // L.Map
-let camadaCalor = null;          // L.heatLayer
-let mapaCalorRegioes = null;     // { idx, centroRegiao: Map, centroCidade: Map }
+let mapaCalor = null;
+let camadaCalor = null;
+let mapaCalorRegioes = null;
 let mapaCalorToken = 0;
 let mapaCalorPrimeiroEnquadre = true;
-let mapaCalorOrdens = null;      // recorte do Filtro Global da última renderização
-let mapaCalorPosicao = null;     // login -> posição da CTO (refino), reaproveitado ao trocar o assunto
-let mapaCalorAssunto = "";       // filtro de assunto próprio do mapa ("" = todos)
+let mapaCalorOrdens = null;
+let mapaCalorPosicao = null;
+let mapaCalorAssunto = "";
 
 function carregarScriptCalor(src) {
     return new Promise((ok, erro) => {
@@ -66,20 +45,19 @@ async function garantirLibsMapaCalor() {
     if (typeof L.heatLayer === "undefined") await carregarScriptCalor(MAPA_CALOR_LIBS.heat);
 }
 
-/** Mapa de regiões (bairros com coordenada): o do site, senão a cópia do Agendador. */
 async function carregarRegioesMapaCalor() {
     if (mapaCalorRegioes) return mapaCalorRegioes;
     let dados = null;
     try {
         const r = await fetch(URL_MAPA_REGIOES_CALOR, { cache: "no-store" });
         if (r.ok) dados = Motor.lerMapaRegioes(await r.text());
-    } catch { /* sem o site: usa a cópia */ }
+    } catch {  }
     if (!dados) {
         await carregarScriptCalor("js/agendador/mapa-regioes-dados.js");
         dados = window.MAPA_REGIOES_PADRAO ?? null;
     }
     const idx = Motor.indiceMapa(dados);
-    // centro de cada região e de cada cidade = média dos bairros dela
+
     const soma = new Map();
     const acumular = (chave, it) => {
         const s = soma.get(chave) ?? { lat: 0, lng: 0, n: 0 };
@@ -97,7 +75,6 @@ async function carregarRegioesMapaCalor() {
     return (mapaCalorRegioes = { idx, centro });
 }
 
-/** Coordenada da OS no IXC, se plausível: perto (60 km) da cidade/bairro dela. */
 function coordenadaPropriaOs(ordem, loc, centro) {
     const lat = Number(ordem.lat), lng = Number(ordem.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || !lat || !lng) return null;
@@ -106,13 +83,12 @@ function coordenadaPropriaOs(ordem, loc, centro) {
     return { lat, lng };
 }
 
-/** Ponto de cada OS + de onde veio. `posicaoPorLogin` (opcional) = login -> {lat,lng} da CTO. */
 function localizarOrdensMapaCalor(ordens, posicaoPorLogin) {
     const { idx, centro } = mapaCalorRegioes;
     const pontos = [];
     const fonte = { os: 0, cto: 0, bairro: 0, cidade: 0, sem: 0 };
     const porRegiao = new Map(), porBairro = new Map();
-    const memo = new Map(); // cidade|bairro -> resultado de localizarNoMapa (muitas OS repetem)
+    const memo = new Map();
 
     for (const ordem of ordens.values()) {
         const chave = `${ordem.cidade ?? ""}|${ordem.bairro ?? ""}`;
@@ -176,13 +152,12 @@ async function renderizarMapaCalor() {
         L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
             { maxZoom: 16 }).addTo(mapaCalor);
     }
-    setTimeout(() => mapaCalor.invalidateSize(), 0); // a seção estava escondida
+    setTimeout(() => mapaCalor.invalidateSize(), 0);
 
     mapaCalorOrdens = FiltroEngine.ordensFiltradas();
     preencherAssuntosMapaCalor();
     redesenharMapaCalor(false);
 
-    // refino: posição da CTO de cada login (se o cadastro de CTOs existir)
     try {
         const posicao = await posicoesCtoDosLogins([...mapaCalorOrdens.values()].map(o => o.login));
         if (token !== mapaCalorToken) return;
@@ -195,7 +170,6 @@ async function renderizarMapaCalor() {
     }
 }
 
-/** Recorte do Filtro Global + o assunto escolhido em cima do mapa. */
 function ordensDoMapaCalor() {
     if (!mapaCalorAssunto) return mapaCalorOrdens;
     return new Map([...mapaCalorOrdens].filter(([, o]) => (o.assunto ?? "") === mapaCalorAssunto));
@@ -206,7 +180,6 @@ function redesenharMapaCalor(refinado) {
     desenharMapaCalor(localizarOrdensMapaCalor(ordens, mapaCalorPosicao), ordens.size, refinado || !!mapaCalorPosicao);
 }
 
-/** Assuntos do recorte atual, do mais frequente pro menos (com a contagem). */
 function preencherAssuntosMapaCalor() {
     const select = document.getElementById("filtroAssuntoMapaCalor");
     if (!select) return;
@@ -226,7 +199,6 @@ function preencherAssuntosMapaCalor() {
     select.value = mapaCalorAssunto;
 }
 
-/** login (minúsculo) -> {lat,lng} da CTO dele no IXC; null se o cadastro de CTOs não existe/está vazio. */
 async function posicoesCtoDosLogins(logins) {
     if (typeof carregarPosicoesCtos !== "function") return null;
     const posicoes = await carregarPosicoesCtos();
@@ -247,8 +219,7 @@ function desenharMapaCalor(r, totalOrdens, refinado) {
     const pct = n => totalOrdens ? `${Math.round(n / totalOrdens * 100)}%` : "0%";
 
     if (camadaCalor) mapaCalor.removeLayer(camadaCalor);
-    // escala relativa ao volume: o vermelho fica pras áreas mais densas do recorte
-    // (com max fixo em 1, qualquer bairro com 2 OS já saturava)
+
     const max = Math.max(1, r.pontos.length / 150);
     camadaCalor = L.heatLayer(r.pontos.map(([a, b]) => [a, b, 1]),
         { radius: 24, blur: 18, maxZoom: 13, max, minOpacity: 0.35,

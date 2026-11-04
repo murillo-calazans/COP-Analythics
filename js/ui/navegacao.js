@@ -1,18 +1,3 @@
-/**
- * ==========================================================
- * Navegação entre Seções
- * ==========================================================
- * Só troca qual <section class="secao"> fica visível — nenhum
- * cálculo acontece aqui, é puramente apresentação. Seletor é
- * global (não preso a "nav.menu") porque o botão de
- * Configurações vive fora da nav, junto dos utilitários.
- *
- * Cada seção pertence a um módulo do menu lateral (ver
- * js/ui/menulateral.js); o menu do topo só mostra as abas do
- * módulo aberto. A seção atual fica no endereço (#auditoria), pra
- * dar pra abrir direto de outra página ou de um favorito.
- */
-
 const MODULO_DA_SECAO = {
     "inicio": "inicio",
     "dashboard": "ordens",
@@ -39,11 +24,8 @@ const MODULO_DA_SECAO = {
     "configuracoes": "admin"
 };
 
-// Fora do controle de abas por usuário (Configurações > Acesso dos usuários):
-// Início é de todos; Usuários/Configurações já têm a trava própria.
 const SECOES_SEMPRE_LIBERADAS = ["inicio", "usuarios", "configuracoes"];
 
-/** Aba liberada pro usuário logado? (perfis.abas_visiveis, patch-28; null = todas; admin vê tudo) */
 function podeVerSecao(nome) {
     if (SECOES_SEMPRE_LIBERADAS.includes(nome)) return true;
     const abas = APP.usuario?.abasVisiveis;
@@ -51,12 +33,10 @@ function podeVerSecao(nome) {
     return abas.includes(nome);
 }
 
-/** 1ª aba liberada de um módulo (null se nenhuma). */
 function primeiraSecaoLiberada(modulo) {
     return Object.keys(MODULO_DA_SECAO).find(s => MODULO_DA_SECAO[s] === modulo && podeVerSecao(s)) ?? null;
 }
 
-// Tempos, Indicadores e Gestão COP saem do mesmo cálculo (js/ui/indicadores.js).
 const SECOES_INDICADORES = ["tempos", "indicadores", "gestao-cop"];
 
 function registrarNavegacao() {
@@ -68,7 +48,6 @@ function registrarNavegacao() {
     window.addEventListener("hashchange", abrirSecaoDoEndereco);
     atualizarMenuDoModulo("inicio");
 
-    // Clicar na logo volta pra tela inicial.
     const logo = document.querySelector("header .logo");
     if (logo) {
         logo.style.cursor = "pointer";
@@ -81,15 +60,10 @@ function secaoAtiva() {
     return document.querySelector("section.secao.ativa")?.id.replace("secao-", "") ?? "inicio";
 }
 
-/** Redesenha a seção aberta — usado quando os dados terminam de carregar. */
 function renderizarSecaoAtiva() {
     mostrarSecao(secaoAtiva());
 }
 
-/**
- * Abre a seção pedida no endereço (index.html#alertas). Chamado ao
- * terminar de carregar os dados (js/core/app.js) e quando o # muda.
- */
 function abrirSecaoDoEndereco() {
     const nome = decodeURIComponent(location.hash.slice(1));
     if (nome && MODULO_DA_SECAO[nome] && !document.getElementById(`secao-${nome}`)?.classList.contains("ativa")) {
@@ -100,7 +74,6 @@ function abrirSecaoDoEndereco() {
 function atualizarMenuDoModulo(nome) {
     const modulo = MODULO_DA_SECAO[nome] || "ordens";
 
-    // Abas do topo: só as do módulo atual; módulo de uma tela só não mostra aba.
     const abas = document.querySelectorAll("nav.menu [data-secao]");
     const doModulo = [...abas].filter(b => MODULO_DA_SECAO[b.dataset.secao] === modulo && podeVerSecao(b.dataset.secao));
     abas.forEach(b => { b.hidden = doModulo.length < 2 || !doModulo.includes(b); });
@@ -109,21 +82,15 @@ function atualizarMenuDoModulo(nome) {
 }
 
 function mostrarSecao(nome) {
-    // Gestão de Terceiras é só pra admin/editor — barra o acesso por URL direta
-    // (#terceiras, #terceiras-lpu…) de quem é leitor, mandando pro Início.
+
     if (MODULO_DA_SECAO[nome] === "terceiras" && typeof podeEditarOperacao === "function" && !podeEditarOperacao()) {
         return mostrarSecao("inicio");
     }
 
-    // Aba bloqueada pro usuário (link, favorito, tile do Início…): vai pra
-    // 1ª aba liberada do mesmo módulo, senão pro Início.
     if (!podeVerSecao(nome)) {
         return mostrarSecao(primeiraSecaoLiberada(MODULO_DA_SECAO[nome]) ?? "inicio");
     }
 
-    // Filtro Global isolado por aba: ao trocar de MÓDULO, o filtro volta pro
-    // padrão (mês atual), pra o recorte de um relatório não vazar pro outro.
-    // Dentro do mesmo módulo (ex.: Dashboard -> Técnicos) o filtro é mantido.
     const moduloFiltro = MODULO_DA_SECAO[nome] || "ordens";
     if (APP.moduloFiltroAtual && APP.moduloFiltroAtual !== moduloFiltro) {
         APP.filtrosGlobais = {
@@ -160,10 +127,10 @@ function mostrarSecao(nome) {
     if (nome === "mapa-calor") renderizarMapaCalor();
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "agenda-hoje") {
-        renderizarAgendaHoje();   // deixa a Agenda IA pronta (aba hoje escondida por padrão)
-        if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("aberto");   // abre já em "Em aberto"
+        renderizarAgendaHoje();
+        if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("aberto");
     }
-    // Infográficos no topo da aba (js/ui/infograficos.js); o conteúdo de sempre continua embaixo.
+
     if (typeof renderizarInfografico === "function") renderizarInfografico(nome);
     if (nome === "usuarios") renderizarAdminUsuarios();
     if (nome === "terceiras") renderizarTerceirasPainel();

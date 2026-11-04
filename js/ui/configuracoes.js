@@ -1,9 +1,3 @@
-/**
- * ==========================================================
- * UI de Configurações (mapeamento de colunas)
- * ==========================================================
- */
-
 function preencherFormularioConfig() {
     document.querySelectorAll("#formConfiguracoes [data-config]").forEach(input => {
         input.value = obterValorConfigPorCaminho(input.dataset.config) ?? "";

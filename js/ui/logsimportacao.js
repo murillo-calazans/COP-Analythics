@@ -1,18 +1,3 @@
-/**
- * ==========================================================
- * UI de Logs (Importação + Login)
- * ==========================================================
- * Duas exibições:
- * 1. Dentro do popup de Importar Dados, quais arquivos já foram
- *    carregados no banco compartilhado — nome, quem, quando, resumo.
- * 2. Popup dedicado de Logs (botão no cabeçalho, admin-only), com
- *    abas "Logins" e "Arquivos" — a de Arquivos reaproveita a mesma
- *    renderizarLogsImportacao() acima, só que num container diferente.
- * Só leitura aqui; quem grava cada log é js/services/importador.js
- * (arquivos) e js/ui/login.js (logins), na hora que acontece.
- */
-
-/** Abre o popup de Importar Dados já com a lista de logs atualizada. */
 function abrirModalImportar() {
     abrirModal("modalImportar");
     renderizarLogsImportacao();
@@ -76,7 +61,6 @@ function resumoLogImportacao(log) {
         (e.linhasIgnoradas > 0 ? ` (${e.linhasIgnoradas} linha(s) ignorada(s) sem ID)` : "");
 }
 
-/** Abre o popup dedicado de Logs, sempre começando na aba Logins. */
 function abrirModalLogs() {
     abrirModal("modalLogs");
     alternarAbaLogs("logins");

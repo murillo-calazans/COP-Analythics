@@ -1,37 +1,7 @@
-/**
- * ==========================================================
- * Painel de TV (tv.html) — visão de parede, ao vivo
- * ==========================================================
- * Página AUTÔNOMA (fora do app) pra deixar numa TV da operação. Mostra,
- * em tela cheia e letra grande, o retrato do momento:
- *   · Clientes fora (logins ativos offline) e possíveis rompimentos
- *   · Equipes em campo (deslocamento / execução)
- *   · Reagendadas hoje e ordens comerciais em aberto
- *   · Pedidos de prioridade (urgência escrita nas mensagens)
- *   · Ordens em aberto por assunto e por cidade
- *
- * Dados do robô (os_pendentes + clientes_offline). O robô atualiza a
- * os_pendentes de hora em hora e a clientes_offline a cada 30 min, então
- * a TV só rebaixa a os_pendentes quando o `capturado_em` muda (egress
- * baixo — ver memória egress_incremental); a offline (pequena) recarrega
- * a cada ciclo.
- *
- * Reaproveita os motores do app (carregados no tv.html): Motor
- * (assuntoEhDeCampo), PrioridadeEngine (pedido de urgência) e o
- * calcularRompimentos() do rompimentos.js — por isso a TV bate com o
- * chip "Possíveis rompimentos" e com o painel de início.
- *
- * Os helpers abaixo (ixcNorm, ixcDataBR, escaparHtml, hojeMeiaNoite,
- * buscarOsPendentesCacheado…) são GLOBAIS de propósito: o rompimentos.js
- * conta com eles (no app vêm de outros arquivos que a TV não carrega).
- */
-
-// -------- helpers (globais; o rompimentos.js usa estes nomes) --------
 function ixcNorm(t) {
     return String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
 }
 
-/** "dd/mm/aaaa HH:ii:ss" -> Date (com hora, se houver) ou null. */
 function ixcDataBR(s) {
     const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
     return m && m[3] !== "0000"
@@ -47,15 +17,11 @@ function escaparHtml(texto) {
         .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-/** "SEM CONEXÃO / LOS (14)" -> "Sem conexão / LOS" */
 function ixcAssuntoCurto(assunto) {
     const s = String(assunto || "").replace(/\s*\(\d+\)/g, "").trim().toLowerCase();
     return (s.charAt(0).toUpperCase() + s.slice(1)).replace(/\blos\b/g, "LOS");
 }
 
-// -------- os_pendentes: leitura + cache por capturado_em --------
-// Carrega por keyset (id > último) em páginas de 1000 — simples e sem
-// timeout de offset fundo com a RLS.
 async function buscarOsPendentes() {
     if (typeof supabaseClient === "undefined") return [];
     const linhas = [];
@@ -72,7 +38,7 @@ async function buscarOsPendentes() {
     return linhas;
 }
 
-var _osCache = null;             // Promise das linhas (invalidada quando capturado_em muda)
+var _osCache = null;
 async function buscarOsPendentesCacheado() {
     if (_osCache) return _osCache;
     _osCache = buscarOsPendentes().catch(e => { _osCache = null; throw e; });
@@ -80,20 +46,18 @@ async function buscarOsPendentesCacheado() {
 }
 function invalidarCacheOsPendentes() { _osCache = null; }
 
-// -------- app da TV --------
 const TV = (() => {
-    const CICLO_MS = 90 * 1000;        // recalcula os dados a cada 90s
-    const ROTACAO_MS = 30 * 1000;      // troca de tela (slide) a cada 30s
-    const TETO_BARRAS = 9;             // barras por gráfico (assunto/cidade)
+    const CICLO_MS = 90 * 1000;
+    const ROTACAO_MS = 30 * 1000;
+    const TETO_BARRAS = 9;
 
-    let capturadoOs = null;            // último capturado_em visto (os_pendentes)
+    let capturadoOs = null;
     let timer = null, relogioTimer = null, rotTimer = null;
 
     const $ = id => document.getElementById(id);
     const fmt = n => Number(n || 0).toLocaleString("pt-BR");
     const horaDe = d => d ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
 
-    /** Técnico (equipe de campo) que iniciou o deslocamento — lido do texto do evento. */
     function tecnicoDoDeslocamento(msg) {
         const m = String(msg || "").match(/usu[aá]rio\s+(.+?)\s*,\s*iniciou o deslocamento/i);
         return m ? m[1].trim() : null;
@@ -101,13 +65,9 @@ const TV = (() => {
     const ehCampo = assunto => (typeof Motor !== "undefined" && Motor.assuntoEhDeCampo)
         ? Motor.assuntoEhDeCampo(assunto) : true;
 
-    // Tipos de ordem que o COP NÃO quer ver na TV (trabalho de escritório/logística,
-    // não é reparo/instalação de rua): auditoria, exclusão de acesso, pós-terceirizada,
-    // retirada, recolhimento. Casado no assunto normalizado (sem acento, minúsculo).
     const TV_EXCLUIR = /auditoria|exclusao de acesso|pos.?terceiriz|retirada|recolhimento/;
     const tvOsAparece = assunto => !TV_EXCLUIR.test(ixcNorm(assunto));
 
-    // --- 1 passada na os_pendentes -> OS agregadas por id ---
     function agregarOs(linhas) {
         const os = new Map();
         let capturado = null;
@@ -143,9 +103,8 @@ const TV = (() => {
         return { os, capturado };
     }
 
-    // --- equipes em campo agora (deslocamento / execução) ---
     function equipesEmCampo(lista) {
-        const desloc = new Map(), exec = new Map();   // técnico -> [OS]
+        const desloc = new Map(), exec = new Map();
         for (const o of lista) {
             const st = ixcNorm(o.statusUlt);
             const isDesloc = st === "deslocamento";
@@ -165,7 +124,6 @@ const TV = (() => {
         return { desloc: resumo(desloc), exec: resumo(exec), osDesloc: somaOs(desloc), osExec: somaOs(exec) };
     }
 
-    // --- pedidos de prioridade (urgência no texto), por situação ---
     function prioridades(lista) {
         const itens = [];
         if (typeof PrioridadeEngine === "undefined") return { itens, semAgenda: 0, insistentes: 0 };
@@ -194,11 +152,6 @@ const TV = (() => {
         };
     }
 
-    // --- técnicos com agenda HOJE que ainda não saíram (nem desloc nem execução) ---
-    // O técnico de uma OS agendada não vem direto na os_pendentes (COLAB=0). Quem
-    // resolve é o Motor (nomeColab, via evento 5), igual à Agenda IXC do app. Então
-    // rodamos Motor.montarOS pra pegar o técnico de cada OS; "parado" = técnico com
-    // OS marcada pra hoje mas que NÃO aparece em deslocamento/execução neste momento.
     function tecnicosParados(linhas, visiveis, equipes) {
         if (typeof Motor === "undefined" || typeof Motor.montarOS !== "function") return [];
         let osM;
@@ -210,24 +163,23 @@ const TV = (() => {
             const t = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
             if (t) tecPorId.set(String(o.id), t);
         }
-        const emCampo = new Set();                       // quem já saiu (tem OS em desloc/exec agora)
+        const emCampo = new Set();
         equipes.desloc.concat(equipes.exec).forEach(e => emCampo.add(ixcNorm(e.nome)));
 
         const hoje = hojeMeiaNoite().getTime(), amanha = hoje + 86400000;
         const ehHoje = d => d && d.getTime() >= hoje && d.getTime() < amanha;
-        const porTec = new Map();                        // técnico -> nº de OS de hoje ainda paradas
+        const porTec = new Map();
         for (const o of visiveis) {
             if (!ehHoje(o.agendamento)) continue;
             const st = ixcNorm(o.statusUlt);
-            if (st === "deslocamento" || st.includes("execu")) continue;   // essa OS já está em campo
+            if (st === "deslocamento" || st.includes("execu")) continue;
             const t = tecPorId.get(String(o.id));
-            if (!t || emCampo.has(ixcNorm(t))) continue;                   // sem técnico, ou já saiu
+            if (!t || emCampo.has(ixcNorm(t))) continue;
             porTec.set(t, (porTec.get(t) || 0) + 1);
         }
         return [...porTec.entries()].map(([nome, n]) => ({ nome, n })).sort((a, b) => b.n - a.n);
     }
 
-    // --- contagens por chave (assunto/cidade) ---
     function contarPor(lista, chaveFn) {
         const m = new Map();
         for (const o of lista) {
@@ -237,7 +189,6 @@ const TV = (() => {
         return [...m.entries()].map(([rot, n]) => ({ rot, n })).sort((a, b) => b.n - a.n);
     }
 
-    // ---------------- render ----------------
     const SIT_COR = {
         "Sem agendamento": "#dc2626", "Agendada": "#2563eb", "Assumida": "#7c3aed",
         "Em deslocamento": "#0891b2", "Em execução": "#b7791f"
@@ -272,10 +223,8 @@ const TV = (() => {
             </div>`).join("")}</div>`;
     }
 
-    // ===== telas (slides) em tela cheia, girando sozinhas =====
     const ROMP_ICO = { energia: "⚡", rompimento: "✂️", misto: "⚠️", reset: "↻", outro: "⚠️" };
 
-    /** Rosca/anel em SVG (igual ao infográfico do COP): fatias = [{n,cor}]. */
     function donut(fatias, centro, sub) {
         const cx = 90, cy = 90, r = 68, larg = 22, circ = 2 * Math.PI * r;
         const total = fatias.reduce((s, f) => s + f.n, 0);
@@ -294,7 +243,6 @@ const TV = (() => {
         </svg>`;
     }
 
-    /** Linha com bolinha colorida + rótulo + valor + barra proporcional (igual ao COP). */
     function barLine(rot, n, max, cor) {
         const w = max ? Math.min(100, n / max * 100) : 0;
         return `<div class="tv-line">
@@ -305,7 +253,6 @@ const TV = (() => {
         </div>`;
     }
 
-    /** Tela 1: Panorama — infográfico estilo COP (rosca de fechamentos + barras coloridas). */
     function slidePanorama(m) {
         const r = m.romp, eq = m.equipes, pr = m.prio;
         const nFe = m.finalizadas.length, nAg = m.agendadasHoje, feitas = Math.min(nFe, nAg);
@@ -335,7 +282,6 @@ const TV = (() => {
         </div>`;
     }
 
-    /** Tela: finalizadas hoje (OS fechadas no dia). */
     function slideFinalizadas(m) {
         const fin = m.finalizadas;
         if (!fin.length) return `<div class="tv-um"><p class="tv-vazio">Nenhuma OS finalizada hoje ainda.</p></div>`;
@@ -350,7 +296,6 @@ const TV = (() => {
         return `<div class="tv-um">${itens}</div>`;
     }
 
-    /** Tela 2: possíveis rompimentos — grupo + os logins caídos (cliente · login · OS). */
     function slideRompimentos(m) {
         const r = m.romp;
         if (!r.clusters.length)
@@ -383,7 +328,6 @@ const TV = (() => {
         return `<div class="tv-rm-grade">${cards}</div>`;
     }
 
-    /** Tela 3: equipes em campo (deslocamento / execução / com agenda mas parados). */
     function slideEquipes(m) {
         const eq = m.equipes, par = m.parados || [];
         if (!eq.desloc.length && !eq.exec.length && !par.length)
@@ -401,7 +345,6 @@ const TV = (() => {
         </div>`;
     }
 
-    /** Tela 4: pedidos de prioridade. */
     function slidePrioridade(m) {
         const pr = m.prio;
         if (!pr.itens.length)
@@ -417,7 +360,6 @@ const TV = (() => {
         return `<div class="tv-um">${itens}</div>`;
     }
 
-    /** Tela 5: comerciais + reagendadas hoje. */
     function slideComReag(m) {
         const comLinha = o => `<div class="tv-item">
             <div class="tv-item-txt">
@@ -431,7 +373,6 @@ const TV = (() => {
         return `<div class="tv-duas">${col("🏢 Comerciais em aberto", m.comerciais)}${col("↻ Reagendadas hoje", m.reagendadas)}</div>`;
     }
 
-    /** Tela "Painel geral": tudo numa tela só (bom pra deixar fixo numa TV). */
     function miniKpiG(n, rot, perigo) {
         return `<div class="tvg-kpi${perigo ? " perigo" : ""}"><div class="n">${n}</div><div class="r">${escaparHtml(rot)}</div></div>`;
     }
@@ -531,7 +472,6 @@ const TV = (() => {
         rotTimer = setInterval(() => { if (!pausado) irPara(slideIx + 1); }, ROTACAO_MS);
     }
 
-    // Zoom da TV (cada navegador lembra o seu; pode vir no link ?zoom=1.2).
     const ZOOM_CHAVE = "cop_tv_zoom";
     let zoom = 1;
     function carregarZoom() {
@@ -550,11 +490,10 @@ const TV = (() => {
         aplicarZoom();
     }
 
-    /** Liga/desliga o giro automático das telas (botão do rodapé e barra de espaço). */
     function alternarGiro() {
         pausado = !pausado;
         atualizarBotaoGiro();
-        if (!pausado) reiniciarRotacao();   // retomou: reinicia o relógio do giro
+        if (!pausado) reiniciarRotacao();
     }
     function atualizarBotaoGiro() {
         const b = $("tvGira");
@@ -566,19 +505,15 @@ const TV = (() => {
         if (p) p.hidden = !pausado;
     }
 
-    // ---------------- ciclo ----------------
     async function checarNovidadeOs() {
         try {
             const { data } = await supabaseClient.from("os_pendentes")
                 .select("capturado_em").order("capturado_em", { ascending: false }).limit(1);
             const cap = data && data[0] && data[0].capturado_em;
             if (cap && cap !== capturadoOs) { capturadoOs = cap; invalidarCacheOsPendentes(); }
-        } catch (e) { /* silencioso */ }
+        } catch (e) {  }
     }
 
-    // Finalizadas HOJE — saem da os_pendentes quando fecham, então vêm da tabela
-    // `ordens` (já reconstruída). Filtro no servidor por data_fechamento >= meia-noite
-    // de hoje (barato: só os fechamentos do dia, não a tabela toda).
     async function buscarFinalizadasHoje() {
         try {
             const hoje = hojeMeiaNoite().toISOString();
@@ -594,16 +529,14 @@ const TV = (() => {
     }
 
     async function recalcular() {
-        await checarNovidadeOs();                               // invalida o cache se o robô rodou
+        await checarNovidadeOs();
         const [linhas, romp, finalizadas] = await Promise.all([
-            buscarOsPendentesCacheado(),                        // tudo (1x por hora, via cache)
+            buscarOsPendentesCacheado(),
             (typeof calcularRompimentos === "function" ? calcularRompimentos() : Promise.resolve({ clusters: [], total: 0, totalOffline: 0 })),
             buscarFinalizadasHoje()
         ]);
         const { os, capturado } = agregarOs(linhas);
 
-        // OS em aberto que a TV mostra: tira finalizadas e os tipos de escritório
-        // (auditoria, exclusão de acesso, pós-terceirizada, retirada, recolhimento).
         const visiveis = [...os.values()].filter(o =>
             ixcNorm(o.statusUlt) !== "finalizada" && tvOsAparece(o.assunto));
 
@@ -633,7 +566,7 @@ const TV = (() => {
     async function tick() {
         try {
             dados = await recalcular();
-            pintar();                              // repinta a tela atual com os dados novos
+            pintar();
             $("tvErro").hidden = true;
         } catch (e) {
             console.warn("TV:", e);
@@ -653,9 +586,7 @@ const TV = (() => {
         $("tvPainel").hidden = false;
         relogio();
         relogioTimer = setInterval(relogio, 20000);
-        // Link pode fixar uma TV numa tela: tv.html?tela=geral (ou rompimentos,
-        // equipes, prioridade, finalizadas, comerciais, assunto, cidade, panorama),
-        // ou tv.html?tela=3. Começa parada nessa tela (a outra TV fica girando).
+
         const fixo = new URLSearchParams(location.search).get("tela");
         if (fixo) {
             const i = /^\d+$/.test(fixo) ? (+fixo - 1) : SLIDES.findIndex(s => s.id === fixo.toLowerCase());
@@ -666,8 +597,8 @@ const TV = (() => {
         atualizarBotaoGiro();
         zoom = carregarZoom();
         aplicarZoom();
-        pintar();                 // mostra "Carregando…" até o 1º tick
-        reiniciarRotacao();       // começa a girar as telas (respeita `pausado`)
+        pintar();
+        reiniciarRotacao();
         tick();
         timer = setInterval(tick, CICLO_MS);
 
@@ -675,7 +606,6 @@ const TV = (() => {
         $("tvZoomMais")?.addEventListener("click", () => mudarZoom(0.1));
         $("tvZoomMenos")?.addEventListener("click", () => mudarZoom(-0.1));
 
-        // Controles de teclado: ← → troca de tela; espaço gira/para; + / − zoom.
         document.addEventListener("keydown", e => {
             if (e.key === "ArrowRight") irPara(slideIx + 1);
             else if (e.key === "ArrowLeft") irPara(slideIx - 1);
@@ -685,7 +615,6 @@ const TV = (() => {
         });
     }
 
-    // ---------------- login (gate) ----------------
     async function entrar(email, senha) {
         const { error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
         if (error) {
@@ -704,7 +633,7 @@ const TV = (() => {
             e.preventDefault();
             entrar($("tvEmail").value.trim().toLowerCase(), $("tvSenha").value);
         });
-        // Olhinho: mostra/oculta a senha (pega autofill/Caps Lock errado).
+
         $("tvVerSenha")?.addEventListener("click", () => {
             const inp = $("tvSenha");
             inp.type = inp.type === "password" ? "text" : "password";
@@ -713,7 +642,7 @@ const TV = (() => {
     }
 
     async function init() {
-        // Botões de tela cheia / sair (discretos, no rodapé)
+
         $("tvFull")?.addEventListener("click", () => {
             if (document.fullscreenElement) document.exitFullscreen();
             else document.documentElement.requestFullscreen?.();

@@ -1,13 +1,3 @@
-/**
- * ==========================================================
- * Utilitários de Texto
- * ==========================================================
- * Usados para casar nomes de colunas configurados em
- * js/config/colunas.js com os cabeçalhos reais da planilha,
- * mesmo quando maiúsculas/minúsculas ou acentuação variam
- * (ex.: "Descrição" bate com "DESCRICAO" e "descrição").
- */
-
 function normalizarTexto(texto) {
     return String(texto)
         .normalize("NFD")

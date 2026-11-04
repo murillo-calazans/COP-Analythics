@@ -1,28 +1,3 @@
-/**
- * ==========================================================
- * UI de CTOs e Lacres (módulo Gestão de Clientes)
- * ==========================================================
- * Toda OS de instalação (também transferência de endereço e mudança de
- * tecnologia) cujo texto de fechamento traz um número de LACRE vira uma
- * linha: OS, Cliente, Diagnóstico, Login, CTO (localização), Porta,
- * Lacre e Status (Pendente/Cadastrado) — mesma estrutura da antiga
- * ferramenta avulsa cadastro-instalacao.html, mas lendo direto das OS
- * já importadas, sem subir planilha.
- *
- * O técnico preenche o fechamento sempre no mesmo modelo ("NUMERO DO
- * LACRE: 123 POTÊNCIA: -20 PORTA DA CTO: 4 LOCALIZAÇÃO DA CTO: ...");
- * os campos saem por posição (ver extrairCamposFechamentoCto). As OS de
- * AUDITORIA INSTALAÇÃO/TRANSFERÊNCIA ficam de fora: elas repetem o texto
- * da OS original ("Descrição OS anterior") e duplicariam a instalação.
- *
- * Status e correções manuais (login/CTO/porta/lacre) ficam no Supabase
- * (tabela ctos_lacres_cadastro, database/patch-24-ctos-lacres.sql),
- * iguais pra todos. Leitor só vê; admin/editor edita.
- *
- * Independente do Filtro Global — filtro próprio (período, busca,
- * status, diagnóstico, tipo), igual Alertas e Ordens.
- */
-
 const ROTULOS_FECHAMENTO_CTO = [
     { chave: "organizado", regex: /DEIXOU\s+O\s+LOCAL\s+ORGANIZADO\s*\?\s*(?:SIM|N[ÃA]O)?\s*\([^)]*\)\s*(?:SIM|N[ÃA]O)?\s*\([^)]*\)/i },
     { chave: "lacre", regex: /N[UÚ]MERO\s+DO\s+LACRE\s*:?/i },
@@ -34,9 +9,6 @@ const ROTULOS_FECHAMENTO_CTO = [
     { chave: "observacoes", regex: /OBSERVA[ÇC](?:[ÕO]ES|[ÃA]O)\s*:?/i }
 ];
 
-// Fora do modelo ("Porta 1 Cto -22,5... OBS: ..."): só vale quando o rótulo
-// oficial do mesmo campo não aparece, e nunca dentro de outro rótulo já achado
-// (o "CTO" de "PORTA DA CTO", por exemplo).
 const ROTULOS_FECHAMENTO_CTO_ALTERNATIVOS = [
     { chave: "porta", regex: /\bPORTA\b\s*:?/gi },
     { chave: "ctoLoc", regex: /\bCTO\b\s*:?/gi },
@@ -44,22 +16,20 @@ const ROTULOS_FECHAMENTO_CTO_ALTERNATIVOS = [
 ];
 
 const REGEX_ROTULO_LACRE = /N[UÚ]MERO\s+DO\s+LACRE/i;
-// "-22.4652, -42.6535", "(-22.72, -42.66)" ou com vírgula decimal "-22,4652539, -42,6535331".
+
 const REGEX_COORDENADA_CTO = /^\(?\s*-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+\s*\)?|^\(?\s*-?\d{1,3},\d+\s*[,;]?\s+-?\d{1,3},\d+\s*\)?/;
 const REGEX_PLUS_CODE_CTO = /^[23456789CFGHJMPQRVWX]{4}\+[23456789CFGHJMPQRVWX]{2,3}(?:\s+[^,:]+,\s*[A-Z]{2}\b)?/i;
 
-// Assunto (já normalizado) que entra / que fica de fora mesmo batendo no primeiro.
 const ASSUNTOS_CTO_LACRE = /INSTALACAO|TRANSFERENCIA DE ENDERECO|MUDANCA DE TECNOLOGIA/;
 const ASSUNTOS_CTO_LACRE_FORA = /AUDITORIA|NAO CONCLUIDA|REPARO|POS TERCEIRIZADA|GARANTIA/;
 
 const LIMITE_LINHAS_CTOS = 300;
 
 let _ctosLinhasCache = [];
-let _ctosCadastro = new Map(); // os_id -> linha de ctos_lacres_cadastro
+let _ctosCadastro = new Map();
 let _ctosErroBanco = null;
 let _ctosRenderToken = 0;
 
-/** Lacre / porta / localização da CTO a partir do texto livre do fechamento. */
 function extrairCamposFechamentoCto(texto) {
     const resultado = { lacre: "", porta: "", cto: "" };
     if (!texto) return resultado;
@@ -80,20 +50,18 @@ function extrairCamposFechamentoCto(texto) {
     const valores = {};
     encontrados.forEach((atual, i) => {
         const proximoInicio = i + 1 < encontrados.length ? encontrados[i + 1].inicio : texto.length;
-        // Não tira "-" das pontas: coordenada de GPS começa com "-" (hemisfério sul/oeste).
+
         valores[atual.chave] = texto.slice(atual.fim, proximoInicio).trim().replace(/^:\s*/, "").trim();
     });
 
-    // Lacre e porta são códigos curtos: fica só o número quando vem texto colado depois.
     resultado.lacre = (valores.lacre || "").match(/\d[\d.\-/]*/)?.[0] ?? (valores.lacre || "");
     resultado.porta = (valores.porta || "").match(/^\d+/)?.[0] ?? (valores.porta || "");
-    // CTO como coordenada ou plus code seguida de texto livre: fica só a localização.
+
     const cto = valores.ctoLoc || "";
     resultado.cto = cto.match(REGEX_COORDENADA_CTO)?.[0].trim() ?? cto.match(REGEX_PLUS_CODE_CTO)?.[0].trim() ?? cto;
     return resultado;
 }
 
-/** "não tem", "-", vazio… não contam como lacre — só valor com número. */
 function lacreInformado(lacre) {
     return /\d/.test(lacre ?? "");
 }
@@ -110,7 +78,6 @@ function tipoCtoLacre(assunto) {
     return "Instalação";
 }
 
-/** Mensagem com o modelo do lacre: a do fechamento efetivo; se não tiver, a mais recente que tiver. */
 function mensagemComLacre(ordem, fechamento) {
     if (fechamento?.mensagem && REGEX_ROTULO_LACRE.test(fechamento.mensagem)) return fechamento;
     let melhor = null;
@@ -153,7 +120,6 @@ function calcularLinhasCtos() {
     _ctosLinhasCache.sort((a, b) => (b.dataFinal?.getTime() ?? -1) - (a.dataFinal?.getTime() ?? -1));
 }
 
-/** Valor exibido: correção manual salva no banco, senão o que veio da OS. */
 function valorCto(linha, campo) {
     const salvo = _ctosCadastro.get(linha.id)?.[campo];
     return salvo !== null && salvo !== undefined ? salvo : linha.extraido[campo];
@@ -187,8 +153,6 @@ async function renderizarCtosLacres() {
         return;
     }
 
-    // Atualização ao vivo (js/services/aovivo.js) redesenha a seção aberta —
-    // não apaga uma célula que alguém está editando agora.
     if (document.activeElement?.classList.contains("ctos-input")) return;
 
     registrarFiltrosCtos();
@@ -208,7 +172,6 @@ async function renderizarCtosLacres() {
         _ctosErroBanco = erro;
     }
 
-    // cruzamento com as CTOs do IXC (patch-29 + base de clientes); sem isso a aba segue normal
     try {
         await carregarPosicoesCtos();
         await carregarCtoIxcDosLogins(_ctosLinhasCache.map(l => valorCto(l, "login")));
@@ -254,7 +217,6 @@ function preencherOpcoesDiagnosticoCtos() {
     select.value = diagnosticos.includes(atual) ? atual : "";
 }
 
-/** Tudo menos o status — base dos contadores (Cadastrados/Pendentes do recorte). */
 function linhasCtosSemStatus() {
     const termo = normalizarTexto(document.getElementById("buscaCtos")?.value ?? "");
     const diagnostico = document.getElementById("filtroDiagnosticoCtos")?.value ?? "";
@@ -314,7 +276,6 @@ function renderizarResumoCtos(base, filtradas) {
         <span class="ctos-aviso">${aviso}${_ctosCruzamentoAviso ? ` · ${escaparHtml(_ctosCruzamentoAviso)}` : ""}</span>`;
 }
 
-/** Link pro mapa quando a CTO veio como coordenada ou link. */
 function linkMapaCto(valor) {
     const texto = String(valor ?? "").trim();
     if (/^https?:\/\//i.test(texto)) return texto;
@@ -389,7 +350,7 @@ function renderizarTabelaCtos(linhas) {
         tr.querySelector(".ctos-os")?.addEventListener("click", () => abrirModalOS(linha.id));
         tr.querySelectorAll(".ctos-input").forEach(input => {
             input.addEventListener("change", () => salvarCampoCto(linha, input.dataset.campo, input.value, input));
-            // Enter salva (não quebra linha); a altura acompanha o texto
+
             input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
             input.addEventListener("input", () => ajustarAlturaCto(input));
             ajustarAlturaCto(input);
@@ -398,7 +359,6 @@ function renderizarTabelaCtos(linhas) {
     });
 }
 
-/** Célula editável cresce pra baixo com o texto (fallback de field-sizing). */
 function ajustarAlturaCto(campo) {
     if (CSS.supports?.("field-sizing", "content")) return;
     campo.style.height = "auto";
@@ -413,7 +373,6 @@ function htmlStatusCto(cadastrado, editavel) {
         : `<span class="ctos-status ${classe}">${texto}</span>`;
 }
 
-/** Grava a linha inteira da OS (status + correções). Correção igual ao texto da OS volta a ser null. */
 async function gravarCadastroCto(linha, alteracoes) {
     const atual = _ctosCadastro.get(linha.id) ?? {};
     const registro = { os_id: linha.id, cadastrado: atual.cadastrado ?? false };
@@ -486,17 +445,11 @@ function exportarCtosLacres() {
     XLSX.writeFile(livro, `ctos-lacres-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-// ---------- Cruzamento com as CTOs do IXC ----------
-// A coordenada que o técnico escreve em "LOCALIZAÇÃO DA CTO" é comparada com
-// a posição das CTOs cadastradas no IXC (tabela ctos, patch-29, montada pelo
-// robô a partir da visão "CTOs de Clientes"): CTO mais próxima + distância,
-// e se ela confere com a CTO que o login tem no IXC (clientes_cto).
+const RAIO_CTO_PERTO_M = 300;
+const CELULA_GRADE_CTO = 0.02;
 
-const RAIO_CTO_PERTO_M = 300;   // mais longe que isso = "nenhuma CTO perto"
-const CELULA_GRADE_CTO = 0.02;  // ~2 km; busca na célula e nas 8 vizinhas
-
-let _ctosPosicoes = null;           // { grade: Map("i|j" -> [cto]), total }
-let _ctosIxcPorLogin = new Map();   // login (minúsculo) -> CTO no IXC (ou null)
+let _ctosPosicoes = null;
+let _ctosIxcPorLogin = new Map();
 let _ctosCruzamentoAviso = "";
 
 const SITUACOES_CTO = {
@@ -529,14 +482,13 @@ async function carregarPosicoesCtos() {
     return (_ctosPosicoes = { grade, total });
 }
 
-/** CTO do IXC de cada login da lista (só busca os que ainda não tem). */
 async function carregarCtoIxcDosLogins(logins) {
     const faltam = [...new Set(logins.filter(Boolean).map(l => l.toLowerCase()))].filter(l => !_ctosIxcPorLogin.has(l));
     const lotes = [];
     for (let i = 0; i < faltam.length; i += 150) lotes.push(faltam.slice(i, i + 150));
     for (let i = 0; i < lotes.length; i += 4) {
         await Promise.all(lotes.slice(i, i + 4).map(async lote => {
-            // login no IXC pode ter maiúsculas: busca sem diferenciar (ilike em OR fica pesado; in() + lower no retorno)
+
             const variantes = [...new Set(lote.flatMap(l => [l, l.toUpperCase()]))];
             const { data, error } = await supabaseClient.from("clientes_cto").select("login, cto").in("login", variantes);
             if (error) throw error;
@@ -546,7 +498,6 @@ async function carregarCtoIxcDosLogins(logins) {
     }
 }
 
-/** "-22.858880,-41.997955" / "(-22.72, -42.66)" / "-22,4652539, -42,6535331" -> {lat, lng}. */
 function coordenadaDoTextoCto(texto) {
     const s = String(texto ?? "");
     const m = s.match(/(-?\d{1,3}\.\d+)\s*[,;]\s*(-?\d{1,3}\.\d+)/) ?? s.match(/(-?\d{1,3},\d+)\s*[,;]?\s+(-?\d{1,3},\d+)/);
@@ -577,7 +528,6 @@ function ctoMaisProxima(ponto) {
 
 const normalizarCto = t => String(t ?? "").trim().toUpperCase();
 
-/** Situação da linha: confere | diverge | sem-ixc | longe | sem-coordenada (null = cruzamento indisponível). */
 function cruzamentoCto(linha) {
     if (!_ctosPosicoes) return null;
     const login = String(valorCto(linha, "login") ?? "").toLowerCase();

@@ -1,9 +1,3 @@
-/**
- * ==========================================================
- * UI de Tabela — Resultados da Busca de OS
- * ==========================================================
- */
-
 function renderizarResultadosAuditoria(ordens) {
     const container = document.getElementById("resultadosAuditoria");
     if (!container) return;

@@ -1,9 +1,3 @@
-/**
- * ==========================================================
- * Utilitários de Formatação
- * ==========================================================
- */
-
 function formatarDataHora(data) {
     if (!data) return "-";
     return data.toLocaleString("pt-BR");

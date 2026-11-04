@@ -1,13 +1,3 @@
-/**
- * Service worker do app (PWA) — necessário pro "Instalar app" no celular.
- *
- * Estratégia: REDE PRIMEIRO pros arquivos do próprio site (HTML/JS/CSS/
- * imagens), guardando a última versão boa; sem internet, abre a cópia
- * guardada. Assim o app instalado sempre pega a versão nova quando há rede
- * (o site muda quase todo dia) e não fica preso numa versão velha.
- * Dados (Supabase), fontes e bibliotecas de outros domínios NÃO passam por
- * aqui — vão direto pra rede, como no navegador.
- */
 const CACHE = "cop-analytics-v1";
 const ESSENCIAIS = ["./", "./index.html", "./manifest.webmanifest", "./img/app/icone-192.png"];
 
@@ -28,7 +18,7 @@ self.addEventListener("fetch", evento => {
     const req = evento.request;
     if (req.method !== "GET") return;
     const url = new URL(req.url);
-    if (url.origin !== self.location.origin) return;   // Supabase, fontes, CDN: direto pra rede
+    if (url.origin !== self.location.origin) return;
 
     evento.respondWith(
         fetch(req)

@@ -1,31 +1,12 @@
-/**
- * ==========================================================
- * Infográficos — Gestão de Clientes
- * ==========================================================
- * Quatro seções:
- * - "clientes-cto": cadastro de CTO/porta/lacre dos logins ativos. Só
- *   contagens (count/head) na clientes_cto, as mesmas da tela — nenhuma
- *   linha desce. Guardadas 10 min em memória.
- * - "ctos-lacres": ocupação das CTOs (logins_ativos ÷ portas do splitter).
- *   Sem baixar a tabela ctos: splitter 4/8/16 (99,6% das caixas) sai de
- *   contagens por faixa (count/head); só as poucas caixas com splitter fora
- *   disso (ou sem splitter, ~60) descem, com 2 colunas. Guardado 30 min (o
- *   robô atualiza a tabela 1x por dia).
- * - "alertas": recorrência já calculada (APP.indicadores.recorrenciaAlertas).
- * - "enderecos": resultado da tela (_enderecosResultado) ou
- *   EnderecoEngine.calcular sobre o recorte do Filtro Global (em memória).
- */
-
 const IGC_TEMPO_CONTAGENS = 10 * 60 * 1000;
 const IGC_TEMPO_CTOS = 30 * 60 * 1000;
-let _igcContagens = null;   // { em, total, completos, semLacre, inativos, temAtivo }
-let _igcOcupacao = null;    // { em, faixas: {...}, total }
+let _igcContagens = null;
+let _igcOcupacao = null;
 
-// ---------- Cadastro na CTO ----------
 async function igcContagensClientesCto() {
     if (_igcContagens && Date.now() - _igcContagens.em < IGC_TEMPO_CONTAGENS) return _igcContagens;
     if (typeof supabaseClient === "undefined" || typeof contarClientesCto !== "function") return null;
-    // a tela descobre se a coluna "ativo" existe (patch-26); sem ela, não há o alerta de inativos
+
     const temAtivo = typeof _clientesCtoTemAtivo === "undefined" ? true : _clientesCtoTemAtivo;
     const [total, completos, semLacre, inativos] = await Promise.all([
         contarClientesCto("todos"),
@@ -36,7 +17,6 @@ async function igcContagensClientesCto() {
     return (_igcContagens = { em: Date.now(), total, completos, semLacre, inativos, temAtivo });
 }
 
-/** Clique num número do painel = mesmo filtro do card da tela (lista logo abaixo). */
 function igcFiltrarClientesCto(filtro) {
     if (typeof buscarListaClientesCto !== "function") return;
     _clientesCtoFiltro = filtro;
@@ -51,7 +31,7 @@ registrarInfografico("clientes-cto", async () => {
     try { c = await igcContagensClientesCto(); } catch (erro) { console.warn("Infográfico Cadastro na CTO:", erro); return []; }
     if (!c || !c.total) return [];
     const semCadastro = Math.max(0, c.total - c.completos);
-    const temLacre = c.semLacre < c.total;   // visão sem lacre nenhum = coluna vazia, card some (igual à tela)
+    const temLacre = c.semLacre < c.total;
     const cartoes = [
         {
             titulo: "Logins com CTO e porta", sub: "Clientes ativos", cor: "verde", icone: "lupa",
@@ -80,7 +60,6 @@ registrarInfografico("clientes-cto", async () => {
     return cartoes;
 });
 
-// ---------- CTOs e Lacres: ocupação ----------
 const IGC_FAIXAS_OCUPACAO = [
     { id: "lotada", rotulo: "Lotada (100%+)", cor: "vermelho" },
     { id: "f80", rotulo: "80–99%", cor: "laranja" },
@@ -109,7 +88,7 @@ async function igcOcupacaoCtos() {
         return count ?? 0;
     };
     const faixas = Object.fromEntries(IGC_FAIXAS_OCUPACAO.map(f => [f.id, 0]));
-    // por splitter comum: total e "pelo menos N logins" nos cortes de 1, 50%, 80% e 100%
+
     await Promise.all(IGC_SPLITTERS_COMUNS.map(async s => {
         const [total, g1, g50, g80, g100] = await Promise.all([0, 1, Math.ceil(s * 0.5), Math.ceil(s * 0.8), s].map(m => contar(s, m)));
         faixas.lotada += g100;
@@ -118,7 +97,7 @@ async function igcOcupacaoCtos() {
         faixas.f1 += g1 - g50;
         faixas.vazia += total - g1;
     }));
-    // o resto (splitter raro ou vazio) é pouco: desce só splitter + logins
+
     const { data, error } = await supabaseClient.from("ctos").select("splitter, logins_ativos")
         .or(`splitter.is.null,splitter.not.in.(${IGC_SPLITTERS_COMUNS.join(",")})`).limit(2000);
     if (error) throw error;
@@ -157,7 +136,6 @@ registrarInfografico("ctos-lacres", async () => {
     ];
 });
 
-// ---------- Alertas (recorrência) ----------
 registrarInfografico("alertas", async () => {
     const rec = APP?.indicadores?.recorrenciaAlertas;
     if (!rec || !rec.size) return [];
@@ -200,7 +178,6 @@ registrarInfografico("alertas", async () => {
     ].filter(Boolean);
 });
 
-// ---------- Endereços a corrigir ----------
 function igcFiltrarEnderecos(filtro) {
     if (typeof desenharListaEnderecos !== "function") return;
     _enderecosFiltro = filtro;

@@ -1,30 +1,10 @@
-/**
- * ==========================================================
- * Painel de Operação (tela inicial) — visão global do dia
- * ==========================================================
- * Cards de gestão com o retrato do dia pra toda a operação (não é o
- * "Seu mês", que é pessoal): agendadas e reagendadas hoje, fechamentos
- * hoje, OS assumidas em aberto e OS do COP em aberto. Só admin/editor
- * (dado operacional). Cada card abre a lista por trás; a OS abre a
- * ordem cronológica (reusa a timeline da Agenda IXC / modal de ordens).
- *
- * Tudo sai de UMA varredura da os_pendentes (eventos de OS em aberto) +
- * as finalizadas de hoje do relatório de ordens (APP.dados.ordens).
- *
- * "Pedidos de prioridade": OS de campo em aberto (mesmo recorte da aba Em
- * aberto) cujo texto pede prioridade/urgência (PrioridadeEngine), quebradas
- * pelo status atual, + as finalizadas hoje que tinham pedido.
- */
-
 let painelOpCache = null;
 
-/** Técnico (equipe de campo) que iniciou o deslocamento — lido do texto do evento. */
 function tecnicoDoDeslocamento(msg) {
     const m = String(msg || "").match(/usu[aá]rio\s+(.+?)\s*,\s*iniciou o deslocamento/i);
     return m ? m[1].trim() : null;
 }
 
-/** EVENTO 10 = reagendamento; 5 = agendamento; 2 = deslocamento; 9 = execução. */
 async function calcularPainelOperacao() {
     const linhas = typeof buscarOsPendentesCacheado === "function" ? await buscarOsPendentesCacheado() : [];
     const parse = typeof ixcDataBR === "function" ? ixcDataBR : () => null;
@@ -63,15 +43,14 @@ async function calcularPainelOperacao() {
     const grupos = { agendadas: [], reagendadas: [], assumidas: [], cop: [] };
     for (const o of os.values()) {
         const stn = norm(o.statusUlt);
-        if (stn === "finalizada") continue;         // 529 já é <> Finalizada; só segurança
+        if (stn === "finalizada") continue;
         const cop = ehCop(o.assunto);
         if (o.reagHoje) grupos.reagendadas.push(o);
         if (stn === "assumida") grupos.assumidas.push(o);
         if (cop) grupos.cop.push(o);
-        else if (ehHoje(o.agendamento)) grupos.agendadas.push(o);   // agendadas de campo pra hoje
+        else if (ehHoje(o.agendamento)) grupos.agendadas.push(o);
     }
 
-    // Fechamentos de hoje (OS já fechadas -> relatório de ordens, não no pré-agendamento).
     const fechamentos = [];
     const ordens = APP?.dados?.ordens;
     if (ordens) for (const ordem of ordens.values()) {
@@ -83,21 +62,17 @@ async function calcularPainelOperacao() {
     grupos.agendadas.sort((a, b) => (a.agendamento || 0) - (b.agendamento || 0));
     grupos.cop.sort((a, b) => (a.cliente || "").localeCompare(b.cliente || "", "pt-BR"));
 
-    // Início da operação: RETRATO do momento da importação (status ATUAL de cada
-    // OS, não "eventos do dia"). Equipe = o técnico de campo (com/sem auxiliar),
-    // lido do texto do deslocamento. Quem está AGORA em deslocamento, quem em
-    // execução, e quem da escala ainda não saiu (sem nenhuma OS em desloc/execução).
-    const deslocAgora = new Map(), execAgora = new Map();   // nomeTécnico -> [OS]
+    const deslocAgora = new Map(), execAgora = new Map();
     for (const id in eventosPorOs) {
         const o = os.get(id) || {};
         const st = norm(o.statusUlt);
         const isDesloc = st === "deslocamento";
         const isExec = st.includes("execu");
-        if (!isDesloc && !isExec) continue;            // só o que está em campo AGORA
+        if (!isDesloc && !isExec) continue;
         const evs = eventosPorOs[id];
         let tec = null;
         for (const e of evs) if (+e.evento === 2) { const t = tecnicoDoDeslocamento(e.msg); if (t) tec = t; }
-        if (!tec) continue;                            // sem técnico identificável no deslocamento
+        if (!tec) continue;
         const info = { id, cliente: o.cliente, assunto: o.assunto, cidade: o.cidade, bairro: o.bairro, statusUlt: o.statusUlt };
         const alvo = isDesloc ? deslocAgora : execAgora;
         if (!alvo.has(tec)) alvo.set(tec, []);
@@ -115,14 +90,11 @@ async function calcularPainelOperacao() {
         .sort((a, b) => b.oss.length - a.oss.length);
     const inicioOperacao = { desloc: equipesLista(deslocAgora), exec: equipesLista(execAgora), semMov };
 
-    // Pedidos de prioridade: pesado (refaz o recorte de campo da aba Em aberto), por
-    // isso é calculado depois que o resto do painel aparece (ver renderizarPainelOperacao).
     const calcularPrioridade = () => calcularPrioridadesPainel(linhas, hoje, amanha, norm);
 
     return { grupos, fechamentos, eventosPorOs, osInfo, capturadoEm, inicioOperacao, calcularPrioridade, prioridade: null };
 }
 
-// Segmentos do bloco "Pedidos de prioridade", na ordem da barra.
 const PRIORIDADE_PAINEL_GRUPOS = [
     { id: "semAgenda",   rotulo: "Sem agendamento",  cor: "#dc2626" },
     { id: "agendada",    rotulo: "Agendadas",        cor: "#2563eb" },
@@ -132,12 +104,10 @@ const PRIORIDADE_PAINEL_GRUPOS = [
     { id: "finalizada",  rotulo: "Finalizadas hoje", cor: "#059669" }
 ];
 
-/** OS com pedido de prioridade no texto, por status atual (ver PRIORIDADE_PAINEL_GRUPOS). */
 function calcularPrioridadesPainel(linhas, hoje, amanha, norm) {
     const grupos = Object.fromEntries(PRIORIDADE_PAINEL_GRUPOS.map(g => [g.id, []]));
     if (typeof PrioridadeEngine === "undefined") return { grupos, total: 0, insistentes: 0 };
 
-    // Mesmo recorte da aba Em aberto (só OS de campo); deixa pronto pra ela também.
     let backlog = null;
     if (typeof montarBacklog === "function") {
         backlog = montarBacklog(linhas);
@@ -155,7 +125,6 @@ function calcularPrioridadesPainel(linhas, hoje, amanha, norm) {
         else grupos.semAgenda.push(item);
     }
 
-    // Finalizadas hoje que tinham pedido (relatório de ordens: OS já fechada sai da os_pendentes).
     for (const ordem of APP?.dados?.ordens?.values?.() ?? []) {
         const df = ordem.dataFechamento;
         if (!df || df.getTime() < hoje.getTime() || df.getTime() >= amanha || norm(ordem.statusAtual) !== "finalizada") continue;
@@ -169,7 +138,6 @@ function calcularPrioridadesPainel(linhas, hoje, amanha, norm) {
     return { grupos, total: todos.length, insistentes: todos.filter(i => i.pedidos.length >= 2).length };
 }
 
-// Ícone (SVG) + cor por cartão — visual moderno (ver mock do usuário).
 const IC = {
     cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>',
     redo: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5"/>',
@@ -185,12 +153,11 @@ const PAINEL_OP_CARTOES = [
     { id: "cop",         rotulo: "COP em aberto",      fonte: "painel", cor: "#0891b2", icone: IC.inbox, lista: m => m.grupos.cop,          titulo: "OS do Controle de Operações ainda em aberto" }
 ];
 
-const PAINEL_OP_TETO = 300;   // teto de OS listadas por card
+const PAINEL_OP_TETO = 300;
 
 async function renderizarPainelOperacao() {
     const alvo = document.getElementById("inicioPainelOperacao");
     if (!alvo) return;
-    // Visível a todos os usuários logados (inclusive leitor).
 
     try {
         painelOpCache = await calcularPainelOperacao();
@@ -204,7 +171,6 @@ async function renderizarPainelOperacao() {
     const svgT = p => `<svg viewBox="0 0 24 24" class="op-svg">${p}</svg>`;
     const icTruck = '<path d="M2 6h11v10H2zM13 10h4l4 3v3h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>';
 
-    // 1) Operação hoje — anel: fechamentos sobre a agenda de hoje + barras dos 5 números do dia.
     const n = id => PAINEL_OP_CARTOES.find(c => c.id === id).lista(m).length;
     const nAg = n("agendadas"), nFe = n("fechamentos");
     const maiorOp = Math.max(1, ...PAINEL_OP_CARTOES.map(c => c.lista(m).length));
@@ -219,7 +185,6 @@ async function renderizarPainelOperacao() {
         <div class="pi-linhas">${linhasOp}</div>
         <p class="pi-nota">${nAg > feitas ? `<b>${fmt(nAg - feitas)} OS</b> da agenda de hoje ainda sem fechamento.` : "Agenda de hoje toda fechada."}</p>`);
 
-    // 2) Deslocamento das equipes — rosca: deslocamento × execução × sem movimento.
     const io = m.inicioOperacao || { desloc: [], exec: [], semMov: [] };
     const somaOs = lista => lista.reduce((s, e) => s + e.oss.length, 0);
     const nD = io.desloc.length, nE = io.exec.length, nS = io.semMov.length, nT = nD + nE + nS;
@@ -236,14 +201,12 @@ async function renderizarPainelOperacao() {
         </div>
         <p class="pi-nota">${nS ? `<b>${fmt(nS)} equipe(s)</b> da escala sem nenhuma OS em deslocamento ou execução.` : "Todas as equipes da escala já saíram."}</p>`);
 
-    // 3) Pedidos de prioridade — preenchido depois (cálculo pesado, ver calcularPrioridadesPainel).
     const icAlerta = '<path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/>';
     const colPr = piColuna("#dc2626", icAlerta, "Pedidos de prioridade", "OS de campo em aberto com pedido de urgência",
         `<div id="painelPrioridades"><p class="pi-nota pi-nota-solta">Lendo as mensagens das OS em aberto…</p></div>`, "pi-col-prio");
 
     alvo.innerHTML = `<div class="pi-colunas">${colOp}${colEq}${colPr}</div>`;
 
-    // Depois de pintar o resto (não segura as outras colunas).
     setTimeout(() => {
         const caixa = document.getElementById("painelPrioridades");
         if (!caixa || painelOpCache !== m) return;
@@ -267,12 +230,10 @@ async function renderizarPainelOperacao() {
         abrirPopupEquipes("Sem movimento", "Técnicos da escala que ainda não saíram", io.semMov, false));
 }
 
-// ---------- Peças do painel infográfico (3 colunas) ----------
 function piPct(v) {
     return `${v.toLocaleString("pt-BR", { maximumFractionDigits: v > 0 && v < 10 ? 1 : 0 })}%`;
 }
 
-/** Coluna: cabeçalho com ícone colorido + corpo. */
 function piColuna(cor, icone, titulo, sub, corpo, classe = "") {
     return `
         <section class="pi-coluna ${classe}" style="--c:${cor}">
@@ -284,7 +245,6 @@ function piColuna(cor, icone, titulo, sub, corpo, classe = "") {
         </section>`;
 }
 
-/** Linha clicável: ponto colorido, rótulo, valor (+ extra) e barra proporcional ao maior da coluna. */
 function piLinha(attr, rotulo, n, total, cor, extra = "", titulo = "") {
     const largura = total ? Math.min(100, n / total * 100) : 0;
     return `
@@ -295,7 +255,6 @@ function piLinha(attr, rotulo, n, total, cor, extra = "", titulo = "") {
         </button>`;
 }
 
-/** Rosca/anel em SVG (360° = soma das fatias), com número e legenda no centro. */
 function piRosca(fatias, centro, sub) {
     const cx = 66, cy = 66, r = 50, larg = 14, circ = 2 * Math.PI * r;
     const total = fatias.reduce((s, f) => s + f.n, 0);
@@ -317,12 +276,11 @@ function piRosca(fatias, centro, sub) {
         </svg>`;
 }
 
-/** Corpo da coluna "Pedidos de prioridade": waffle (1 quadrado = 1 OS) + destaque sem agendamento + linhas por status. */
 function blocoPrioridadesPainel(p) {
     if (!p) return "";
     if (!p.total) return '<p class="pi-nota pi-nota-solta">Nenhuma OS de campo em aberto com pedido de prioridade ou urgência nas mensagens.</p>';
 
-    const TETO_WAFFLE = 100;   // acima disso, cada quadrado vale mais de 1 OS
+    const TETO_WAFFLE = 100;
     const escala = Math.max(1, Math.ceil(p.total / TETO_WAFFLE));
     const quadrados = PRIORIDADE_PAINEL_GRUPOS.flatMap(g =>
         Array.from({ length: Math.round(p.grupos[g.id].length / escala) }, () => `<i style="--c:${g.cor}" title="${g.rotulo}"></i>`)).join("");
@@ -342,7 +300,6 @@ function blocoPrioridadesPainel(p) {
         <p class="pi-nota"><b>${p.total.toLocaleString("pt-BR")} OS de campo</b> em aberto pedem prioridade nas mensagens. Cada quadrado é ${escala === 1 ? "uma OS" : `${escala} OS`}.</p>`;
 }
 
-/** Lista das OS com pedido de prioridade: trecho do último pedido, quantas vezes pediu e o status. */
 const PRESETS_ANOT = ["Área de risco", "Em tratativa", "Agendado", "Aguardando material", "Aguardando supervisão", "Reagendar"];
 
 async function abrirPopupPrioridade(titulo, itens) {
@@ -397,8 +354,6 @@ async function abrirPopupPrioridade(titulo, itens) {
     fundo.querySelectorAll("[data-fech-os]").forEach(li =>
         li.addEventListener("click", () => { if (typeof abrirModalOS === "function") abrirModalOS(li.dataset.fechOs); }));
 
-    // Anotações por OS (área de risco, em tratativa…). stopPropagation pra
-    // mexer na nota não abrir a timeline/OS do <li>.
     fundo.querySelectorAll(".os-anot").forEach(wrap => {
         const osId = wrap.dataset.anotWrap;
         const edit = wrap.querySelector(".os-anot-edit");
@@ -424,7 +379,6 @@ async function abrirPopupPrioridade(titulo, itens) {
     fundo.querySelector(".ixc-popup-fechar").focus();
 }
 
-/** Re-renderiza o balão/estado da anotação de uma OS no popup depois de salvar/remover. */
 function atualizarBalaoAnot(wrap, osId) {
     const anot = (typeof anotacaoOs === "function") ? anotacaoOs(osId) : null;
     wrap.querySelector(".os-anot-balao")?.remove();
@@ -439,7 +393,6 @@ function atualizarBalaoAnot(wrap, osId) {
     wrap.querySelector(".os-anot-edit").hidden = true;
 }
 
-/** Popup de EQUIPES (técnicos), não de OS — usado pelo bloco "Início da operação". */
 function abrirPopupEquipes(titulo, descricao, equipes, comOs) {
     fecharPopupPainel();
     const linhas = equipes.map(e => `
@@ -507,7 +460,7 @@ function abrirPopupPainel(cartao) {
     document.body.classList.add("ixc-popup-aberto");
     fundo.addEventListener("click", e => { if (e.target === fundo) fecharPopupPainel(); });
     fundo.querySelector(".ixc-popup-fechar").addEventListener("click", fecharPopupPainel);
-    // OS em aberto -> timeline (eventos do próprio painel); finalizada -> modal de ordens.
+
     fundo.querySelectorAll("[data-painel-os]").forEach(li =>
         li.addEventListener("click", () => abrirTimelineIxc(li.dataset.painelOs, painelOpCache)));
     fundo.querySelectorAll("[data-fech-os]").forEach(li =>

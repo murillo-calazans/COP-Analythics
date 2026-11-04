@@ -1,12 +1,3 @@
-/**
- * ==========================================================
- * Infográficos — Auditoria
- * ==========================================================
- * Painéis no topo das abas Auditoria (Diagnóstico × Próxima Tarefa e
- * demais achados) e Auditor IA (vereditos salvos em ordem.auditoriaIA).
- * Desenho em js/ui/infograficos.js; lista de OS em igrListaOS
- * (js/ui/info-relatorios.js), que abre o modal da ordem no clique.
- */
 (() => {
     const norm = s => (typeof normalizarTexto === "function" ? normalizarTexto(String(s ?? "")) : String(s ?? "").toUpperCase().trim());
     const ehErro = l => String(l.resultadoAuditoria ?? "").startsWith("Erro");
@@ -16,7 +7,6 @@
         ? (() => igrListaOS(titulo, descricao, linhas)) : undefined;
     const abrirOS = id => typeof abrirModalOS === "function" ? (() => abrirModalOS(id)) : undefined;
 
-    // ---------- Auditoria ----------
     registrarInfografico("auditoria", async () => {
         const linhas = igLinhasDoRecorte();
         if (!linhas) return [];
@@ -31,7 +21,6 @@
         const auditadas = erros.length + ok.length;
         const corrigidas = fin.filter(l => l.resultadoAuditoria === "Corrigido").length;
 
-        // erros por tipo
         const porTipo = new Map();
         for (const l of erros) {
             const tipo = String(l.resultadoAuditoria).replace(/^Erro\s*-\s*/, "") || "Erro";
@@ -40,7 +29,6 @@
         }
         const tipos = [...porTipo].sort((a, b) => b[1].length - a[1].length);
 
-        // quem errou
         const origem = l => l.tipoDono === "Campo" ? "Técnico de campo" : l.tipoDono === "Administrativo" ? "COP / suporte" : "Não identificado";
         const CORES_ORIGEM = { "Técnico de campo": "azul", "COP / suporte": "roxo", "Não identificado": "cinza" };
         const quem = ["Técnico de campo", "COP / suporte", "Não identificado"]
@@ -48,7 +36,6 @@
             .filter(q => q.linhas.length);
         const copErros = quem.find(q => q.rotulo === "COP / suporte")?.linhas.length ?? 0;
 
-        // outros achados
         const refechadas = fin.filter(l => l.refechadaOutro);
         const duplicidade = fin.filter(l => l.duplicidade);
         const motivos = new Map();
@@ -60,7 +47,6 @@
         }
         const listaMotivos = [...motivos].sort((a, b) => b[1].length - a[1].length);
 
-        // técnicos de campo com mais erros (15+ auditados)
         const porTec = new Map();
         for (const l of fin) {
             if (l.tipoDono !== "Campo") continue;
@@ -151,7 +137,6 @@
         ];
     });
 
-    // ---------- Auditor IA ----------
     registrarInfografico("auditoria-ia", async () => {
         if (!APP?.status?.baseCarregada || !APP.dados?.ordens?.size) return [];
         const ordens = FiltroEngine.ordensFiltradas();

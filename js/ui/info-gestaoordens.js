@@ -1,30 +1,14 @@
-/**
- * ==========================================================
- * Infográfico — Gestão de Ordens (seção "agenda-hoje")
- * ==========================================================
- * Retrato do que está EM ABERTO (aba "Em aberto", js/ui/agendabacklog.js):
- * agendadas × sem agendamento, idade das OS, pedidos de prioridade, assunto,
- * cidade e bairros fora do normal.
- *
- * Não faz consulta nova: usa agendaBacklogCache (montado pela aba) ou a
- * mesma busca compartilhada da os_pendentes (buscarOsPendentesCacheado, que
- * guarda a promessa por ~2 min — a aba e o painel inicial pedem a mesma).
- * Agenda IXC / Agenda IA ficam de fora (sem dado pronto pra resumir).
- */
-
-/** Backlog de campo em aberto, reaproveitando o cache da aba. */
 async function igoBacklog() {
     if (typeof agendaBacklogCache !== "undefined" && agendaBacklogCache?.itens) return agendaBacklogCache;
     if (typeof buscarOsPendentesCacheado !== "function" || typeof montarBacklog !== "function") return null;
     const linhas = await buscarOsPendentesCacheado();
-    // a aba pode ter terminado de montar enquanto a busca (compartilhada) corria
+
     if (agendaBacklogCache?.itens) return agendaBacklogCache;
     const modelo = montarBacklog(linhas);
     if (!agendaBacklogCache) agendaBacklogCache = modelo;
     return modelo;
 }
 
-/** Dias corridos entre a abertura e hoje (0 = aberta hoje). */
 function igoDiasAberta(abertura, hoje) {
     if (!abertura) return null;
     const d0 = new Date(abertura.getFullYear(), abertura.getMonth(), abertura.getDate());
@@ -49,11 +33,6 @@ const IGO_PRIO_GRUPOS = [
     { id: "finalizada", rotulo: "Finalizadas hoje", cor: "verde" }
 ];
 
-/**
- * Pedidos de prioridade (PrioridadeEngine) — mesma regra de
- * calcularPrioridadesPainel (js/ui/paineloperacao.js), mas sobre o backlog já
- * montado (sem refazer o montarBacklog).
- */
 function igoPrioridades(modelo, hoje) {
     const grupos = Object.fromEntries(IGO_PRIO_GRUPOS.map(g => [g.id, []]));
     if (typeof PrioridadeEngine === "undefined") return null;
@@ -69,7 +48,7 @@ function igoPrioridades(modelo, hoje) {
         else if (o.agendada) grupos.agendada.push(item);
         else grupos.semAgenda.push(item);
     }
-    // finalizadas hoje que tinham pedido (relatório de ordens — já em memória)
+
     const amanha = hoje.getTime() + 86400000;
     for (const ordem of APP?.dados?.ordens?.values?.() ?? []) {
         const df = ordem.dataFechamento;
@@ -98,7 +77,6 @@ function igoDetalheBairro(s) {
     return partes.join(" · ") || "—";
 }
 
-/** Cartão "Bairros fora do normal" (mesma conferência da aba: histórico da cidade + mapa de regiões). */
 async function igoCartaoBairros(itens) {
     if (typeof situacaoBairroBacklog !== "function" || typeof historicoBairrosBacklog !== "function") return null;
     const hist = historicoBairrosBacklog();
@@ -155,7 +133,6 @@ registrarInfografico("agenda-hoje", async () => {
     const pop = (titulo, oss) => () => abrirPopupBacklog(titulo, oss);
     const cartoes = [];
 
-    // 1) Agendadas × sem agendamento + KPIs da aba
     const agendadas = itens.filter(i => i.agendada);
     const semAgenda = itens.filter(i => !i.agendada);
     const reagendadas = itens.filter(i => i.reagendamentos > 0);
@@ -175,7 +152,6 @@ registrarInfografico("agenda-hoje", async () => {
         ]
     });
 
-    // 2) Idade pela abertura
     const faixas = IGO_FAIXAS_IDADE.map(f => ({ ...f, oss: [] }));
     let semData = 0;
     for (const o of itens) {
@@ -193,7 +169,6 @@ registrarInfografico("agenda-hoje", async () => {
         ]
     });
 
-    // 3) Pedidos de prioridade
     const prio = igoPrioridades(modelo, hoje);
     if (prio) {
         const gruposComOs = IGO_PRIO_GRUPOS.filter(g => prio.grupos[g.id].length);
@@ -214,7 +189,6 @@ registrarInfografico("agenda-hoje", async () => {
         });
     }
 
-    // 4) Por assunto (assunto unificado: interno + terceirizado juntos)
     const unificar = typeof assuntoUnificado === "function" ? assuntoUnificado : (a => a);
     const porAssunto = new Map();
     for (const o of itens) {
@@ -228,7 +202,6 @@ registrarInfografico("agenda-hoje", async () => {
         blocos: [{ t: "linhas", itens: assuntos.map(([a, oss]) => ({ rotulo: IG.assuntoCurto(a), titulo: a, n: oss.length, cor: "verde", extra: IG.pctDe(oss.length, total), acao: pop(IG.assuntoCurto(a), oss) })) }]
     });
 
-    // 5) Por cidade
     const porCidade = new Map();
     for (const o of itens) { const c = o.cidade || "—"; if (!porCidade.has(c)) porCidade.set(c, []); porCidade.get(c).push(o); }
     const cidades = [...porCidade].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "pt-BR")).slice(0, 12);
@@ -237,7 +210,6 @@ registrarInfografico("agenda-hoje", async () => {
         blocos: [{ t: "colunas", cor: "azul", itens: cidades.map(([c, oss]) => ({ rotulo: c, n: oss.length, acao: pop(c, oss) })) }]
     });
 
-    // 6) Bairros fora do normal
     const bairros = await igoCartaoBairros(itens);
     if (bairros) cartoes.push(bairros);
 

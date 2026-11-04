@@ -1,74 +1,11 @@
-/**
- * ==========================================================
- * Auditoria Operacional Engine
- * ==========================================================
- * Motor de REGRAS determinísticas (nada de IA aqui — isso é o
- * Auditor IA, ver js/services/auditoriaia.js) que verifica, pra cada
- * OS finalizada, se o Diagnóstico do fechamento é coerente com a
- * Próxima Tarefa informada — ver REGRAS_AUDITORIA_DIAGNOSTICO em
- * js/config/regrasauditoria.js. Roda em lote sobre um conjunto de
- * ordens (normalmente FiltroEngine.ordensFiltradas(), igual ao resto
- * do sistema), sem persistir nada — recalculado a cada carregamento.
- *
- * Diagnóstico e Próxima Tarefa só valem na movimentação de FECHAMENTO
- * (evento "Fechamento" — conferido nos dados reais: toda linha com
- * esse evento tem status "Finalizada", e vice-versa, então as duas
- * condições citadas no pedido original são a mesma coisa) — reaproveita
- * IndicatorEngine.analisarEventosDeTodas/fechamentoEfetivo em vez de
- * duplicar essa varredura. É o 1º Fechamento NA MAIORIA dos casos (uma
- * reabertura costuma ser só acerto de processo, nunca um novo
- * atendimento) — EXCETO quando a reabertura foi classificada como
- * "serviço não executado" (ver js/config/motivosreabertura.js), caso em
- * que é o ÚLTIMO Fechamento que representa o que realmente aconteceu na
- * OS (ver js/engine/filtroengine.js pro mesmo raciocínio aplicado no
- * resto do sistema).
- *
- * Diagnóstico pode vir como ID (dado antigo, já importado antes da
- * planilha passar a trazer o nome direto) ou como texto (dado novo)
- * — AuditEngine.resolverReferencia já lida com os dois formatos
- * (tenta achar por ID na Base; não achando, devolve o texto cru), sem
- * precisar de nenhuma lógica extra aqui.
- */
 const AuditoriaOperacionalEngine = {
 
-    // Normalizado (sem acento/maiúscula) — comparado com normalizarTexto(diagnostico).endsWith(...).
     SUFIXO_DIAGNOSTICO_CONCLUIDO: "CONCLUIDA",
 
-    /**
-     * Alguns diagnósticos vêm com o ID do diagnóstico colado no fim,
-     * tipo "INSTALAÇÃO CONCLUÍDA (340)" ou "TRANSFERÊNCIA CONCLUÍDA
-     * (130)" — mesma convenção já usada em
-     * IndicatorEngine.ASSUNTO_CANCELAMENTO ("CANCELAMENTO (350)").
-     * Próxima Tarefa nunca traz esse sufixo. Ignora esse "(NNN)" final
-     * SÓ pra casar a regra — o texto original (com o número) continua
-     * sendo o que aparece pro usuário no achado (ver auditarFechamento).
-     */
     removerSufixoIdDiagnostico(texto) {
         return String(texto).replace(/\s*\(\d+\)\s*$/, "").trim();
     },
 
-    /**
-     * Acha a regra (específica, da tabela em REGRAS_AUDITORIA_DIAGNOSTICO,
-     * ou a genérica de "CONCLUÍDA") que se aplica a um diagnóstico —
-     * ou null se não houver nenhuma regra mapeada pra ele ainda (nesse
-     * caso a OS fica em "sem regra mapeada", não conta como certo nem
-     * como erro).
-     *
-     * Cada regra casa o diagnóstico de um dos dois jeitos (ver
-     * js/config/regrasauditoria.js): "diagnostico" exige texto EXATO
-     * (normalizado); "diagnosticoContemAlgum" basta o diagnóstico CONTER
-     * uma das palavras/trechos da lista — usado quando a grafia real
-     * varia demais pra travar num texto único.
-     */
-    /**
-     * Diagnóstico deliberadamente excluído (ver
-     * DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA em
-     * js/config/regrasauditoria.js) — diferente de "ainda não tem regra
-     * mapeada": esse aqui NUNCA vai ter regra, de propósito, então não
-     * deve aparecer no gráfico "Diagnósticos sem regra mapeada" (ver
-     * auditarFechamento/auditar) — esse gráfico é só pra diagnóstico que
-     * falta MESMO cadastrar.
-     */
     diagnosticoExcluidoDaProximaTarefa(diagnosticoNome) {
         const diagnosticoNormalizado = normalizarTexto(this.removerSufixoIdDiagnostico(diagnosticoNome));
         return DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA.some(
@@ -82,9 +19,6 @@ const AuditoriaOperacionalEngine = {
         const diagnosticoBase = this.removerSufixoIdDiagnostico(diagnosticoNome);
         const diagnosticoNormalizado = normalizarTexto(diagnosticoBase);
 
-        // Checado ANTES de tudo — inclusive da regra genérica de
-        // "CONCLUÍDA" logo abaixo, que senão pegaria por engano um
-        // diagnóstico como "EXPANSÃO CONCLUÍDA".
         if (this.diagnosticoExcluidoDaProximaTarefa(diagnosticoNome)) return null;
 
         const especifica = REGRAS_AUDITORIA_DIAGNOSTICO.find(regra => {
@@ -119,24 +53,12 @@ const AuditoriaOperacionalEngine = {
         return null;
     },
 
-    /**
-     * OS de "ordem de estrutura" (ver ASSUNTOS_ORDEM_ESTRUTURA em
-     * js/config/regrasauditoria.js) — problema é da rede/infraestrutura,
-     * não do cliente, e nunca espera Próxima Tarefa preenchida, seja lá
-     * qual for o diagnóstico usado no fechamento.
-     */
     assuntoEhOrdemDeEstrutura(assunto) {
         if (!assunto) return false;
         const assuntoNormalizado = normalizarTexto(assunto);
         return ASSUNTOS_ORDEM_ESTRUTURA.some(chave => assuntoNormalizado.includes(normalizarTexto(chave)));
     },
 
-    /**
-     * Confere se a Próxima Tarefa informada satisfaz a regra: texto
-     * EXATO (proximaTarefaEsperada) ou apenas CONTER uma das
-     * palavras/trechos aceitos (proximaTarefaContemAlgum) — ver
-     * regraParaDiagnostico.
-     */
     proximaTarefaAtendeRegra(regra, proximaTarefaNormalizada) {
         if (regra.proximaTarefaContemAlgum) {
             return regra.proximaTarefaContemAlgum.some(
@@ -148,19 +70,10 @@ const AuditoriaOperacionalEngine = {
         );
     },
 
-    /** Lista pra exibir no achado (coluna "Esperado") — funciona pros dois modos de regra. */
     textoProximaTarefaEsperada(regra) {
         return regra.proximaTarefaContemAlgum ?? regra.proximaTarefaEsperada;
     },
 
-    /**
-     * Audita o fechamento de UMA OS. Devolve um dos status:
-     * - "sem-fechamento": OS ainda não fechou, fora do escopo.
-     * - "diagnostico-ausente": fechou sem nenhum diagnóstico — conta como erro.
-     * - "sem-regra": tem diagnóstico, mas nenhuma regra mapeada ainda — neutro.
-     * - "ok": Próxima Tarefa bate com o esperado pra esse diagnóstico.
-     * - "erro": Próxima Tarefa ausente ou incompatível — vem junto um "achado".
-     */
     auditarFechamento(movFechamento) {
         const diagnosticoNome = AuditEngine.resolverReferencia(
             APP.referencias.diagnosticos, movFechamento.diagnostico, CONFIG_BASE.diagnosticos.nome
@@ -184,9 +97,7 @@ const AuditoriaOperacionalEngine = {
 
         const regra = this.regraParaDiagnostico(diagnosticoNome);
         if (!regra) {
-            // foraDoEscopo distingue "nunca vai ter regra, de propósito"
-            // (não deve poluir o gráfico de sem regra mapeada) de
-            // "ainda falta cadastrar" (ver diagnosticoExcluidoDaProximaTarefa).
+
             return {
                 status: "sem-regra",
                 diagnostico: diagnosticoNome,
@@ -235,29 +146,8 @@ const AuditoriaOperacionalEngine = {
         return { status: "ok", diagnostico: diagnosticoNome, proximaTarefa: proximaTarefaBruta };
     },
 
-    // id da regra em REGRAS_AUDITORIA_DIAGNOSTICO usada por
-    // auditarDuplicidadeLogin abaixo pra restringir a checagem de
-    // duplicidade só a diagnósticos de troca/recolhimento de
-    // equipamento — ver comentário lá.
     REGRA_ID_DUPLICIDADE_EQUIPAMENTO: "equipamento-troca-ou-recolhimento",
 
-    /**
-     * Mesmo login + mesmo assunto + mesmo diagnóstico de troca/
-     * recolhimento de equipamento (ver REGRA_ID_DUPLICIDADE_EQUIPAMENTO)
-     * repetido em 2+ OS — sinaliza como possível duplicidade (ex.: dois
-     * "Equipamento Recolhido" pro mesmo cliente no mesmo assunto, sinal
-     * de que o equipamento pode ter sido recolhido/trocado mais de uma
-     * vez sem necessidade). Só faz sentido pra essa família de
-     * diagnóstico — repetir OUTROS diagnósticos (ex.: "Troca de
-     * Conector", "Verificação sem problema encontrado") pro mesmo
-     * cliente é normal, não indica nada suspeito, então não deve virar
-     * achado aqui.
-     *
-     * Dimensão SEPARADA da checagem Diagnóstico x Próxima Tarefa acima —
-     * uma OS pode estar "ok" ali e ainda assim entrar aqui. Exige
-     * assunto preenchido nos dois lados (sem isso o agrupamento
-     * juntaria OS sem relação nenhuma sob uma chave vazia).
-     */
     auditarDuplicidadeLogin(ordens, analise) {
         const porGrupo = new Map();
 
@@ -310,32 +200,6 @@ const AuditoriaOperacionalEngine = {
         return achados;
     },
 
-    /**
-     * OS que foi reaberta e fechada de novo por um Colaborador
-     * Responsável DIFERENTE do que fez o 1º Fechamento — sinal de que a
-     * reabertura não foi só o mesmo técnico corrigindo o próprio
-     * processo, alguém mais teve que assumir (equipe errada, técnico
-     * que sumiu, etc.). Dimensão SEPARADA das outras — uma OS pode estar
-     * "ok" no Diagnóstico x Próxima Tarefa e ainda cair aqui.
-     *
-     * Só entra quem realmente tem DOIS fechamentos com data diferente
-     * (1º e último) — uma OS sem reabertura de verdade, ou reaberta mas
-     * ainda não refechada, não se qualifica. Carrega junto
-     * motivoReabertura (ver js/config/motivosreabertura.js) pra quem
-     * consome o achado (js/ui/auditoriaoperacional.js) separar "erro de
-     * processo" (correção administrativa, operador de fechamento
-     * continua correto) de "serviço não executado" (o 1º técnico não foi
-     * a campo de verdade — operador de fechamento incorreto).
-     *
-     * TRÊS pessoas podem estar envolvidas, não duas — o achado carrega
-     * os três nomes separados pra não sugerir que é sempre a mesma
-     * gente: colaboradorPrimeiro (quem fechou a 1ª vez), operadorReabertura
-     * (quem EXECUTOU a reabertura em si — via de regra um despachante/
-     * operador interno organizando o processo, não necessariamente um
-     * técnico de campo) e colaboradorUltimo (quem fica com o crédito do
-     * fechamento seguinte — pode ser o mesmo operadorReabertura, outro
-     * técnico, ou até o mesmo colaboradorPrimeiro).
-     */
     auditarReaberturaComTrocaDeColaborador(ordens, analise) {
         const achados = [];
 
@@ -350,20 +214,10 @@ const AuditoriaOperacionalEngine = {
             if (!nomePrimeiro || !nomeUltimo) continue;
             if (normalizarTexto(nomePrimeiro) === normalizarTexto(nomeUltimo)) continue;
 
-            // Diagnóstico/Próxima Tarefa exibidos são do fechamento
-            // EFETIVO (ver analisarEventosOS) — quando o motivo é
-            // "serviço não executado", esse já é o último fechamento, o
-            // que realmente aconteceu de campo.
             const diagnosticoNome = AuditEngine.resolverReferencia(
                 APP.referencias.diagnosticos, info.fechamentoEfetivo?.diagnostico, CONFIG_BASE.diagnosticos.nome
             );
 
-            // Quem EXECUTOU a reabertura (Operador da movimentação de
-            // Reabertura — normalmente um despachante/operador interno
-            // organizando o processo) é gente DIFERENTE de quem fica com
-            // o crédito do fechamento seguinte (nomeUltimo, o Colaborador
-            // Responsável de quem realmente fechou depois) — por isso são
-            // 3 campos separados, não 2 (ver js/ui/auditoriaoperacional.js).
             const nomeOperadorReabertura = AuditEngine.resolverReferencia(
                 APP.referencias.operadores, info.operadorReabertura, CONFIG_BASE.operadores.nome
             );
@@ -393,14 +247,6 @@ const AuditoriaOperacionalEngine = {
         return achados;
     },
 
-    /**
-     * Mesmo login do cliente aparecendo em 2+ OS distintas do recorte,
-     * agrupado por login. SEÇÃO INFORMATIVA (não entra na contagem de
-     * erros): serve pra ver clientes com várias ordens no período, com a
-     * empresa (terceira pelo sufixo do técnico de fechamento, ou "Nossa
-     * equipe" quando interno). Login normalizado (sem acento/caixa) pra
-     * não perder duplicidade. OS sem fechamento usam o responsável atual.
-     */
     loginsEmVariasOrdens(ordens, analise) {
         const porLogin = new Map();
 
@@ -434,30 +280,20 @@ const AuditoriaOperacionalEngine = {
             .sort((a, b) => b.ordens.length - a.ordens.length || String(a.login).localeCompare(String(b.login)));
     },
 
-    /**
-     * Ponto de entrada: audita um conjunto de OS (normalmente
-     * FiltroEngine.ordensFiltradas()) e devolve o resumo agregado +
-     * a lista de achados, pra Auditoria desenhar os indicadores e a
-     * tabela de inconsistências.
-     */
     auditar(ordens) {
         const analise = IndicatorEngine.analisarEventosDeTodas(ordens);
 
         const resumo = {
             totalOS: ordens.size,
             semFechamento: 0,
-            totalAuditadas: 0, // semErro + comErro (Diagnóstico x Próxima Tarefa) — não inclui "sem regra mapeada"
+            totalAuditadas: 0,
             semErro: 0,
             comErro: 0,
             semRegraMapeada: 0,
             duplicidades: 0,
-            // OS reaberta e fechada por um Colaborador Responsável
-            // diferente do 1º Fechamento — ver
-            // auditarReaberturaComTrocaDeColaborador.
+
             reaberturasOutroColaborador: 0,
-            // Achados (de qualquer tipo) marcados manualmente como já
-            // corrigidos (ver js/services/auditoriacorrecoes.js) — contam
-            // à parte, não entram em comErro/duplicidades/reaberturasOutroColaborador.
+
             corrigidos: 0
         };
 
@@ -467,11 +303,7 @@ const AuditoriaOperacionalEngine = {
 
         for (const ordem of ordens.values()) {
             const info = analise.get(ordem.id);
-            // Fechamento EFETIVO (1º Fechamento por padrão, último quando
-            // a reabertura foi por serviço não executado — ver
-            // js/engine/filtroengine.js e IndicatorEngine.analisarEventosOS),
-            // pra auditar o Diagnóstico x Próxima Tarefa de quem realmente
-            // atendeu a OS.
+
             const fechamento = info?.fechamentoEfetivo;
 
             if (!fechamento) {
@@ -479,12 +311,6 @@ const AuditoriaOperacionalEngine = {
                 continue;
             }
 
-            // Ordem de estrutura (ver ASSUNTOS_ORDEM_ESTRUTURA) — o
-            // diagnóstico do fechamento pode ser QUALQUER um (inclusive
-            // um diagnóstico de reparo normal, tipo ROMPIMENTO DE
-            // FIBRA), mas Próxima Tarefa nunca é esperada aqui. Checado
-            // pelo ASSUNTO da OS, não pelo diagnóstico — por isso fica
-            // fora de auditarFechamento (que só enxerga o fechamento).
             if (this.assuntoEhOrdemDeEstrutura(ordem.assunto)) {
                 resumo.semRegraMapeada++;
                 continue;
@@ -494,10 +320,7 @@ const AuditoriaOperacionalEngine = {
 
             if (resultado.status === "sem-regra") {
                 resumo.semRegraMapeada++;
-                // foraDoEscopo (diagnóstico deliberadamente excluído, ver
-                // DIAGNOSTICOS_SEM_PROXIMA_TAREFA_ESPERADA) fica de fora
-                // do gráfico — esse é só pra diagnóstico que falta MESMO
-                // cadastrar regra.
+
                 if (!resultado.foraDoEscopo) {
                     semRegraDiagnosticos.set(resultado.diagnostico, (semRegraDiagnosticos.get(resultado.diagnostico) ?? 0) + 1);
                 }
@@ -511,17 +334,6 @@ const AuditoriaOperacionalEngine = {
                 continue;
             }
 
-            // Achado encontrado no fechamento EFETIVO — mas ele pode não
-            // ser o fechamento mais recente da OS (ex.: reabertura por
-            // "erro de processo" mantém o crédito no 1º Fechamento, ver
-            // fechamentoEfetivo). Se o ÚLTIMO fechamento (o que está
-            // valendo hoje no sistema de origem) já resolve o MESMO
-            // Diagnóstico x Próxima Tarefa, o problema já foi corrigido
-            // por lá — reimportar não deveria trazer isso de volta pra
-            // "Com erro" só porque ninguém marcou manualmente ainda (ver
-            // pedido do usuário: mesclar detecção automática + marcação
-            // manual). Só verifica quando o último é de fato outro
-            // fechamento — senão é exatamente o mesmo já auditado acima.
             const corrigidoAutomaticamente = !!(
                 info.ultimoFechamento &&
                 info.ultimoFechamento !== fechamento &&
@@ -538,30 +350,14 @@ const AuditoriaOperacionalEngine = {
                 porTipoErro.set(resultado.achado.tipo, (porTipoErro.get(resultado.achado.tipo) ?? 0) + 1);
             }
 
-            // Subcategoria SÓ pra "inconsistencia" (Diagnóstico x Próxima
-            // Tarefa incompatível) — ver subcategoriaErroInconsistencia.
-            // "diagnostico-ausente"/"proxima-tarefa-ausente" já são
-            // subcategorias em si mesmas, não precisam de mais divisão.
             const subcategoria = resultado.achado.tipo === "inconsistencia"
                 ? this.subcategoriaErroInconsistencia(info)
                 : null;
 
-            // Quem reabriu (só faz sentido se a OS realmente foi
-            // reaberta) e as datas de referência — pra quem consome o
-            // achado (js/ui/auditoriaoperacional.js) mostrar "reaberta
-            // por", "finalizada em" (o fechamento que foi auditado aqui)
-            // e "corrigida em" (o fechamento mais recente, quando a
-            // correção foi automática).
             const operadorReabertura = info.temReabertura
                 ? AuditEngine.resolverReferencia(APP.referencias.operadores, info.operadorReabertura, CONFIG_BASE.operadores.nome)
                 : null;
 
-            // Código (não nome) de quem fez o fechamento que corrigiu
-            // sozinho o problema (ver corrigidoAutomaticamente acima) —
-            // cru de propósito, pra quem for cruzar com "é do COP?"
-            // (IndicatorEngine.operadorEhDoCop só aceita o código, não o
-            // nome já resolvido — ver relatório de Ordens Acertadas do
-            // COP em js/ui/setorescop.js).
             const operadorCorrecaoCodigo = corrigidoAutomaticamente ? (info.ultimoFechamento.operador ?? null) : null;
 
             achados.push({
@@ -614,59 +410,15 @@ const AuditoriaOperacionalEngine = {
         };
     },
 
-    /** Correção manual (se houver) pra um achado — ver js/services/auditoriacorrecoes.js. */
     buscarCorrecaoAchado(ordemId, tipoAchado) {
         return APP.correcoesAuditoria?.get(chaveCorrecaoAuditoria(ordemId, tipoAchado)) ?? null;
     },
 
-    /**
-     * Pra um achado "inconsistencia" (Diagnóstico x Próxima Tarefa
-     * incompatível), decide qual dos dois campos era o errado de
-     * verdade.
-     *
-     * O PADRÃO é "erro_proxima_tarefa" — não "erro_diagnostico" (era
-     * assim antes, e OS 1895501 mostrou o problema: diagnóstico
-     * "TROCA DE EQUIPAMENTO" batia certinho com a mensagem do técnico
-     * "Fizemos a troca dos equipamentos e recolhemos os antigos", só a
-     * Próxima Tarefa ("A.O.M") que não tinha nada a ver — e mesmo assim
-     * caía em "erro_diagnostico" por não ter reabertura nenhuma pra
-     * confirmar). Isso é estrutural: auditarFechamento só chega a
-     * "inconsistencia" quando o Diagnóstico JÁ bateu com alguma regra
-     * conhecida (regraParaDiagnostico achou algo) — quem falhou ali foi
-     * sempre a Próxima Tarefa. Diagnóstico errado de verdade (o técnico
-     * escolheu a categoria errada) o motor não tem como detectar sozinho,
-     * porque ele audita CONSISTÊNCIA entre os dois campos, não se o
-     * Diagnóstico escolhido reflete o que aconteceu de fato.
-     *
-     * A ÚNICA forma de saber que foi o Diagnóstico é uma confirmação
-     * explícita: a OS foi reaberta e a mensagem da Reabertura menciona
-     * "diagnóstico" (ex.: "reaberta para corrigir o diagnóstico") ->
-     * "erro_diagnostico". Não reaproveita classificarMotivoReabertura
-     * inteiro de propósito: aquela função decide "servico_nao_executado"
-     * vs "erro_processo" (qual fechamento credita quem); aqui a pergunta
-     * é outra (qual CAMPO do fechamento estava errado).
-     */
     subcategoriaErroInconsistencia(info) {
         const mensagem = normalizarTexto(info?.mensagemReabertura ?? "");
         return mensagem.includes("DIAGNOSTICO") ? "erro_diagnostico" : "erro_proxima_tarefa";
     },
 
-    /**
-     * "Ordens Acertadas" do COP — achados que ficaram OK sozinhos porque
-     * o PRÓPRIO fechamento da reabertura (não uma marcação manual) já
-     * resolveu o Diagnóstico x Próxima Tarefa (ver corrigidoAutomaticamente
-     * em auditar), quebrado por quem fez esse fechamento — só entra quem
-     * é do COP (mesmo critério do TMR de agendamento, ver
-     * IndicatorEngine.operadorEhDoCop e js/ui/setorescop.js). Usa o
-     * OPERADOR do fechamento (não o Colaborador Responsável, que não tem
-     * setor cadastrado — ver CONFIG_BASE.colaboradoresResponsaveis) pra
-     * bater com o mesmo critério de "é do COP?" usado ali.
-     *
-     * Correção MANUAL (corrigidoPor) fica de fora de propósito — é feita
-     * por quem está logado no COP Analytics, não necessariamente a mesma
-     * pessoa da planilha que reabriu/fechou a OS (ver conversa/decisão:
-     * "ordens acertadas" é sobre quem resolveu na própria reabertura).
-     */
     contarOrdensAcertadasCopDetalhado(ordens) {
         const relatorio = this.auditar(ordens);
         const porColaborador = new Map();

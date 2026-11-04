@@ -1,22 +1,3 @@
-/**
- * ==========================================================
- * Menu Lateral (hambúrguer) — navegação entre os módulos do COP
- * ==========================================================
- * Componente autocontido (HTML + CSS injetados daqui) pra ser o
- * mesmo em todas as páginas: index.html, agendador.html e
- * escala.html. Cada página só precisa:
- *   1. marcar onde o botão entra com [data-menu-lateral-host]
- *      (o botão vai como primeiro filho, antes da logo);
- *   2. dizer qual módulo está ativo em <body data-modulo="...">.
- *
- * Os módulos que vivem no index.html são abertos por âncora
- * (index.html#auditoria). Quando já estamos no index, o clique não
- * recarrega a página: chama mostrarSecao() (js/ui/navegacao.js).
- *
- * As cores são fixas (navy), como o cabeçalho do index — é a cor
- * de marca e não muda com o tema claro/escuro.
- */
-
 (function () {
 
     const ICONES = {
@@ -31,8 +12,6 @@
         admin: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'
     };
 
-    // secao: seção do index.html aberta pelo módulo. Escala e Agendador
-    // abrem a visão do dia; editar/pré-agendar é numa guia nova, de lá.
     const MODULOS = [
         { id: "inicio",    titulo: "Início",                  href: "index.html",               secao: "inicio" },
         { id: "ordens",    titulo: "Gestão de Relatórios",    href: "index.html#dashboard",     secao: "dashboard" },
@@ -133,18 +112,13 @@ body.menu-lateral-aberto .menu-lateral-fundo{ opacity:1; pointer-events:auto; }
         document.querySelector(".menu-hamburguer")?.setAttribute("aria-expanded", "false");
     }
 
-    // Painel de Administrador só pra admin. Fora do index (onde ehAdmin()
-    // não existe) o item fica visível — o próprio index barra quem não pode.
     function atualizarVisibilidadeAdmin() {
         const admin = document.querySelector('.menu-lateral nav a[data-modulo="admin"]');
         if (admin) admin.hidden = typeof ehAdmin === "function" && !ehAdmin();
-        // Gestão de Terceiras: só admin/editor (fora do index, onde a função
-        // não existe, fica visível — o próprio index barra quem não pode).
+
         const terceiras = document.querySelector('.menu-lateral nav a[data-modulo="terceiras"]');
         if (terceiras) terceiras.hidden = typeof podeEditarOperacao === "function" && !podeEditarOperacao();
 
-        // Abas por usuário (Configurações > Acesso dos usuários): módulo sem
-        // nenhuma aba liberada some; o link abre a 1ª aba liberada dele.
         if (typeof primeiraSecaoLiberada !== "function") return;
         document.querySelectorAll(".menu-lateral nav a[data-secao-modulo]").forEach(a => {
             if (a.dataset.modulo === "inicio" || a.dataset.modulo === "admin") return;
@@ -214,7 +188,6 @@ body.menu-lateral-aberto .menu-lateral-fundo{ opacity:1; pointer-events:auto; }
             if (e.key === "Escape" && document.body.classList.contains("menu-lateral-aberto")) fechar();
         });
 
-        // No index, módulos do próprio index trocam de seção sem recarregar.
         painel.querySelectorAll("a[data-secao-modulo]").forEach(a => {
             a.addEventListener("click", e => {
                 if (!estaNoIndex() || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -228,7 +201,6 @@ body.menu-lateral-aberto .menu-lateral-fundo{ opacity:1; pointer-events:auto; }
         atualizarVisibilidadeAdmin();
     }
 
-    // Contador ao lado do item (ex.: alertas ativos) + ponto no hambúrguer.
     function definirBadge(id, total) {
         const badge = document.querySelector(`.menu-lateral nav a[data-modulo="${id}"] .menu-lateral-badge`);
         if (!badge) return;

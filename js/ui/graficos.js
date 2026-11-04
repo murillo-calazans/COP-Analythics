@@ -1,30 +1,3 @@
-/**
- * ==========================================================
- * UI de Gráficos — barra horizontal reutilizável
- * ==========================================================
- * Recebe dados já prontos do IndicatorEngine ([{rotulo, valor}],
- * ordenado do maior pro menor) e desenha. Não calcula nada aqui
- * — só apresenta. Sempre mostra só os "limite" primeiros (padrão
- * 5) — se tiver mais que isso, aparece um link "Ver todos" que
- * abre a lista completa num popup, pra página não ficar comprida
- * demais com ranking grande (técnico, cidade, assunto, etc.).
- * Tooltip acessível por mouse e teclado.
- *
- * Com opcoes.campoFiltro (ex.: "assuntos", "operadores", "cidades",
- * "diagnosticos" — ver CAMPOS_FILTRO_INTERATIVO em
- * js/ui/filtrointerativo.js), clicar numa barra filtra a tela inteira
- * por ela (Ctrl+clique soma várias), e, com esse campo filtrado, as
- * barras fora do filtro ficam opacas em vez de sumir (realce estilo
- * Power BI — pra isso o gráfico precisa receber os dados calculados
- * SEM esse campo no filtro, ver dadosComRealce). Valor escolhido que
- * ficaria fora do top "limite" entra na lista mesmo assim.
- */
-
-/**
- * Dados de um gráfico com campoFiltro: se o campo estiver filtrado,
- * recalcula ignorando ele (FiltroEngine.ordensFiltradasExceto), senão
- * reaproveita o que já foi calculado pro resto da tela (sem custo extra).
- */
 function dadosComRealce(campo, dadosJaCalculados, calcular) {
     if (!campoInterativoAtivo(campo)) return dadosJaCalculados;
     return calcular(FiltroEngine.ordensFiltradasExceto(CAMPOS_FILTRO_INTERATIVO[campo].chaveEstado));
@@ -70,7 +43,7 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
         linha.setAttribute("aria-label", `${item.rotulo}: ${formatoValor(item.valor)}`);
 
         if (campoFiltro) {
-            // O clique em si é tratado pelo listener delegado de js/ui/filtrointerativo.js.
+
             linha.classList.add("filtro-clicavel");
             linha.dataset.campo = campoFiltro;
             linha.dataset.valor = item.rotulo;
@@ -111,15 +84,13 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
 
         if (campoFiltro) {
             linha.addEventListener("keydown", evento => {
-                if (evento.target !== linha) return; // Enter no botão de ação é dele
+                if (evento.target !== linha) return;
                 if (evento.key === "Enter" || evento.key === " ") {
                     evento.preventDefault();
                     cliqueFiltroInterativo(campoFiltro, item.rotulo, evento, linha);
                 }
             });
 
-            // Clique na barra agora filtra — a ação antiga (ex.: abrir a
-            // ficha do técnico) vai pra um botão próprio no fim da linha.
             if (opcoes.aoClicar) {
                 linha.classList.add("com-acao");
                 const acao = document.createElement("button");
@@ -160,13 +131,6 @@ function renderizarGraficoBarras(containerId, dados, opcoes = {}) {
     }
 }
 
-/**
- * Popup com a lista completa (não só os "limite" primeiros) em tabela.
- * O modal #modalGraficoCompleto é genérico (só título + um container de
- * conteúdo) — também reaproveitado por abrirCategoriaAuditoria
- * (js/ui/auditoriaoperacional.js) pro popup dos cards da Auditoria, com
- * um HTML diferente (duas colunas em vez de tabela).
- */
 function abrirGraficoCompleto(containerId) {
     const container = document.getElementById(containerId);
     if (!container || !container._dadosGrafico) return;

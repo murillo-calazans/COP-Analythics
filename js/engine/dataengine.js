@@ -1,14 +1,3 @@
-/**
- * ==========================================================
- * Data Engine
- * ==========================================================
- * Responsável por transformar as linhas brutas de Ordens.xlsx
- * em objetos Movimentacao/OrdemServico e popular APP.dados.
- * Não conhece Excel além do array de linhas já convertido
- * por XLSX.utils.sheet_to_json — nenhuma outra camada deve
- * tocar em planilha diretamente.
- */
-
 const DataEngine = {
 
     processarOrdens(linhas) {
@@ -16,8 +5,6 @@ const DataEngine = {
 
         this.validarEstrutura(linhas);
 
-        // Resolve os nomes reais das colunas 1x (não a cada linha) —
-        // essencial para processar milhares de movimentações rapidamente.
         const colunas = this.resolverColunas(linhas[0]);
 
         const ordens = new Map();
@@ -67,15 +54,6 @@ const DataEngine = {
         };
     },
 
-    /**
-     * Acrescenta "novas" (Map de OrdemServico recém-processado) dentro de
-     * "existentes" — em vez de substituir. Existe porque um arquivo de
-     * Ordens.xlsx de um ano inteiro é grande demais pro navegador processar
-     * de uma vez (memória); dividindo em pedaços menores (por mês, por
-     * trimestre) e importando um de cada vez, os dados vão se acumulando.
-     * Se a mesma OS aparecer nos dois pedaços, as movimentações se somam
-     * (adicionarMovimentacao recalcula status/técnico/datas sozinho).
-     */
     mesclarOrdens(existentes, novas) {
         for (const [id, novaOrdem] of novas) {
             const existente = existentes.get(id);

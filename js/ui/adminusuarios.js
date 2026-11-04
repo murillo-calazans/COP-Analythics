@@ -1,32 +1,11 @@
-/**
- * ==========================================================
- * Painel de Administrador — Usuários
- * ==========================================================
- * Lista quem tem conta e deixa um admin trocar papel, nome e setor
- * ou remover o acesso, sem SQL Editor. Tudo passa pelas funções do
- * database/patch-16-admin-usuarios.sql, que conferem no banco se
- * quem chama é admin — esconder a tela aqui é só conforto.
- *
- * - nome: aparece na saudação e acha o operador nas OS (produção do
- *   mês, ver ProducaoEngine.encontrarOperador) — use o nome como está
- *   no sistema de OS;
- * - setor: só identifica a pessoa. O que ela VÊ (setores das OS e abas)
- *   fica em Configurações > Acesso dos usuários (js/ui/acessousuarios.js).
- *   (usuário de terceirizada, ver database/patch-06).
- *
- * Criar a conta (e-mail/senha) continua no Supabase; a conta nova
- * aparece aqui como "Sem acesso" até receber um papel.
- */
-
 const PAPEIS_USUARIO = {
     admin: { rotulo: "Admin", descricao: "Tudo o que o editor faz + usuários e Auditor IA" },
     editor: { rotulo: "Editor", descricao: "Importa e apaga dados, logs, edita escala, pré-agendamento e agenda" },
     leitor: { rotulo: "Leitor", descricao: "Só consulta" }
 };
 
-let usuariosAdmin = null;     // lista vinda do banco
-// id -> acesso (setores/abas visíveis, patch-28) — resumo na coluna "Pode ver";
-// a edição é a mesma de Configurações > Acesso dos usuários.
+let usuariosAdmin = null;
+
 let acessoPorUsuario = new Map();
 let buscaUsuariosAdmin = "";
 
@@ -180,7 +159,6 @@ function registrarLinhaUsuarioAdmin(tr) {
     });
     const botaoSalvar = tr.querySelector(".admin-salvar");
 
-    // "Salvar" só acende quando algo mudou (conta sem acesso já nasce acesa).
     const atualizarBotao = () => {
         if (!usuario.papel) return;
         const c = campos();

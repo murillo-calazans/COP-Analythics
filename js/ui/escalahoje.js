@@ -1,21 +1,3 @@
-/**
- * ==========================================================
- * Escala de Hoje (módulo Escala)
- * ==========================================================
- * Só leitura: mostra quem trabalha no dia, a partir da mesma
- * linha do Supabase que a escala.html edita
- * (escala_tecnicos_dados, ver database/patch-14).
- *
- * As regras de "como fica o técnico nesse dia" ficam em
- * js/agendador/escala-dia.js (cópia das de escala.html, compartilhada
- * com o pré-agendamento e a publicação automática da agenda).
- *
- * Editar continua sendo na escala.html, numa guia nova, e o botão
- * só aparece pra admin/editor.
- */
-
-// Feriados e regras do dia vêm de js/agendador/escala-dia.js (compartilhado com o
-// pré-agendamento e a publicação automática da agenda).
 const ESCALA_FERIADOS = EscalaDia.FERIADOS;
 
 const ESCALA_DIAS_JS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
@@ -29,8 +11,8 @@ const ESCALA_SITUACOES = {
     outras: "Outras atividades"
 };
 
-let escalaTecnicosCache = null; // { techs, carregadoEm }
-let escalaHojeData = null;      // dia exibido (Date à meia-noite)
+let escalaTecnicosCache = null;
+let escalaHojeData = null;
 
 function isoDataLocal(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -41,7 +23,6 @@ function hojeMeiaNoite() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** Lê a escala do Supabase uma vez por sessão de tela (forcar = relê). */
 async function carregarEscalaTecnicos(forcar = false) {
     if (escalaTecnicosCache && !forcar) return escalaTecnicosCache.techs;
 
@@ -60,7 +41,6 @@ async function carregarEscalaTecnicos(forcar = false) {
 
 const EscalaRegras = EscalaDia.regras;
 
-/** Lista { tech, resumo, trabalha, parceiro } de todos os técnicos na data. */
 function montarEscalaDoDia(techs, data) {
     return EscalaDia.montarDia(techs, data);
 }
@@ -70,13 +50,10 @@ function formatarDataLonga(data) {
     return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
-// ---------- Desenho ----------
-
-let escalaHojeFiltro = "todos"; // todos | instalador | manutencao | fora
-const escalaCidadesAbertas = new Set(); // cidades com "Ver mais" aberto
+let escalaHojeFiltro = "todos";
+const escalaCidadesAbertas = new Set();
 const ESCALA_LINHAS_VISIVEIS = 5;
 
-// Terceirizada vem como sufixo do nome ("Alex Cardoso - VELOZ"); sem sufixo = interno.
 const ESCALA_TERCEIRAS = { VELOZ: "Veloz", AZUL: "Azul", TECHNOMAIS: "Technomais" };
 
 function separarTerceira(nome) {
@@ -85,13 +62,11 @@ function separarTerceira(nome) {
     return equipe ? { nome: m[1].trim(), terceira: equipe } : { nome: String(nome ?? "").trim(), terceira: null };
 }
 
-/** "Edson Gomes" -> "Edson G." (parceiro da dupla, pra caber na linha). */
 function nomeCurto(nome) {
     const partes = separarTerceira(nome).nome.split(/\s+/).filter(Boolean);
     return partes.length > 1 ? `${partes[0]} ${partes[partes.length - 1].charAt(0)}.` : (partes[0] ?? "");
 }
 
-/** "08:00","17:00" -> "08–17h"; "08:30","17:00" -> "08:30–17h". */
 function faixaHorario(inicio, fim) {
     const curto = h => String(h ?? "").replace(/:00$/, "");
     return `${curto(inicio)}–${curto(fim)}h`;
@@ -131,7 +106,7 @@ async function renderizarEscalaHoje() {
         container.innerHTML = `<p class="alerta-vazio">Não deu pra carregar a escala: ${escaparHtml(erro.message ?? String(erro))}</p>`;
         return;
     }
-    if (escalaHojeData !== data) return; // trocou de dia enquanto carregava
+    if (escalaHojeData !== data) return;
 
     if (techs.length === 0) {
         container.innerHTML = '<p class="alerta-vazio">Nenhum técnico cadastrado na escala ainda.</p>';
@@ -186,8 +161,6 @@ async function renderizarEscalaHoje() {
 function htmlCidadesEscala(trabalhando) {
     const filtrados = escalaHojeFiltro === "todos" ? trabalhando : trabalhando.filter(d => d.resumo.situacao === escalaHojeFiltro);
 
-    // Dupla vira uma linha só, no nome do principal (como na escala.html): os
-    // auxiliares passam por último, então o principal já levou o par.
     const jaListados = new Set();
     const porCidade = new Map();
     const auxiliar = item => (item.parceiro && item.papel === "auxiliar" ? 1 : 0);
@@ -202,7 +175,6 @@ function htmlCidadesEscala(trabalhando) {
 
     if (porCidade.size === 0) return '<p class="alerta-vazio">Ninguém nesse filtro neste dia.</p>';
 
-    // Dentro da cidade: manutenção primeiro, depois instalação; cada bloco em ordem alfabética.
     const ordemSituacao = { manutencao: 0, instalador: 1 };
     for (const linhas of porCidade.values()) {
         linhas.sort((a, b) =>

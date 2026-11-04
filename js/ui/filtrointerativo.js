@@ -1,33 +1,3 @@
-/**
- * ==========================================================
- * Filtro Global interativo (estilo Power BI)
- * ==========================================================
- * Três coisas em cima do Filtro Global que já existe (estado em
- * APP.filtrosGlobais, popup em js/ui/filtroperiodo.js):
- *
- * 1. Etiquetas dos filtros ativos sempre visíveis ao lado do botão do
- *    Filtro Global (no celular, um botão flutuante com o resumo), cada
- *    uma com × pra remover.
- * 2. Clicar pra filtrar: barra de gráfico (opção campoFiltro de
- *    renderizarGraficoBarras) ou nome em tabela (.filtro-clicavel com
- *    data-campo/data-valor, um listener delegado só). Clique simples =
- *    o campo passa a ser SÓ aquele valor; clicar de novo no mesmo
- *    valor remove.
- * 3. Ctrl/Shift/Cmd + clique só MARCA o valor (sem redesenhar a tela,
- *    pra continuar dando pra clicar nas outras barras) — aplica tudo
- *    de uma vez ao soltar a tecla ou quando a janela perde o foco.
- *
- * Não muda regra nenhuma de filtro (período/fechamento efetivo etc.
- * continuam no FiltroEngine) — só escreve em APP.filtrosGlobais e
- * chama atualizarBadgeFiltroGlobal()/atualizarTodasAsTelas(), igual o
- * botão "Aplicar" do popup.
- *
- * Diagnóstico é invertido (APP.filtrosGlobais.diagnosticosOcultos
- * guarda os OCULTOS, normalizados): "filtrar por um diagnóstico" =
- * ocultar todos os outros.
- */
-
-// Chave usada em campoFiltro / data-campo -> onde fica no estado e nas opções.
 const CAMPOS_FILTRO_INTERATIVO = {
     assuntos: { rotulo: "Assunto", chaveEstado: "assuntos", chaveOpcoes: "assuntos" },
     cidades: { rotulo: "Cidade", chaveEstado: "cidades", chaveOpcoes: "cidades" },
@@ -37,13 +7,10 @@ const CAMPOS_FILTRO_INTERATIVO = {
     diagnosticos: { rotulo: "Diagnóstico", chaveEstado: "diagnosticosOcultos", chaveOpcoes: "diagnosticos", invertido: true }
 };
 
-// Acima disso, o campo vira uma etiqueta só ("Assunto: 5 selecionados").
 const MAXIMO_ETIQUETAS_POR_CAMPO = 3;
 
-// Seleção com Ctrl ainda não aplicada: campo -> Set de valores (já resolvidos).
 let _selecaoPendenteCtrl = new Map();
 
-// FiltroEngine.coletarOpcoes passa por TODAS as OS — guarda até os dados mudarem.
 let _cacheOpcoesInterativo = { ordens: null, total: -1, opcoes: null };
 
 function opcoesFiltroInterativo() {
@@ -61,7 +28,6 @@ function rotuloCortado(rotulo) {
     return null;
 }
 
-/** O rótulo (de barra ou célula) bate com esse valor? Normalizado, aceitando rótulo cortado ("Instalação nov…"). */
 function rotuloBateComValor(rotulo, valor) {
     const valorNormalizado = normalizarTexto(String(valor ?? ""));
     const prefixo = rotuloCortado(rotulo);
@@ -69,22 +35,17 @@ function rotuloBateComValor(rotulo, valor) {
     return normalizarTexto(String(rotulo ?? "")) === valorNormalizado;
 }
 
-/** Valor "oficial" do filtro (grafia das opções do popup) pra um rótulo; o próprio rótulo se não achar nenhum. */
 function resolverValorFiltro(campo, rotulo) {
     const opcoes = opcoesFiltroInterativo()[CAMPOS_FILTRO_INTERATIVO[campo].chaveOpcoes] ?? [];
     return opcoes.find(opcao => rotuloBateComValor(rotulo, opcao)) ?? rotuloCortado(rotulo) ?? String(rotulo);
 }
 
-/** Valores hoje "escolhidos" no campo — pra diagnóstico, os VISÍVEIS (vazio = sem filtro nesse campo). */
 function valoresSelecionadosCampo(campo) {
     const config = CAMPOS_FILTRO_INTERATIVO[campo];
     const atuais = APP.filtrosGlobais[config.chaveEstado] ?? [];
     if (!config.invertido) return [...atuais];
     if (atuais.length === 0) return [];
 
-    // Uma entrada por diagnóstico normalizado — grafias que só diferem em
-    // acento/espaço (ex.: "FECHAMENTO CORRETO" e "FECHAMENTO CORRETO ")
-    // são o mesmo diagnóstico pro filtro.
     const ocultos = new Set(atuais);
     const visiveis = new Map();
     for (const d of opcoesFiltroInterativo().diagnosticos ?? []) {
@@ -94,7 +55,6 @@ function valoresSelecionadosCampo(campo) {
     return [...visiveis.values()];
 }
 
-/** Pro realce dos gráficos: o rótulo está entre os valores escolhidos nesse campo? */
 function rotuloEstaNoFiltro(campo, rotulo) {
     const config = CAMPOS_FILTRO_INTERATIVO[campo];
     const atuais = APP.filtrosGlobais[config.chaveEstado] ?? [];
@@ -107,7 +67,6 @@ function campoInterativoAtivo(campo) {
     return Boolean(config) && FiltroEngine.campoAtivo(config.chaveEstado);
 }
 
-/** Grava os valores escolhidos de um campo em APP.filtrosGlobais (objeto novo, nunca mutação). */
 function definirValoresCampo(campo, valores) {
     const config = CAMPOS_FILTRO_INTERATIVO[campo];
     let novoValor;
@@ -133,10 +92,6 @@ function aplicarFiltroInterativo() {
     atualizarTodasAsTelas();
 }
 
-/**
- * Ponto de entrada do clique (gráfico ou tabela). Com Ctrl/Shift/Cmd
- * só marca e espera soltar a tecla; sem, aplica na hora.
- */
 function cliqueFiltroInterativo(campo, rotulo, evento, elemento) {
     if (!CAMPOS_FILTRO_INTERATIVO[campo] || APP.dados.ordens.size === 0) return;
 
@@ -148,7 +103,6 @@ function cliqueFiltroInterativo(campo, rotulo, evento, elemento) {
         return;
     }
 
-    // Clique simples no meio de uma seleção com Ctrl ainda pendente: aplica a pendente primeiro.
     if (_selecaoPendenteCtrl.size > 0) aplicarSelecaoPendenteCtrl(false);
 
     const atuais = valoresSelecionadosCampo(campo);
@@ -160,7 +114,7 @@ function cliqueFiltroInterativo(campo, rotulo, evento, elemento) {
 
 function marcarPendenteCtrl(campo, valor, elemento) {
     if (!_selecaoPendenteCtrl.has(campo)) {
-        // Parte do que já está filtrado nesse campo (igual o Ctrl do Power BI: soma à seleção).
+
         _selecaoPendenteCtrl.set(campo, new Map(valoresSelecionadosCampo(campo).map(v => [normalizarTexto(v), v])));
     }
 
@@ -203,25 +157,16 @@ function esconderAvisoCtrl() {
     if (aviso) aviso.hidden = true;
 }
 
-/**
- * HTML de um valor de tabela clicável pra filtrar (Ordens, Técnicos,
- * Auditoria) — o clique é tratado pelo listener delegado lá embaixo.
- */
 function textoFiltravel(campo, valor) {
     if (valor === null || valor === undefined || valor === "") return "-";
     const texto = escaparHtml(String(valor));
     return `<span class="filtro-clicavel" data-campo="${campo}" data-valor="${texto}" title="Clique pra filtrar o painel por este valor — Ctrl+clique pra escolher vários">${texto}</span>`;
 }
 
-/* ---------------------------------------------------------
- * Etiquetas dos filtros ativos
- * ------------------------------------------------------- */
-
 function formatarDataCurta(data) {
     return data ? data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "…";
 }
 
-/** Uma entrada por etiqueta: { texto, titulo, remover() }. */
 function montarEtiquetasFiltrosAtivos() {
     const filtros = APP.filtrosGlobais;
     const etiquetas = [];
@@ -295,23 +240,16 @@ function renderizarFiltrosAtivos() {
     }
 }
 
-/* ---------------------------------------------------------
- * Listeners (1x, no início do app)
- * ------------------------------------------------------- */
-
 function registrarFiltroInterativo() {
-    // Captura (3º argumento true): roda ANTES do listener da linha da
-    // tabela (que abre o detalhe da OS/técnico) e impede que ele rode —
-    // clicar no nome filtra, clicar no resto da linha continua abrindo.
+
     document.addEventListener("click", evento => {
-        if (evento.target.closest("[data-acao-grafico]")) return; // botão "ver detalhes" dentro da barra
+        if (evento.target.closest("[data-acao-grafico]")) return;
         const alvo = evento.target.closest(".filtro-clicavel[data-campo]");
         if (!alvo) return;
 
         evento.preventDefault();
         evento.stopPropagation();
 
-        // Popup "Ver todos" de um gráfico fica com dado velho depois de filtrar — fecha num clique simples.
         const multiplo = evento.ctrlKey || evento.shiftKey || evento.metaKey;
         if (!multiplo && alvo.closest("#modalGraficoCompleto")) fecharModal("modalGraficoCompleto");
 

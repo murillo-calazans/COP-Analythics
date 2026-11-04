@@ -1,35 +1,8 @@
-/**
- * ==========================================================
- * Cache Local (IndexedDB)
- * ==========================================================
- * Guarda a última leitura completa do Supabase neste navegador, pra
- * "mostrar na hora, atualizar depois": ao abrir o app, js/services/
- * armazenamento.js aplica isso direto (sem esperar rede nenhuma)
- * enquanto busca a versão atual do Supabase por trás e substitui
- * quando terminar. É puramente um acelerador de tela — o Supabase
- * continua sendo a única fonte de verdade compartilhada; se esse
- * cache falhar, estiver ausente ou vier vazio, não quebra nada, só
- * faz a primeira tela demorar como demorava antes.
- * Guarda as linhas BRUTAS (o mesmo formato que vem do Supabase),
- * não os Maps/OrdemServico/Movimentacao já reconstruídos — assim
- * reaproveita exatamente a mesma reconstrução (reconstruirReferencias/
- * reconstruirOrdens em armazenamento.js) nos dois casos.
- * localStorage não dá conta do volume (dezenas de milhares de
- * movimentações passam fácil de 10-20MB) — por isso IndexedDB.
- * Não é um cofre: não é criptografado nem some no logout (mesmo
- * modelo de confiança do token de sessão do Supabase, que já fica no
- * localStorage). A segurança de verdade é a RLS no banco, não isso.
- */
-
 const CACHE_DB_NOME = "cop-analytics-cache";
 const CACHE_DB_VERSAO = 1;
 const CACHE_STORE = "snapshot";
 const CACHE_CHAVE = "atual";
 
-// Qual projeto Supabase gerou este cache. Um cache do projeto A NUNCA pode ser
-// reaproveitado contra o projeto B (migração por egress em 19/10/2026): as datas,
-// ids e a marca d'água do incremental são de outro banco, e mesclar daria dados
-// parciais/errados. SUPABASE_URL é global (js/config/supabase.js carrega antes).
 function projetoDoCache() {
     try { return typeof SUPABASE_URL === "string" ? SUPABASE_URL : ""; } catch { return ""; }
 }
@@ -49,11 +22,6 @@ function abrirBancoCacheLocal() {
     });
 }
 
-/**
- * Salva o snapshot bruto (referências + ordens/movimentações) que acabou
- * de vir do Supabase. Best-effort: falha aqui não impede o app de
- * funcionar, só faz o próximo carregamento não ter cache pra usar.
- */
 async function salvarCacheLocal(referenciasBrutas, ordensBrutas) {
     try {
         const banco = await abrirBancoCacheLocal();
@@ -81,7 +49,6 @@ async function salvarCacheLocal(referenciasBrutas, ordensBrutas) {
     }
 }
 
-/** Retorna o snapshot salvo, ou null se não houver (ou der erro). */
 async function carregarCacheLocal() {
     try {
         const banco = await abrirBancoCacheLocal();
@@ -95,9 +62,6 @@ async function carregarCacheLocal() {
 
         banco.close();
 
-        // Cache de outro projeto Supabase (migração) → descarta e força o load
-        // completo do projeto atual. Sem isso, o incremental mesclaria contra um
-        // snapshot de outro banco e mostraria só uns poucos dados (bug dos "18").
         if (resultado && resultado.projeto !== projetoDoCache()) {
             console.warn(`Cache é de outro projeto (${resultado.projeto || "sem marca"}) — ignorando e apagando.`);
             await limparCacheLocal();
@@ -111,7 +75,6 @@ async function carregarCacheLocal() {
     }
 }
 
-/** Apaga o cache local — chamado junto de limparDadosImportados(), senão o próximo F5 ressuscitaria o que acabou de ser apagado do banco. */
 async function limparCacheLocal() {
     try {
         const banco = await abrirBancoCacheLocal();

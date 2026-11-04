@@ -1,29 +1,3 @@
-/**
- * ==========================================================
- * UI de Alertas
- * ==========================================================
- * Exibe os registros calculados pelo IndicatorEngine (calcularRecorrencia),
- * em duas abas: Ativos (exige o padrão de recorrência — ver
- * LIMITE_QTD_RECORRENCIA/LIMITE_DIAS_RECORRENCIA) e Cancelados (TODO
- * cliente com uma OS de assunto IndicatorEngine.ASSUNTO_CANCELAMENTO
- * em algum ponto do histórico, independente de ter batido o padrão de
- * recorrência — ver encontrarCancelamentoCliente).
- *
- * De propósito INDEPENDENTE do Filtro Global: usa APP.dados.ordens
- * (tudo) em vez de FiltroEngine.ordensFiltradas(), só recortado pelo
- * período PRÓPRIO desta aba (APP.filtrosAlertas — ver ordensParaAlertas)
- * — cidade/setor/assunto/etc. do Filtro Global não valem aqui. Quem
- * decide o que conta pra recorrência são só as configurações dela
- * (Assuntos que Contam / Diagnósticos Excluídos da Recorrência).
- * Guardado em APP.indicadores.recorrenciaAlertas — separado do
- * APP.indicadores.recorrencia usado pelo Dashboard (esse continua
- * respeitando o Filtro Global normalmente).
- *
- * Clicar num cliente abre um modal com o detalhe de cada OS e a
- * quantidade por mês.
- */
-
-/** Ordens pra recorrência de Alertas: tudo, só recortado pelo período local (se houver). Ignora Filtro Global. */
 function ordensParaAlertas() {
     const { dataInicio, dataFim } = APP.filtrosAlertas;
     if (!dataInicio && !dataFim) return APP.dados.ordens;
@@ -37,7 +11,6 @@ function ordensParaAlertas() {
     return filtradas;
 }
 
-/** Recalcula a recorrência de Alertas (independente do Filtro Global) e redesenha badge + tabelas. */
 function atualizarAlertas() {
     if (APP.dados.ordens.size === 0) return;
 
@@ -133,7 +106,6 @@ function renderizarAlertas() {
     renderizarTabelaAlertasCancelados(cancelados);
 }
 
-/** Resumo numérico da recorrência atual (ativos+cancelados juntos) — usado na própria aba e no relatório baixável. */
 function calcularIndicadoresAlertas(lista) {
     const ativos = lista.filter(item => !item.cancelado);
     const cancelados = lista.filter(item => item.cancelado);
@@ -192,8 +164,6 @@ function renderizarIndicadoresAlertas(indicadores) {
         </div>
     `;
 
-    // Clicar numa cidade filtra as OUTRAS telas (Filtro Global) — Alertas
-    // em si continua independente dele, só realça a cidade escolhida.
     renderizarGraficoBarras("graficoAlertasCidade", indicadores.porCidade, {
         serie: "serie-2",
         limite: 5,

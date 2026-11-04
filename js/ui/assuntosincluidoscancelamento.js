@@ -1,15 +1,3 @@
-/**
- * ==========================================================
- * UI de Assuntos Incluídos na Última OS Antes do Cancelamento
- * ==========================================================
- * Abre num modal com busca: digita pra filtrar a lista, clica
- * num assunto pra alternar (incluir/remover como possível "última OS
- * antes do cancelamento"). Lista branca: por padrão nada está
- * incluído. Cada clique já salva e recalcula os indicadores na hora —
- * sem botão "Salvar". Reaproveita coletarAssuntosDistintos() de
- * js/ui/filtroglobal.js (mesma fonte de assuntos).
- */
-
 function registrarAssuntosIncluidosCancelamento() {
     const botaoAbrir = document.getElementById("btnAbrirAssuntosIncluidosCancelamento");
     const inputBusca = document.getElementById("buscaAssuntoIncluidoCancelamento");
