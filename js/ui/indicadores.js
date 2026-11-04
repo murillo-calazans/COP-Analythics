@@ -293,7 +293,7 @@ function renderizarSecaoIndicadores() {
                     <div class="grafico-titulo">Clientes com problema após instalação/transferência</div>
                     <div class="grafico-subtitulo" id="funilAssuntosSubtitulo">Configure os assuntos de origem e destino</div>
                 </div>
-                <button type="button" class="grafico-toggle-tabela" id="btnConfigurarFunilAssuntos">Configurar</button>
+                ${ehAdmin() ? '<button type="button" class="grafico-toggle-tabela" id="btnConfigurarFunilAssuntos">Configurar</button>' : ""}
             </div>
             <div id="funilAssuntosConteudo"></div>
         </div>
@@ -328,7 +328,7 @@ function renderizarSecaoIndicadores() {
                     <div class="grafico-titulo">TMR de agendamento e reagendamento por colaborador do COP</div>
                     <div class="grafico-subtitulo" id="tmrCopSubtitulo">Configure o(s) setor(es) do COP</div>
                 </div>
-                <button type="button" class="grafico-toggle-tabela" id="btnConfigurarSetoresCop">Configurar</button>
+                ${ehAdmin() ? '<button type="button" class="grafico-toggle-tabela" id="btnConfigurarSetoresCop">Configurar</button>' : ""}
             </div>
             <div id="tmrCopConteudo"></div>
         </div>

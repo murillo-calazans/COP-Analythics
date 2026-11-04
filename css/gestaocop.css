@@ -81,3 +81,15 @@ html[data-tema="dark"] .backlog-cidade-sel{ background: var(--cor-superficie, #0
 .graf-valor{ fill: var(--cor-texto-suave); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .graf-barra{ fill: #3b82f6; cursor: pointer; transition: fill .12s; }
 .graf-barra:hover{ fill: #2563eb; }
+
+.backlog-hist-num{
+    border: 0; background: transparent; padding: 2px 6px; border-radius: 6px;
+    color: var(--cor-primaria, #2563eb); font-weight: 600; font-size: inherit; cursor: pointer;
+}
+.backlog-hist-num:hover{ background: var(--cor-fundo-suave, rgba(0,0,0,.05)); text-decoration: underline; }
+.backlog-hist-var{ font-weight: 600; color: var(--cor-texto-suave); white-space: nowrap; }
+.backlog-hist-var.sobe{ color: #B91C1C; }
+.backlog-hist-var.desce{ color: #15803D; }
+html[data-tema="dark"] .backlog-hist-var.sobe{ color: #FCA5A5; }
+html[data-tema="dark"] .backlog-hist-var.desce{ color: #86EFAC; }
+.backlog-hist-tabela td:not(:first-child), .backlog-hist-tabela th:not(:first-child){ text-align: right; }

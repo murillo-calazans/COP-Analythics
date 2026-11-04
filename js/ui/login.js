@@ -160,9 +160,12 @@ function aplicarGateDePapel() {
 
     const operacao = podeEditarOperacao();
     const importar = podeImportar();
+    const admin = typeof ehAdmin === "function" && ehAdmin();
     if (botaoImportar) botaoImportar.hidden = !importar;
     if (botaoLimpar) botaoLimpar.hidden = !operacao;
     if (botaoLogs) botaoLogs.hidden = !operacao;
     if (botaoAtualizarRobo) botaoAtualizarRobo.hidden = !operacao;
     if (cardDiagnosticosNaoResolvidos) cardDiagnosticosNaoResolvidos.hidden = !importar;
+
+    document.querySelectorAll('[data-secao="configuracoes"]').forEach(el => { el.hidden = !admin; });
 }

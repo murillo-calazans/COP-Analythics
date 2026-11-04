@@ -87,6 +87,10 @@ function mostrarSecao(nome) {
         return mostrarSecao("inicio");
     }
 
+    if (nome === "configuracoes" && typeof ehAdmin === "function" && !ehAdmin()) {
+        return mostrarSecao("inicio");
+    }
+
     if (!podeVerSecao(nome)) {
         return mostrarSecao(primeiraSecaoLiberada(MODULO_DA_SECAO[nome]) ?? "inicio");
     }

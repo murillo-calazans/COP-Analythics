@@ -33,6 +33,12 @@ const ConfigRemota = (function () {
         }
     }
 
+    function removerLocal(local) {
+        try {
+            localStorage.removeItem(local);
+        } catch {}
+    }
+
     async function carregarTudo() {
         let linhas;
         try {
@@ -44,16 +50,23 @@ const ConfigRemota = (function () {
             return;
         }
 
-        const presentes = new Set();
+        const valores = new Map();
         for (const linha of linhas) {
-            const entrada = porChave.get(linha.chave);
-            if (!entrada) continue;
-            gravarLocal(entrada.local, linha.valor);
-            presentes.add(linha.chave);
+            if (porChave.has(linha.chave)) valores.set(linha.chave, linha.valor);
         }
 
-        if (APP.usuario?.papel === "admin") {
-            const faltando = ENTRADAS.filter(e => !presentes.has(e.chave) && lerLocal(e.local) !== undefined);
+        const admin = APP.usuario?.papel === "admin";
+
+        for (const entrada of ENTRADAS) {
+            if (valores.has(entrada.chave)) {
+                gravarLocal(entrada.local, valores.get(entrada.chave));
+            } else if (!admin) {
+                removerLocal(entrada.local);
+            }
+        }
+
+        if (admin) {
+            const faltando = ENTRADAS.filter(e => !valores.has(e.chave) && lerLocal(e.local) !== undefined);
             if (faltando.length) {
                 const payload = faltando.map(e => ({
                     chave: e.chave,

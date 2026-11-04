@@ -637,15 +637,18 @@ function ativarAbaAgenda(aba) {
     const ixc = document.getElementById("agendaIxcConteudo");
     const aberto = document.getElementById("agendaAbertoConteudo");
     const timeline = document.getElementById("agendaTimelineConteudo");
+    const backlogHist = document.getElementById("agendaBacklogHistConteudo");
     const navDia = document.getElementById("agendaNavDia");
     if (ia) ia.hidden = aba !== "ia";
     if (ixc) ixc.hidden = aba !== "ixc";
     if (aberto) aberto.hidden = aba !== "aberto";
     if (timeline) timeline.hidden = aba !== "timeline";
+    if (backlogHist) backlogHist.hidden = aba !== "backlog";
     if (navDia) navDia.style.visibility = aba === "ia" ? "" : "hidden";
     if (aba === "ixc") carregarAgendaIxc();
     if (aba === "timeline" && typeof carregarTimelineAgenda === "function") carregarTimelineAgenda();
     if (aba === "aberto" && typeof renderizarAgendaBacklog === "function") renderizarAgendaBacklog();
+    if (aba === "backlog" && typeof renderizarBacklogHistorico === "function") renderizarBacklogHistorico();
 }
 
 function registrarAbasAgenda() {
