@@ -13,8 +13,5 @@ function carregarDiagnosticosImprodutivos() {
 }
 
 function salvarDiagnosticosImprodutivos(diagnosticosImprodutivos) {
-    localStorage.setItem(
-        DIAGNOSTICOS_IMPRODUTIVOS_CHAVE_STORAGE,
-        JSON.stringify([...diagnosticosImprodutivos])
-    );
+    ConfigRemota.sincronizar(DIAGNOSTICOS_IMPRODUTIVOS_CHAVE_STORAGE, [...diagnosticosImprodutivos]);
 }

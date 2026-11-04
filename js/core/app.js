@@ -10,14 +10,7 @@ async function iniciarSistema() {
     console.log("Inicializando...");
     console.log("========================================");
 
-    carregarConfigColunasSalva();
-    APP.configuracoes.assuntosIncluidos = carregarAssuntosIncluidos();
-    APP.configuracoes.funilAssuntos = carregarFunilAssuntos();
-    APP.configuracoes.diagnosticosExcluidosTempo = carregarDiagnosticosExcluidosTempo();
-    APP.configuracoes.diagnosticosExcluidosRecorrencia = carregarDiagnosticosExcluidosRecorrencia();
-    APP.configuracoes.diagnosticosImprodutivos = carregarDiagnosticosImprodutivos();
-    APP.configuracoes.assuntosIncluidosCancelamento = carregarAssuntosIncluidosCancelamento();
-    APP.configuracoes.setoresCop = carregarSetoresCop();
+    aplicarConfiguracoesLocais();
     aplicarTemaSalvo();
 
     registrarEventos();
@@ -87,7 +80,21 @@ async function iniciarSistema() {
 
 }
 
+function aplicarConfiguracoesLocais() {
+    carregarConfigColunasSalva();
+    APP.configuracoes.assuntosIncluidos = carregarAssuntosIncluidos();
+    APP.configuracoes.funilAssuntos = carregarFunilAssuntos();
+    APP.configuracoes.diagnosticosExcluidosTempo = carregarDiagnosticosExcluidosTempo();
+    APP.configuracoes.diagnosticosExcluidosRecorrencia = carregarDiagnosticosExcluidosRecorrencia();
+    APP.configuracoes.diagnosticosImprodutivos = carregarDiagnosticosImprodutivos();
+    APP.configuracoes.assuntosIncluidosCancelamento = carregarAssuntosIncluidosCancelamento();
+    APP.configuracoes.setoresCop = carregarSetoresCop();
+}
+
 async function inicializarDadosAutenticado() {
+
+    await ConfigRemota.carregarTudo();
+    aplicarConfiguracoesLocais();
 
     const tinhaCache = await restaurarDoCacheLocal();
 

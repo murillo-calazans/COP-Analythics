@@ -13,8 +13,5 @@ function carregarDiagnosticosExcluidosTempo() {
 }
 
 function salvarDiagnosticosExcluidosTempo(diagnosticosExcluidos) {
-    localStorage.setItem(
-        DIAGNOSTICOS_EXCLUIDOS_CHAVE_STORAGE,
-        JSON.stringify([...diagnosticosExcluidos])
-    );
+    ConfigRemota.sincronizar(DIAGNOSTICOS_EXCLUIDOS_CHAVE_STORAGE, [...diagnosticosExcluidos]);
 }

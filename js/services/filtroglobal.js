@@ -13,8 +13,5 @@ function carregarAssuntosIncluidos() {
 }
 
 function salvarAssuntosIncluidos(assuntosIncluidos) {
-    localStorage.setItem(
-        FILTRO_GLOBAL_CHAVE_STORAGE,
-        JSON.stringify([...assuntosIncluidos])
-    );
+    ConfigRemota.sincronizar(FILTRO_GLOBAL_CHAVE_STORAGE, [...assuntosIncluidos]);
 }

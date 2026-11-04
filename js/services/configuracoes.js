@@ -26,12 +26,9 @@ function carregarConfigColunasSalva() {
 }
 
 function salvarConfigColunas() {
-    localStorage.setItem(
-        CONFIGURACOES_CHAVE_STORAGE,
-        JSON.stringify({ CONFIG_BASE, CONFIG_ORDENS })
-    );
+    ConfigRemota.sincronizar(CONFIGURACOES_CHAVE_STORAGE, { CONFIG_BASE, CONFIG_ORDENS });
 }
 
 function restaurarConfigColunasPadrao() {
-    localStorage.removeItem(CONFIGURACOES_CHAVE_STORAGE);
+    ConfigRemota.remover(CONFIGURACOES_CHAVE_STORAGE);
 }

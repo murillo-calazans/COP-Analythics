@@ -13,8 +13,5 @@ function carregarAssuntosIncluidosCancelamento() {
 }
 
 function salvarAssuntosIncluidosCancelamento(assuntosIncluidos) {
-    localStorage.setItem(
-        ASSUNTOS_INCLUIDOS_CANCELAMENTO_CHAVE_STORAGE,
-        JSON.stringify([...assuntosIncluidos])
-    );
+    ConfigRemota.sincronizar(ASSUNTOS_INCLUIDOS_CANCELAMENTO_CHAVE_STORAGE, [...assuntosIncluidos]);
 }

@@ -13,8 +13,5 @@ function carregarDiagnosticosExcluidosRecorrencia() {
 }
 
 function salvarDiagnosticosExcluidosRecorrencia(diagnosticosExcluidos) {
-    localStorage.setItem(
-        DIAGNOSTICOS_EXCLUIDOS_RECORRENCIA_CHAVE_STORAGE,
-        JSON.stringify([...diagnosticosExcluidos])
-    );
+    ConfigRemota.sincronizar(DIAGNOSTICOS_EXCLUIDOS_RECORRENCIA_CHAVE_STORAGE, [...diagnosticosExcluidos]);
 }

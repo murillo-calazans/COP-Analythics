@@ -17,5 +17,5 @@ function carregarFunilAssuntos() {
 }
 
 function salvarFunilAssuntos(configuracao) {
-    localStorage.setItem(FUNIL_ASSUNTOS_CHAVE_STORAGE, JSON.stringify(configuracao));
+    ConfigRemota.sincronizar(FUNIL_ASSUNTOS_CHAVE_STORAGE, configuracao);
 }

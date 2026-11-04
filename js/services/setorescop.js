@@ -14,7 +14,7 @@ function carregarSetoresCop() {
 }
 
 function salvarSetoresCop(setores) {
-    localStorage.setItem(SETORES_COP_CHAVE_STORAGE, JSON.stringify(setores));
+    ConfigRemota.sincronizar(SETORES_COP_CHAVE_STORAGE, setores);
 }
 
 const ASSUNTOS_COP_CHAVE_STORAGE = "cop_analytics_assuntos_cop";
@@ -48,5 +48,5 @@ function carregarAssuntosCop() {
 }
 
 function salvarAssuntosCop(assuntos) {
-    localStorage.setItem(ASSUNTOS_COP_CHAVE_STORAGE, JSON.stringify(assuntos));
+    ConfigRemota.sincronizar(ASSUNTOS_COP_CHAVE_STORAGE, assuntos);
 }
