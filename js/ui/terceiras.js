@@ -851,6 +851,11 @@ function renderizarTerceirasQualidade() {
         .filter(r => terceirasFiltroQualidade === "todas" || r.terceira === terceirasFiltroQualidade)
         .sort((a, b) => a.dias - b.dias);
 
+    const copComTerceiro = TerceirasEngine.fechadasPeloCopComTerceiro(mes, analiseTerceiras());
+    const copPorTerceira = new Map(TERCEIRAS.map(t => [t.id, 0]));
+    for (const a of copComTerceiro) copPorTerceira.set(a.terceira, (copPorTerceira.get(a.terceira) ?? 0) + 1);
+    const copVisiveis = copComTerceiro.filter(a => terceirasFiltroQualidade === "todas" || a.terceira === terceirasFiltroQualidade);
+
     container.innerHTML = `
         ${htmlBarraMes()}
         <p class="admin-dica terceiras-legenda-lpu">Só para acompanhamento: retrabalho não desconta do pagamento. Retorno = o mesmo cliente abriu outra OS em até ${TerceirasEngine.DIAS_RETORNO} dias depois do fechamento.</p>
@@ -865,6 +870,7 @@ function renderizarTerceirasQualidade() {
                         <div><span>Reabertas</span><strong>${q.reabertas}</strong><em>${pct(q.reabertas, q.fechadas)}</em></div>
                         <div><span>Retornos em ${TerceirasEngine.DIAS_RETORNO} dias</span><strong>${q.retornos.length}</strong><em>${pct(q.retornos.length, q.fechadas)}</em></div>
                         <div><span>Garantias</span><strong>${q.garantias}</strong><em>${pct(q.garantias, q.fechadas)}</em></div>
+                        <div><span>Finalizadas pelo COP</span><strong>${copPorTerceira.get(t.id) ?? 0}</strong><em>${pct(copPorTerceira.get(t.id) ?? 0, q.fechadas)}</em></div>
                     </div>
                 </div>`;
             }).join("")}
@@ -896,6 +902,33 @@ function renderizarTerceirasQualidade() {
                     </tbody>
                 </table>
             </div>` : '<p class="alerta-vazio">Nenhum retorno neste mês.</p>'}
+        </div>
+
+        <div class="grafico-card">
+            <div class="grafico-cabecalho">
+                <div>
+                    <div class="grafico-titulo">⚠ Finalizadas pelo COP com técnico de terceira</div>
+                    <div class="grafico-subtitulo">OS fechadas por um operador interno (COP), mas com um técnico de terceira no responsável — o técnico deveria ter finalizado. Entram no fechamento da terceira normalmente; aqui é só para acompanhar.</div>
+                </div>
+            </div>
+            ${copVisiveis.length ? `
+            <div class="tabela-scroll">
+                <table class="tabela-alertas terceiras-tabela terceiras-detalhe">
+                    <thead><tr><th>OS</th><th>Fechada em</th><th>Terceira</th><th>Técnico responsável</th><th>Finalizada por (COP)</th><th>Setor</th><th>Cidade</th><th>Assunto</th></tr></thead>
+                    <tbody>${copVisiveis.map(a => `
+                        <tr>
+                            <td>${escaparHtml(String(a.os))}</td>
+                            <td>${a.data.toLocaleDateString("pt-BR")}</td>
+                            <td>${escaparHtml(TerceirasEngine.nomeTerceira(a.terceira))}</td>
+                            <td>${escaparHtml(a.tecnico ?? "")}</td>
+                            <td>${escaparHtml(a.operador ?? "")}</td>
+                            <td>${escaparHtml(a.operadorSetor ?? "")}</td>
+                            <td>${escaparHtml(a.cidade ?? "")}</td>
+                            <td>${escaparHtml(a.assunto ?? "")}</td>
+                        </tr>`).join("")}
+                    </tbody>
+                </table>
+            </div>` : '<p class="alerta-vazio">Nenhuma OS finalizada pelo COP com técnico de terceira neste mês.</p>'}
         </div>
     `;
 

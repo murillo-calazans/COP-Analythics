@@ -334,5 +334,38 @@ const TerceirasEngine = {
         }
 
         return resultado;
+    },
+
+    fechadasPeloCopComTerceiro(mes, analise) {
+        const alertas = [];
+
+        for (const ordem of APP.dados.ordens.values()) {
+            const info = analise.get(ordem.id);
+            const efetivo = info?.fechamentoEfetivo;
+            if (!efetivo?.data || this.chaveMes(efetivo.data) !== mes) continue;
+
+            if (efetivo.colaboradorResponsavel === null || efetivo.colaboradorResponsavel === undefined || efetivo.colaboradorResponsavel === "") continue;
+
+            const tecnico = IndicatorEngine.nomeResponsavelFechamento(efetivo);
+            const terceira = this.terceiraDoNome(tecnico);
+            if (!terceira) continue;
+
+            const operador = AuditEngine.resolverReferencia(APP.referencias.operadores, efetivo.operador, CONFIG_BASE.operadores.nome);
+            if (this.terceiraDoNome(operador)) continue;
+
+            alertas.push({
+                os: ordem.id,
+                data: efetivo.data,
+                terceira,
+                tecnico,
+                operador: operador ?? "—",
+                operadorSetor: AuditEngine.resolverReferencia(APP.referencias.operadores, efetivo.operador, CONFIG_BASE.operadores.setor) ?? "",
+                cliente: ordem.cliente,
+                cidade: ordem.cidade,
+                assunto: ordem.assunto
+            });
+        }
+
+        return alertas.sort((a, b) => b.data - a.data);
     }
 };
