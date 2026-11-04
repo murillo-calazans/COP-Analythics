@@ -88,12 +88,31 @@ const FiltroEngine = {
     fechamentoEhDoSetor(ordem, nomeSetorAlvo) {
         const alvo = normalizarTexto(nomeSetorAlvo);
         const fechamento = this.fechamentoEfetivoDaOrdem(ordem);
-        const operador = fechamento?.operador;
+        if (!fechamento) return false;
+        return normalizarTexto(this.setorDoFechamento(fechamento) ?? "") === alvo;
+    },
 
-        if (operador === null || operador === undefined) return false;
+    setorDoFechamento(fechamento) {
+        const nome = IndicatorEngine.nomeResponsavelFechamento(fechamento);
+        const porNome = this.setorPorNome(nome);
+        if (porNome !== null) return porNome;
+        return AuditEngine.resolverReferencia(APP.referencias.operadores, fechamento.operador, CONFIG_BASE.operadores.setor);
+    },
 
-        const setor = AuditEngine.resolverReferencia(APP.referencias.operadores, operador, CONFIG_BASE.operadores.setor);
-        return normalizarTexto(setor ?? "") === alvo;
+    setorPorNome(nome) {
+        if (nome === null || nome === undefined || nome === "") return null;
+        if (this._setorPorNomeFonte !== APP.referencias.operadores) {
+            this._setorPorNomeFonte = APP.referencias.operadores;
+            this._mapaSetorPorNome = new Map();
+            for (const linha of APP.referencias.operadores.values()) {
+                const colNome = encontrarColuna(linha, CONFIG_BASE.operadores.nome);
+                const colSetor = encontrarColuna(linha, CONFIG_BASE.operadores.setor);
+                if (colNome && colSetor && linha[colNome]) {
+                    this._mapaSetorPorNome.set(normalizarTexto(linha[colNome]), linha[colSetor] ?? "");
+                }
+            }
+        }
+        return this._mapaSetorPorNome.get(normalizarTexto(nome)) ?? null;
     },
 
     diagnosticoDoFechamentoEstaOculto(ordem, diagnosticosOcultos) {
