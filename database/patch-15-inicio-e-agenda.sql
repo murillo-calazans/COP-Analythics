@@ -1,22 +1,9 @@
--- ==========================================================
--- Patch 15: Tela inicial (nome do usuário) e Agenda do dia
--- ==========================================================
--- 1) perfis.nome: nome de exibição ("Bom dia, Murillo") e também o nome
---    usado pra achar o operador do usuário nas OS (produção do mês). Use
---    o nome como está no sistema de OS (aba Operadores da Base.xlsx).
---    Vazio = o app usa o começo do e-mail.
---
--- 2) agenda_publicada: o pré-agendamento (agendador.html) publica o plano
---    de um dia aqui; a tela "Agenda do dia" do COP Analytics lê. Um JSONB
---    por data, igual ao padrão de escala_tecnicos_dados.
---    Leitura: qualquer usuário com papel em "perfis". Escrita: só admin.
-
 alter table perfis add column if not exists nome text;
 
 create table if not exists agenda_publicada (
     data date primary key,
-    itens jsonb not null,          -- uma linha por parada (técnico, horário, OS, cliente...)
-    resumo jsonb,                  -- totais pro cabeçalho (OS agendadas, sem técnico, técnicos)
+    itens jsonb not null,
+    resumo jsonb,
     publicado_por text,
     atualizado_em timestamptz not null default now()
 );

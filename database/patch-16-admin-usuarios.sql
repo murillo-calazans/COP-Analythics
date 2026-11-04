@@ -1,21 +1,3 @@
--- ==========================================================
--- Patch 16: Painel de Administrador — gestão de usuários
--- ==========================================================
--- A tela Usuários (js/ui/adminusuarios.js) lista quem tem conta e muda
--- papel, nome e setor sem precisar do SQL Editor.
---
--- Por que funções e não policies: "perfis" só deixa cada um ler a
--- própria linha, e o e-mail mora em auth.users, que o navegador não
--- lê. As funções rodam como dono (security definer) e cada uma confere
--- antes de tudo se QUEM CHAMA é admin.
---
--- Criar a conta (e-mail + senha) continua no Supabase:
--- Authentication > Users > Add user. A conta nova aparece na tela como
--- "sem acesso" até um admin dar um papel.
---
--- Travas: ninguém tira o próprio admin nem remove o próprio acesso —
--- assim sempre sobra pelo menos um admin (quem está mexendo).
-
 create or replace function admin_listar_usuarios()
 returns table (
     id uuid,

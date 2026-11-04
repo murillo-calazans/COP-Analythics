@@ -1,13 +1,3 @@
--- ==========================================================
--- Patch 30: coordenada (lat/long) de cada OS
--- ==========================================================
--- A visão 343 do IXC já traz latitude/longitude da OS (endereço do
--- atendimento); o robô passa a gravar aqui. Usado pelo Mapa de calor
--- (posição exata da OS, antes de CTO/bairro/cidade).
---
--- preencher_coordenadas_ordens: preenchimento em massa das OS antigas,
--- feito pelo robô aos poucos (um mês por rodada). Só a chave service chama.
-
 alter table ordens add column if not exists lat double precision;
 alter table ordens add column if not exists lng double precision;
 

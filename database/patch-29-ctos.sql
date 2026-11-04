@@ -1,15 +1,3 @@
--- ==========================================================
--- Patch 29: cadastro de CTOs (posição de cada caixa)
--- ==========================================================
--- O robô monta a partir da mesma visão "CTOs de Clientes" (539): uma
--- linha por CTO (descrição da caixa de atendimento) com latitude,
--- longitude, endereço, projeto e splitter, + quantos logins ativos ela
--- atende. A aba CTOs e Lacres cruza a coordenada que o técnico escreve no
--- fechamento com essas posições (CTO mais próxima + confere com o IXC?).
---
--- Só aparecem CTOs com pelo menos um login na visão (CTO vazia não vem).
--- Leitura: qualquer perfil. Escrita: só o robô (chave service).
-
 create table if not exists ctos (
     descricao text primary key,
     lat double precision,

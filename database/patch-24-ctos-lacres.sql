@@ -1,16 +1,3 @@
--- ==========================================================
--- Patch 24: Gestão de Clientes > CTOs e Lacres
--- ==========================================================
--- A lista em si sai das OS já importadas (mensagem do fechamento:
--- "NUMERO DO LACRE: ... PORTA DA CTO: ... LOCALIZAÇÃO DA CTO: ...",
--- ver js/ui/ctoslacres.js). Aqui só fica o que o COP faz em cima
--- dela, uma linha por OS:
---   cadastrado        -> já lançou CTO/porta/lacre no sistema?
---   login/cto/porta/lacre -> correção manual; null = usa o que veio
---                        do texto do técnico
---
--- Leitura: qualquer perfil. Escrita: admin ou editor.
-
 create table if not exists ctos_lacres_cadastro (
     os_id text primary key,
     cadastrado boolean not null default false,

@@ -1,19 +1,3 @@
--- ==========================================================
--- Patch 27: setores com visão total das OS (COP vê tudo)
--- ==========================================================
--- O patch-06 restringe quem tem perfis.setor preenchido às OS daquele
--- setor (pensado pros terceiros). Só que a tela de Usuários grava o setor
--- de TODO mundo — e o COP ("CONTROLE DE OPERAÇÕES") acabou enxergando só
--- as OS cujo técnico responsável é do próprio COP, sem conseguir puxar
--- relatório dos outros setores.
---
--- Agora: setor listado em setores_visao_total vê TODAS as OS (o setor
--- continua no perfil, só não restringe mais). Quem tem setor fora da
--- lista segue restrito como antes; setor vazio continua vendo tudo.
---
--- Pra liberar outro setor depois (ex.: GERENCIA):
---   insert into setores_visao_total (setor) values ('GERENCIA');
-
 create table if not exists setores_visao_total (
     setor text primary key
 );

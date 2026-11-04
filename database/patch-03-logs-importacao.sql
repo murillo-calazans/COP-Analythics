@@ -1,11 +1,3 @@
--- ==========================================================
--- Patch #3 — log de arquivos importados
--- ==========================================================
--- Rode no SQL Editor do Supabase. Guarda um registro por
--- importação (Base.xlsx ou Ordens.xlsx) — nome do arquivo, quem
--- importou, quando, e um resumo (linhas/ordens/movimentações).
--- Mostrado no popup de Importar Dados, em "Arquivos no banco".
-
 create table if not exists logs_importacao (
     id bigint generated always as identity primary key,
     nome_arquivo text not null,

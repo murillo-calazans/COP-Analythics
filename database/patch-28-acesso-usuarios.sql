@@ -1,28 +1,6 @@
--- ==========================================================
--- Patch 28: acesso por usuário — setores das OS e abas
--- ==========================================================
--- Configurado no site (Configurações > Acesso dos usuários, só admin):
---   perfis.setores_visiveis -> setores das OS que o usuário enxerga
---                              (null = todos). Vale NO BANCO (RLS de
---                              ordens/movimentacoes), não dá pra burlar.
---   perfis.abas_visiveis    -> abas do site que ele abre (null = todas;
---                              ids das seções, ex.: 'dashboard',
---                              'clientes-cto'). Só esconde no site.
--- Admin sempre vê tudo (setores e abas).
---
--- perfis.setor passa a ser só identificação da pessoa (saudação, tela de
--- Usuários) — não restringe mais nada. Substitui o patch-06/27: quem
--- estava restrito pelo setor continua restrito (migração abaixo), menos
--- o CONTROLE DE OPERAÇÕES, que passa a ver todos os setores.
---
--- Pode rodar mesmo sem ter rodado o patch-27 (ele fica obsoleto).
-
 alter table perfis add column if not exists setores_visiveis text[];
 alter table perfis add column if not exists abas_visiveis text[];
 
--- Migração (1x): mantém a restrição de hoje pra quem tinha setor, menos COP
--- e admin. Rodar de novo NÃO desfaz o que foi configurado no site depois:
--- só mexe em quem ainda está sem configuração E nunca foi salvo pela tela.
 alter table perfis add column if not exists acesso_configurado boolean not null default false;
 
 update perfis
@@ -32,8 +10,6 @@ where setor is not null
   and not acesso_configurado
   and papel <> 'admin'
   and upper(setor) <> upper('CONTROLE DE OPERAÇÕES');
-
--- ---------- RLS: setores visíveis por usuário ----------
 
 drop policy if exists "leitura autenticada" on ordens;
 create policy "leitura autenticada" on ordens for select to authenticated
@@ -60,10 +36,7 @@ create policy "leitura autenticada" on movimentacoes for select to authenticated
           )
     ));
 
--- patch-27 (se tiver rodado) ficou sem uso
 drop table if exists setores_visao_total;
-
--- ---------- funções da tela (mesmo modelo do patch-16) ----------
 
 create or replace function admin_listar_acessos()
 returns table (
@@ -93,7 +66,6 @@ begin
 end
 $$;
 
--- p_setores / p_abas: null = todos/todas; lista = só esses.
 create or replace function admin_salvar_acesso(p_id uuid, p_setores text[], p_abas text[])
 returns void
 language plpgsql
