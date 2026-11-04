@@ -247,6 +247,60 @@ const AuditoriaOperacionalEngine = {
         return achados;
     },
 
+    ROTULOS_MOTIVO_REABERTURA_ENGINE: {
+        erro_processo: "Erro de processo",
+        servico_nao_executado: "Serviço não executado (refazer)",
+        indefinido: "não identificado"
+    },
+
+    auditarReaberturaComDataDiferente(ordens, analise) {
+        const achados = [];
+
+        for (const ordem of ordens.values()) {
+            const info = analise.get(ordem.id);
+            if (!info?.temReabertura) continue;
+            if (!info.primeiroFechamento?.data || !info.ultimoFechamento?.data) continue;
+            if (info.primeiroFechamento.data.getTime() === info.ultimoFechamento.data.getTime()) continue;
+
+            const diagnosticoNome = AuditEngine.resolverReferencia(
+                APP.referencias.diagnosticos, info.fechamentoEfetivo?.diagnostico, CONFIG_BASE.diagnosticos.nome
+            );
+
+            const nomeOperadorReabertura = AuditEngine.resolverReferencia(
+                APP.referencias.operadores, info.operadorReabertura, CONFIG_BASE.operadores.nome
+            );
+
+            const dataPrimeiro = info.primeiroFechamento.data;
+            const dataUltimo = info.ultimoFechamento.data;
+            const dias = Math.round((dataUltimo.getTime() - dataPrimeiro.getTime()) / 86400000);
+            const rotuloMotivo = this.ROTULOS_MOTIVO_REABERTURA_ENGINE[info.motivoReabertura] ?? "não identificado";
+
+            achados.push({
+                ordemId: ordem.id,
+                login: ordem.login,
+                cliente: ordem.cliente,
+                assunto: ordem.assunto,
+                tipo: "reabertura-data-diferente",
+                regraId: "reabertura-data-diferente",
+                severidade: "aviso",
+                diagnostico: diagnosticoNome,
+                proximaTarefa: null,
+                proximaTarefaEsperada: null,
+                colaboradorPrimeiro: IndicatorEngine.nomeResponsavelFechamento(info.primeiroFechamento),
+                colaboradorUltimo: IndicatorEngine.nomeResponsavelFechamento(info.ultimoFechamento),
+                operadorReabertura: nomeOperadorReabertura,
+                motivoReabertura: info.motivoReabertura,
+                mensagemReabertura: info.mensagemReabertura,
+                dataFinalizacao: dataPrimeiro,
+                dataUltimoFechamento: dataUltimo,
+                diferencaDias: dias,
+                motivo: `1º fechamento em ${dataPrimeiro.toLocaleDateString("pt-BR")}; último em ${dataUltimo.toLocaleDateString("pt-BR")} (diferença de ${dias} dia(s)). Motivo da reabertura: ${rotuloMotivo}.`
+            });
+        }
+
+        return achados;
+    },
+
     loginsEmVariasOrdens(ordens, analise) {
         const porLogin = new Map();
 
@@ -293,6 +347,7 @@ const AuditoriaOperacionalEngine = {
             duplicidades: 0,
 
             reaberturasOutroColaborador: 0,
+            reaberturasDataDiferente: 0,
 
             corrigidos: 0
         };
@@ -397,6 +452,18 @@ const AuditoriaOperacionalEngine = {
                 resumo.corrigidos++;
             } else {
                 resumo.reaberturasOutroColaborador++;
+                porTipoErro.set(achado.tipo, (porTipoErro.get(achado.tipo) ?? 0) + 1);
+            }
+            achados.push({ ...achado, corrigido: !!correcao, corrigidoPor: correcao?.corrigidoPor ?? null, corrigidoEm: correcao?.corrigidoEm ?? null });
+        }
+
+        const achadosReaberturaData = this.auditarReaberturaComDataDiferente(ordens, analise);
+        for (const achado of achadosReaberturaData) {
+            const correcao = this.buscarCorrecaoAchado(achado.ordemId, achado.tipo);
+            if (correcao) {
+                resumo.corrigidos++;
+            } else {
+                resumo.reaberturasDataDiferente++;
                 porTipoErro.set(achado.tipo, (porTipoErro.get(achado.tipo) ?? 0) + 1);
             }
             achados.push({ ...achado, corrigido: !!correcao, corrigidoPor: correcao?.corrigidoPor ?? null, corrigidoEm: correcao?.corrigidoEm ?? null });

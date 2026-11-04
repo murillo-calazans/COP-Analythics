@@ -3,7 +3,8 @@ const ROTULOS_TIPO_ACHADO_AUDITORIA = {
     "proxima-tarefa-ausente": "Próxima Tarefa não informada",
     "diagnostico-ausente": "Diagnóstico não informado",
     "duplicidade": "Possível duplicidade (mesmo login/assunto/diagnóstico)",
-    "reabertura-outro-colaborador": "Reaberta e fechada por outro colaborador"
+    "reabertura-outro-colaborador": "Reaberta e fechada por outro colaborador",
+    "reabertura-data-diferente": "Reaberta e finalizada com data diferente"
 };
 
 let _achadosAuditoriaOperacionalCache = [];
@@ -39,6 +40,10 @@ function renderizarPainelAuditoriaOperacional() {
             <div class="stat-tile stat-tile-destaque stat-tile-clicavel" data-categoria-auditoria="reaberturas">
                 <div class="stat-label">⚠ Reabertas e fechadas por outro colaborador</div>
                 <div class="stat-valor">${resumo.reaberturasOutroColaborador.toLocaleString("pt-BR")}</div>
+            </div>
+            <div class="stat-tile stat-tile-destaque stat-tile-clicavel" data-categoria-auditoria="reaberturas-data">
+                <div class="stat-label">⚠ Reabertas e finalizadas com data diferente</div>
+                <div class="stat-valor">${resumo.reaberturasDataDiferente.toLocaleString("pt-BR")}</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-label">OS auditadas</div>
@@ -231,6 +236,11 @@ const DEFINICAO_CATEGORIAS_AUDITORIA = {
     reaberturas: {
         titulo: "Reabertas e fechadas por outro colaborador",
         filtro: achado => achado.tipo === "reabertura-outro-colaborador" && !achado.corrigido
+    },
+    "reaberturas-data": {
+        titulo: "Reabertas e finalizadas com data diferente",
+        filtro: achado => achado.tipo === "reabertura-data-diferente" && !achado.corrigido,
+        duasColunas: false
     }
 };
 
@@ -270,7 +280,7 @@ function abrirCategoriaAuditoria(categoria) {
 
 function abrirSubcategoriasErro() {
     const itensComErro = _achadosAuditoriaOperacionalCache.filter(
-        achado => achado.tipo !== "duplicidade" && achado.tipo !== "reabertura-outro-colaborador" && !achado.corrigido
+        achado => achado.tipo !== "duplicidade" && achado.tipo !== "reabertura-outro-colaborador" && achado.tipo !== "reabertura-data-diferente" && !achado.corrigido
     );
 
     document.getElementById("modalGraficoCompletoTitulo").textContent = `Com erro (${itensComErro.length})`;
@@ -304,7 +314,7 @@ function abrirSubcategoriaErro(chave) {
     if (!definicaoSub) return;
 
     const itensComErro = _achadosAuditoriaOperacionalCache.filter(
-        achado => achado.tipo !== "duplicidade" && achado.tipo !== "reabertura-outro-colaborador" && !achado.corrigido
+        achado => achado.tipo !== "duplicidade" && achado.tipo !== "reabertura-outro-colaborador" && achado.tipo !== "reabertura-data-diferente" && !achado.corrigido
     );
 
     _reabrirPopupAuditoriaAtual = () => abrirSubcategoriaErro(chave);
