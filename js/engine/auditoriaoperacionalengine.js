@@ -250,6 +250,7 @@ const AuditoriaOperacionalEngine = {
     ROTULOS_MOTIVO_REABERTURA_ENGINE: {
         erro_processo: "Erro de processo",
         servico_nao_executado: "Serviço não executado (refazer)",
+        tecnico_errado: "Técnico errado no fechamento",
         indefinido: "não identificado"
     },
 

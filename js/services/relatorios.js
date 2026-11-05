@@ -707,7 +707,8 @@ function equipeDoColaborador(nome, setor) {
 
 const ROTULO_MOTIVO_REABERTURA = {
     servico_nao_executado: "Serviço não executado",
-    erro_processo: "Erro de processo"
+    erro_processo: "Erro de processo",
+    tecnico_errado: "Técnico errado no fechamento"
 };
 
 function limparMensagemFechamento(mensagem) {

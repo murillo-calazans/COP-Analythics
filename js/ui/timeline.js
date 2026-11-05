@@ -31,6 +31,7 @@ function renderizarDetalhesOS({ ordem, timeline }) {
     const ROTULOS_MOTIVO_REABERTURA = {
         erro_processo: "Erro de processo (mesmo técnico corrige)",
         servico_nao_executado: "Serviço não executado (outro técnico concluiu)",
+        tecnico_errado: "Técnico errado no fechamento (vale quem fechar de novo)",
         indefinido: "Motivo não identificado no texto da reabertura"
     };
     const motivoReaberturaRotulo = temReabertura

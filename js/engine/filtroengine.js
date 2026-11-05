@@ -164,7 +164,7 @@ const FiltroEngine = {
             .filter(Boolean)
             .join(" ");
         const motivo = ultimaReabertura ? classificarMotivoReabertura(mensagemParaClassificar) : null;
-        return motivo === "servico_nao_executado" ? ultimoFechamento : primeiroFechamento;
+        return escolherFechamentoEfetivo(motivo, { primeiroFechamento, ultimoFechamento, ultimaReabertura });
     },
 
     coletarOpcoes(ordens) {

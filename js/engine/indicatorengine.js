@@ -490,9 +490,7 @@ const IndicatorEngine = {
             ? classificarMotivoReabertura(mensagemParaClassificar)
             : null;
 
-        const fechamentoEfetivo = motivoReabertura === "servico_nao_executado"
-            ? ultimoFechamento
-            : primeiroFechamento;
+        const fechamentoEfetivo = escolherFechamentoEfetivo(motivoReabertura, { primeiroFechamento, ultimoFechamento, ultimaReabertura });
 
         return {
             ultimoFechamento, primeiroFechamento, fechamentoEfetivo,

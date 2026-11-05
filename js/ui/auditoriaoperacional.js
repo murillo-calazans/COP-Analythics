@@ -467,6 +467,7 @@ async function alternarCorrecaoAchadoNoModalOS(botao, ordemId, tipoAchado, desfa
 const ROTULOS_MOTIVO_REABERTURA = {
     erro_processo: "Erro de processo",
     servico_nao_executado: "Serviço não executado",
+    tecnico_errado: "Técnico errado no fechamento",
     indefinido: "Motivo não identificado"
 };
 

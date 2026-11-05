@@ -1,4 +1,19 @@
 const MOTIVOS_REABERTURA = {
+    TECNICO_ERRADO: [
+        "ACERTO DO TECNICO",
+        "ACERTO DO TÉCNICO",
+        "ACERTO DE TECNICO",
+        "ACERTO DE TÉCNICO",
+        "TECNICO ERRADO",
+        "TÉCNICO ERRADO",
+        "TECNICO QUE REALIZOU",
+        "TÉCNICO QUE REALIZOU",
+        "APLICATIVO ERRADO",
+        "APP ERRADO",
+        "LOGIN ERRADO",
+        "USUARIO ERRADO",
+        "USUÁRIO ERRADO"
+    ],
     ERRO_PROCESSO: [
         "ACERTO DE PROXIMA TAREFA",
         "ACERTO DE PRÓXIMA TAREFA",
