@@ -14,7 +14,10 @@ function escolherFechamentoEfetivo(motivo, { primeiroFechamento, ultimoFechament
     if (motivo === "servico_nao_executado") return ultimoFechamento;
     if (motivo === "tecnico_errado") {
         const fechouDepois = ultimoFechamento?.data && ultimaReabertura?.data && ultimoFechamento.data > ultimaReabertura.data;
-        return fechouDepois ? ultimoFechamento : null;
+        if (!fechouDepois) return null;
+        const corrigido = Object.assign(Object.create(Object.getPrototypeOf(ultimoFechamento)), ultimoFechamento);
+        corrigido.data = primeiroFechamento?.data ?? ultimoFechamento.data;
+        return corrigido;
     }
     return primeiroFechamento;
 }
