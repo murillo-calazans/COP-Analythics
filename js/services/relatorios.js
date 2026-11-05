@@ -802,6 +802,10 @@ function montarLinhasDetalheOS(ordens) {
             .sort((a, b) => a.data - b.data)[0];
         const desloc = primeiraComStatus(IndicatorEngine.STATUS_DESLOCAMENTO);
         const exec = primeiraComStatus(IndicatorEngine.STATUS_EM_EXECUCAO);
+        const operadorTrocado = info?.motivoReabertura === "tecnico_errado" && efetivo ? info.primeiroFechamento?.operador : null;
+        const foiTrocado = mov => operadorTrocado != null && mov?.operador === operadorTrocado;
+        const nomeExecutor = mov => foiTrocado(mov) ? tecnicoAuditado : nomeOperador(mov?.operador);
+        const setorExecutor = mov => !mov ? "" : foiTrocado(mov) ? setorDono : setorOperador(mov.operador);
         const mensagem = limparMensagemFechamento(efetivo?.mensagem);
 
         return {
@@ -820,8 +824,8 @@ function montarLinhasDetalheOS(ordens) {
             reabertaPor: nomeOperador(info?.operadorReabertura),
             refechadaOutro: reaberturaOutro.has(d.id),
             reagendada: !!info?.temReagendamento,
-            deslocPor: nomeOperador(desloc?.operador), setorDesloc: desloc ? setorOperador(desloc.operador) : "", inicioDesloc: desloc?.data ?? null,
-            execPor: nomeOperador(exec?.operador), setorExec: exec ? setorOperador(exec.operador) : "", inicioExec: exec?.data ?? null,
+            deslocPor: nomeExecutor(desloc), setorDesloc: setorExecutor(desloc), inicioDesloc: desloc?.data ?? null,
+            execPor: nomeExecutor(exec), setorExec: setorExecutor(exec), inicioExec: exec?.data ?? null,
             abandonos: info?.deslocamentosAbandonados?.length ?? 0,
             tmsMin: info?.excluidoDoTempo ? null : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosSolucao ?? [])),
             tmaMin: info?.excluidoDoTempo ? null : minutos(IndicatorEngine.somarHorasSegmentos(info?.segmentosAtendimento ?? [])),
