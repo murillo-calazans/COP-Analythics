@@ -81,7 +81,7 @@ function igRosca(fatias, centro, sub) {
 
 function igColunas(itens, corPadrao, formato = IG.fmt) {
     if (!itens.length) return '<p class="ig-vazio">Sem dados no recorte.</p>';
-    const W = 640, H = 230, mL = 44, mR = 8, mT = 18, mB = 40, pw = W - mL - mR, ph = H - mT - mB;
+    const W = Math.max(640, Math.min(16, itens.length) * 80), H = 230, mL = 44, mR = 8, mT = 18, mB = 40, pw = W - mL - mR, ph = H - mT - mB;
     const max = Math.max(1, ...itens.map(i => i.n));
     const passo = pw / itens.length, larg = Math.max(6, Math.min(38, passo - 8)), y = v => mT + ph - v / max * ph;
     const grade = Array.from({ length: 5 }, (_, k) => {
@@ -89,13 +89,26 @@ function igColunas(itens, corPadrao, formato = IG.fmt) {
         return `<line x1="${mL}" y1="${gy.toFixed(1)}" x2="${W - mR}" y2="${gy.toFixed(1)}" class="ig-g-grade"/><text x="${mL - 6}" y="${(gy + 3.5).toFixed(1)}" text-anchor="end" class="ig-g-tick">${IG.esc(formato(Math.round(v)))}</text>`;
     }).join("");
     const pulo = Math.ceil(itens.length / 16);
+    const cabe = Math.max(3, Math.floor((passo * pulo - 4) / 5.9));
+    const rotuloX = (rotulo, cx) => igQuebrarRotulo(String(rotulo), cabe)
+        .map((l, k) => `<tspan x="${cx.toFixed(1)}" dy="${k ? 12 : 0}">${IG.esc(l)}</tspan>`).join("");
     const cols = itens.map((it, i) => {
         const cx = mL + passo * i + passo / 2, topo = y(it.n);
         return `<g${igAcao(it.acao)} class="${it.acao ? "ig-clicavel" : ""}"><rect x="${(cx - larg / 2).toFixed(1)}" y="${topo.toFixed(1)}" width="${larg.toFixed(1)}" height="${(mT + ph - topo).toFixed(1)}" rx="4" fill="${IG.cor(it.cor ?? corPadrao)}"><title>${IG.esc(it.rotulo)}: ${IG.esc(formato(it.n))}</title></rect>
             ${itens.length <= 16 ? `<text x="${cx.toFixed(1)}" y="${(topo - 5).toFixed(1)}" text-anchor="middle" class="ig-g-val">${IG.esc(formato(it.n))}</text>` : ""}
-            ${i % pulo === 0 ? `<text x="${cx.toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" class="ig-g-x">${IG.esc(String(it.rotulo).length > 12 ? String(it.rotulo).slice(0, 11) + "…" : it.rotulo)}</text>` : ""}</g>`;
+            ${i % pulo === 0 ? `<text x="${cx.toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" class="ig-g-x"><title>${IG.esc(it.rotulo)}</title>${rotuloX(it.rotulo, cx)}</text>` : ""}</g>`;
     }).join("");
     return `<div class="ig-colunas"><svg viewBox="0 0 ${W} ${H}" role="img">${grade}${cols}</svg></div>`;
+}
+
+// Rótulo do eixo X em até duas linhas que cabem na largura da coluna ("Rio das Ostras" → "Rio das" / "Ostras").
+function igQuebrarRotulo(texto, cabe) {
+    const cortar = s => s.length > cabe ? s.slice(0, cabe - 1) + "…" : s;
+    if (texto.length <= cabe) return [texto];
+    const palavras = texto.split(/\s+/);
+    let l1 = palavras.shift();
+    while (palavras.length && `${l1} ${palavras[0]}`.length <= cabe) l1 += ` ${palavras.shift()}`;
+    return palavras.length ? [cortar(l1), cortar(palavras.join(" "))] : [cortar(l1)];
 }
 
 const IG_BLOCOS = {
