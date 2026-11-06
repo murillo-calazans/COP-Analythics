@@ -1,6 +1,6 @@
 const IG_CORES = {
     azul: "#2563eb", verde: "#059669", laranja: "#d97706", roxo: "#7c3aed",
-    ciano: "#0891b2", vermelho: "#dc2626", cinza: "#94a3b8", rosa: "#db2777",
+    ciano: "#0891b2", vermelho: "#dc2626", amarelo: "#eab308", cinza: "#94a3b8", rosa: "#db2777",
     trilha: "var(--cor-borda)"
 };
 const IG_PALETA = ["azul", "verde", "laranja", "roxo", "ciano", "vermelho", "rosa", "cinza"];
@@ -92,9 +92,20 @@ function igColunas(itens, corPadrao, formato = IG.fmt) {
     const cabe = Math.max(3, Math.floor((passo * pulo - 4) / 5.9));
     const rotuloX = (rotulo, cx) => igQuebrarRotulo(String(rotulo), cabe)
         .map((l, k) => `<tspan x="${cx.toFixed(1)}" dy="${k ? 12 : 0}">${IG.esc(l)}</tspan>`).join("");
+    // coluna empilhada: it.pilha = [{ rotulo, n, cor, acao }] de baixo pra cima; cada pedaço abre o seu recorte
+    const pilha = (it, cx) => {
+        let base = 0;
+        return it.pilha.filter(p => p.n > 0).map(p => {
+            const y0 = y(base), y1 = y(base + p.n);
+            base += p.n;
+            return `<rect${igAcao(p.acao)} class="${p.acao ? "ig-clicavel" : ""}" x="${(cx - larg / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${larg.toFixed(1)}" height="${Math.max(0, y0 - y1 - .6).toFixed(1)}" rx="2" fill="${IG.cor(p.cor)}"><title>${IG.esc(it.rotulo)} · ${IG.esc(p.rotulo)}: ${IG.esc(formato(p.n))}</title></rect>`;
+        }).join("");
+    };
     const cols = itens.map((it, i) => {
         const cx = mL + passo * i + passo / 2, topo = y(it.n);
-        return `<g${igAcao(it.acao)} class="${it.acao ? "ig-clicavel" : ""}"><rect x="${(cx - larg / 2).toFixed(1)}" y="${topo.toFixed(1)}" width="${larg.toFixed(1)}" height="${(mT + ph - topo).toFixed(1)}" rx="4" fill="${IG.cor(it.cor ?? corPadrao)}"><title>${IG.esc(it.rotulo)}: ${IG.esc(formato(it.n))}</title></rect>
+        const barra = it.pilha ? pilha(it, cx)
+            : `<rect x="${(cx - larg / 2).toFixed(1)}" y="${topo.toFixed(1)}" width="${larg.toFixed(1)}" height="${(mT + ph - topo).toFixed(1)}" rx="4" fill="${IG.cor(it.cor ?? corPadrao)}"><title>${IG.esc(it.rotulo)}: ${IG.esc(formato(it.n))}</title></rect>`;
+        return `<g${it.pilha ? "" : igAcao(it.acao)} class="${it.acao && !it.pilha ? "ig-clicavel" : ""}">${barra}
             ${itens.length <= 16 ? `<text x="${cx.toFixed(1)}" y="${(topo - 5).toFixed(1)}" text-anchor="middle" class="ig-g-val">${IG.esc(formato(it.n))}</text>` : ""}
             ${i % pulo === 0 ? `<text x="${cx.toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" class="ig-g-x"><title>${IG.esc(it.rotulo)}</title>${rotuloX(it.rotulo, cx)}</text>` : ""}</g>`;
     }).join("");
@@ -128,7 +139,8 @@ const IG_BLOCOS = {
         <${k.acao ? "button type=\"button\"" : "div"} class="ig-kpi${k.acao ? " ig-clicavel" : ""}"${igAcao(k.acao)} style="${k.cor ? `--cv:${IG.cor(k.cor)}` : ""}">
             <small>${IG.esc(k.rotulo)}</small><strong>${IG.esc(k.valor)}</strong>${k.sub ? `<span>${IG.esc(k.sub)}</span>` : ""}
         </${k.acao ? "button" : "div"}>`).join("")}</div>`,
-    colunas: b => igColunas(b.itens, b.cor, b.formato === "pct" ? (v => `${v}%`) : b.formato === "min" ? (v => `${v} min`) : IG.fmt),
+    colunas: b => igColunas(b.itens, b.cor, b.formato === "pct" ? (v => `${v}%`) : b.formato === "min" ? (v => `${v} min`) : IG.fmt)
+        + (b.legenda ? `<div class="ig-legenda">${b.legenda.map(g => `<span><i style="background:${IG.cor(g.cor)}"></i>${IG.esc(g.rotulo)}${g.n !== undefined ? ` · <b>${IG.fmt(g.n)}</b>` : ""}</span>`).join("")}</div>` : ""),
     empilhada: b => {
         const t = b.grupos.reduce((s, g) => s + g.n, 0) || 1;
         return `<div class="ig-empilhada" role="img">${b.grupos.map(g => `<i style="flex:${g.n || .001};background:${IG.cor(g.cor)}" title="${IG.esc(g.rotulo)}: ${IG.fmt(g.n)}"></i>`).join("")}</div>

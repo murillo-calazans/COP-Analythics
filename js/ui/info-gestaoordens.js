@@ -24,6 +24,21 @@ const IGO_FAIXAS_IDADE = [
     { rotulo: "+10 dias", cor: "vermelho", de: 11, ate: Infinity }
 ];
 
+// Situação atual da OS (última movimentação) no gráfico por cidade.
+// "Aberta" junta o que ainda não foi agendado nem está em campo: aberta, assumida, encaminhada, análise, aguardando agendamento...
+const IGO_SITUACOES = [
+    { id: "agendada", rotulo: "Agendada", cor: "azul" },
+    { id: "execucao", rotulo: "Execução / deslocamento", cor: "roxo" },
+    { id: "aberta", rotulo: "Aberta (assumida, encaminhada, análise…)", cor: "amarelo" }
+];
+
+function igoSituacao(o) {
+    const st = typeof ixcNorm === "function" ? ixcNorm(o.status) : String(o.status ?? "").toLowerCase();
+    if (st === "agendada") return "agendada";
+    if (st.includes("execu") || st.includes("desloca")) return "execucao";
+    return "aberta";
+}
+
 const IGO_PRIO_GRUPOS = [
     { id: "semAgenda", rotulo: "Sem agendamento", cor: "vermelho" },
     { id: "agendada", rotulo: "Agendadas", cor: "azul" },
@@ -241,9 +256,13 @@ registrarInfografico("agenda-hoje", async () => {
     const porCidade = new Map();
     for (const o of itens) { const c = o.cidade || "—"; if (!porCidade.has(c)) porCidade.set(c, []); porCidade.get(c).push(o); }
     const cidades = [...porCidade].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "pt-BR")).slice(0, 12);
+    const naSituacao = (oss, s) => oss.filter(o => igoSituacao(o) === s.id);
     cartoes.push({
-        titulo: "Por cidade", sub: recorteAssunto ? `${recorteAssunto} em aberto` : "OS de campo em aberto", cor: "azul", icone: "mapa", span: 2,
-        blocos: [{ t: "colunas", cor: "azul", itens: cidades.map(([c, oss]) => ({ rotulo: c, n: oss.length, acao: pop(c, oss) })) }]
+        titulo: "Por cidade", sub: `${recorteAssunto ? `${recorteAssunto} em aberto` : "OS de campo em aberto"} · pela situação atual`, cor: "azul", icone: "mapa", span: 2,
+        blocos: [{ t: "colunas", cor: "azul",
+            itens: cidades.map(([c, oss]) => ({ rotulo: c, n: oss.length,
+                pilha: IGO_SITUACOES.map(s => { const lista = naSituacao(oss, s); return { rotulo: s.rotulo, n: lista.length, cor: s.cor, acao: pop(`${c} · ${s.rotulo}`, lista) }; }) })),
+            legenda: IGO_SITUACOES.map(s => ({ rotulo: s.rotulo, cor: s.cor, n: naSituacao(itens, s).length })) }]
     });
 
     const bairros = await igoCartaoBairros(itens);
