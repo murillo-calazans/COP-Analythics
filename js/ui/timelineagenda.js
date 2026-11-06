@@ -22,19 +22,38 @@ const tlHoras = d => d ? (d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 
 const tlFmtH = d => d ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
 const TL_EXCLUIR = /auditoria|exclusao de acesso|pos.?terceiriz|retirada|recolhimento/;
 
+// Filtrar movimentacoes direto por `data` varre a tabela inteira (sem índice, e
+// a RLS faz join com ordens por linha) e estoura o statement timeout. Então:
+// OS tocadas hoje vêm de ordens.atualizado_em (o robô marca a cada gravação) e
+// as movimentações delas saem por ordem_id, que é indexado.
 async function tlBuscarMovHoje() {
     const hoje = hojeMeiaNoite().toISOString();
-    const linhas = [];
+    const ids = [];
     for (let de = 0; ; de += 1000) {
         const { data, error } = await supabaseClient
-            .from("movimentacoes")
-            .select("ordem_id, data, evento, status, mensagem")
-            .gte("data", hoje).order("data").range(de, de + 999);
-        if (error || !data || !data.length) break;
-        linhas.push(...data);
+            .from("ordens").select("id")
+            .gte("atualizado_em", hoje).order("id").range(de, de + 999);
+        if (error) throw error;
+        if (!data || !data.length) break;
+        ids.push(...data.map(o => o.id));
         if (data.length < 1000) break;
     }
-    return linhas;
+
+    const fatias = [];
+    for (let i = 0; i < ids.length; i += 150) fatias.push(ids.slice(i, i + 150));
+    const linhas = [];
+    for (let i = 0; i < fatias.length; i += 6) {
+        const partes = await Promise.all(fatias.slice(i, i + 6).map(async fatia => {
+            const { data, error } = await supabaseClient
+                .from("movimentacoes")
+                .select("ordem_id, data, evento, status, mensagem")
+                .in("ordem_id", fatia).gte("data", hoje).limit(5000);
+            if (error) throw error;
+            return data || [];
+        }));
+        for (const p of partes) linhas.push(...p);
+    }
+    return linhas.sort((a, b) => String(a.data).localeCompare(String(b.data)));
 }
 
 async function tlBuscarOrdens(ids) {
