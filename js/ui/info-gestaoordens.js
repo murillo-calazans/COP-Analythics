@@ -124,12 +124,17 @@ async function igoCartaoBairros(itens) {
     };
 }
 
-const igoFiltro = { cidade: "", assunto: "" };
+const igoFiltro = { cidades: [], assuntos: [] };
 
 function igoOpcoesFiltro(lista, chave) {
     const m = new Map();
     for (const o of lista) { const k = chave(o); m.set(k, (m.get(k) ?? 0) + 1); }
     return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR"));
+}
+
+function igoRotuloRecorte(valores, nome, plural) {
+    if (!valores.length) return "";
+    return valores.length <= 2 ? valores.map(nome).join(" + ") : `${valores.length} ${plural}`;
 }
 
 registrarInfografico("agenda-hoje", async () => {
@@ -138,30 +143,32 @@ registrarInfografico("agenda-hoje", async () => {
     const hoje = typeof ixcMeiaNoite === "function" ? ixcMeiaNoite() : new Date(new Date().setHours(0, 0, 0, 0));
     const unificar = typeof assuntoUnificado === "function" ? assuntoUnificado : (a => a);
     const cidadeDe = o => o.cidade || "—";
-    const passaCidade = o => !igoFiltro.cidade || cidadeDe(o) === igoFiltro.cidade;
-    const passaAssunto = o => !igoFiltro.assunto || unificar(o.assunto) === igoFiltro.assunto;
+    const passaCidade = o => !igoFiltro.cidades.length || igoFiltro.cidades.includes(cidadeDe(o));
+    const passaAssunto = o => !igoFiltro.assuntos.length || igoFiltro.assuntos.includes(unificar(o.assunto));
     const passa = o => passaCidade(o) && passaAssunto(o);
 
-    const opCidades = igoOpcoesFiltro(modelo.itens.filter(passaAssunto), cidadeDe);
-    const opAssuntos = igoOpcoesFiltro(modelo.itens.filter(passaCidade), o => unificar(o.assunto));
-    if (igoFiltro.cidade && !opCidades.some(([c]) => c === igoFiltro.cidade)) igoFiltro.cidade = "";
-    if (igoFiltro.assunto && !opAssuntos.some(([a]) => a === igoFiltro.assunto)) igoFiltro.assunto = "";
+    const daCidade = modelo.itens.filter(passaCidade), doAssunto = modelo.itens.filter(passaAssunto);
+    const opCidades = igoOpcoesFiltro(doAssunto, cidadeDe);
+    const opAssuntos = igoOpcoesFiltro(daCidade, o => unificar(o.assunto));
+    igoFiltro.cidades = igoFiltro.cidades.filter(c => opCidades.some(([x]) => x === c));
+    igoFiltro.assuntos = igoFiltro.assuntos.filter(a => opAssuntos.some(([x]) => x === a));
 
     const itens = modelo.itens.filter(passa);
     const total = itens.length;
-    const recorte = [igoFiltro.cidade, igoFiltro.assunto && IG.assuntoCurto(igoFiltro.assunto)].filter(Boolean).join(" · ");
+    const recorteAssunto = igoRotuloRecorte(igoFiltro.assuntos, IG.assuntoCurto, "assuntos");
+    const recorte = [igoRotuloRecorte(igoFiltro.cidades, c => c, "cidades"), recorteAssunto].filter(Boolean).join(" · ");
     const pop = (titulo, oss) => () => abrirPopupBacklog(recorte ? `${titulo} · ${recorte}` : titulo, oss);
     const cartoes = [];
     const refazer = () => renderizarInfografico("agenda-hoje");
     cartoes.filtros = [
-        { rotulo: "Cidade", todos: `Todas as cidades (${IG.fmt(modelo.itens.filter(passaAssunto).length)})`, valor: igoFiltro.cidade,
-            opcoes: opCidades.map(([c, n]) => ({ valor: c, rotulo: `${c} (${IG.fmt(n)})` })),
-            aoMudar: v => { igoFiltro.cidade = v; refazer(); } },
-        { rotulo: "Assunto", todos: `Todos os assuntos (${IG.fmt(modelo.itens.filter(passaCidade).length)})`, valor: igoFiltro.assunto,
-            opcoes: opAssuntos.map(([a, n]) => ({ valor: a, rotulo: `${IG.assuntoCurto(a)} (${IG.fmt(n)})` })),
-            aoMudar: v => { igoFiltro.assunto = v; refazer(); } }
+        { rotulo: "Cidade", plural: "cidades", feminino: true, todos: `Todas as cidades (${IG.fmt(doAssunto.length)})`, valores: igoFiltro.cidades,
+            opcoes: opCidades.map(([c, n]) => ({ valor: c, nome: c, n })),
+            aoMudar: v => { igoFiltro.cidades = v; refazer(); } },
+        { rotulo: "Assunto", plural: "assuntos", todos: `Todos os assuntos (${IG.fmt(daCidade.length)})`, valores: igoFiltro.assuntos,
+            opcoes: opAssuntos.map(([a, n]) => ({ valor: a, nome: IG.assuntoCurto(a), n })),
+            aoMudar: v => { igoFiltro.assuntos = v; refazer(); } }
     ];
-    cartoes.limparFiltros = () => { igoFiltro.cidade = ""; igoFiltro.assunto = ""; refazer(); };
+    cartoes.limparFiltros = () => { igoFiltro.cidades = []; igoFiltro.assuntos = []; refazer(); };
 
     const agendadas = itens.filter(i => i.agendada);
     const semAgenda = itens.filter(i => !i.agendada);
@@ -235,7 +242,7 @@ registrarInfografico("agenda-hoje", async () => {
     for (const o of itens) { const c = o.cidade || "—"; if (!porCidade.has(c)) porCidade.set(c, []); porCidade.get(c).push(o); }
     const cidades = [...porCidade].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "pt-BR")).slice(0, 12);
     cartoes.push({
-        titulo: "Por cidade", sub: igoFiltro.assunto ? `${IG.assuntoCurto(igoFiltro.assunto)} em aberto` : "OS de campo em aberto", cor: "azul", icone: "mapa", span: 2,
+        titulo: "Por cidade", sub: recorteAssunto ? `${recorteAssunto} em aberto` : "OS de campo em aberto", cor: "azul", icone: "mapa", span: 2,
         blocos: [{ t: "colunas", cor: "azul", itens: cidades.map(([c, oss]) => ({ rotulo: c, n: oss.length, acao: pop(c, oss) })) }]
     });
 

@@ -72,3 +72,19 @@ g.ig-clicavel:hover rect{opacity:.8}
 .ig-nota{font-size:12px;color:var(--cor-texto-suave);line-height:1.45;margin:0;padding-top:12px;border-top:1px solid var(--cor-borda)}
 .ig-nota b{color:var(--cor-texto)}
 @media (prefers-reduced-motion:no-preference){.ig-barra i{transition:width .5s ease}}
+
+/* Filtro de várias opções (barra do topo do infográfico) */
+.ig-multi{position:relative}
+.ig-multi summary{list-style:none;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;padding-right:28px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+.ig-multi summary::-webkit-details-marker{display:none}
+.ig-multi-ativo{border-color:var(--cor-primaria)!important;font-weight:600}
+.ig-multi-painel{position:absolute;z-index:30;top:calc(100% + 6px);left:0;width:min(340px,calc(100vw - 32px));background:var(--cor-fundo-card);border:1px solid var(--cor-borda);border-radius:12px;box-shadow:0 10px 28px var(--cor-sombra);padding:10px;display:flex;flex-direction:column;gap:8px}
+.ig-multi-busca{width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--cor-borda);border-radius:8px;background:var(--cor-fundo-elevado);color:var(--cor-texto);font:inherit;font-size:13px}
+.ig-multi-acoes{display:flex;gap:6px}
+.ig-multi-acoes button{flex:1;padding:5px 8px;border:1px solid var(--cor-borda);border-radius:8px;background:transparent;color:var(--cor-texto-suave);font:inherit;font-size:12px;cursor:pointer}
+.ig-multi-acoes button:hover{color:var(--cor-texto);background:var(--cor-fundo-elevado)}
+.ig-multi-lista{max-height:300px;overflow-y:auto;display:flex;flex-direction:column}
+.ig-multi-op{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 6px;border-radius:8px;font-size:13px;color:var(--cor-texto);cursor:pointer}
+.ig-multi-op[hidden]{display:none}
+.ig-multi-op:hover{background:var(--cor-fundo-elevado)}
+.ig-multi-op em{font-style:normal;color:var(--cor-texto-suave);font-variant-numeric:tabular-nums;font-size:12px}

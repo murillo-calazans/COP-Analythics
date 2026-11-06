@@ -182,22 +182,60 @@ async function renderizarInfografico(nome) {
     alvo.innerHTML = `${igBarraFiltros(cartoes.filtros)}<div class="ig-grade">${cartoes.map(igCartao).join("")}</div>`;
     const acoes = _igAcoes;
     alvo.querySelectorAll("[data-ig-acao]").forEach(el => el.addEventListener("click", () => acoes[+el.dataset.igAcao]?.()));
-    alvo.querySelectorAll("[data-ig-filtro]").forEach(sel => sel.addEventListener("change", () => cartoes.filtros[+sel.dataset.igFiltro].aoMudar(sel.value)));
+    alvo.querySelectorAll("[data-ig-filtro]").forEach(el => igLigarMulti(el, cartoes.filtros[+el.dataset.igFiltro]));
     alvo.querySelector("[data-ig-limpar]")?.addEventListener("click", () => cartoes.limparFiltros?.());
+}
+
+function igResumoMulti(f) {
+    if (!f.valores.length) return f.todos;
+    if (f.valores.length === 1) return f.opcoes.find(o => o.valor === f.valores[0])?.nome ?? f.valores[0];
+    return `${f.valores.length} ${f.plural} selecionad${f.feminino ? "as" : "os"}`;
 }
 
 function igBarraFiltros(filtros) {
     if (!filtros?.length) return "";
-    const algum = filtros.some(f => f.valor);
+    const algum = filtros.some(f => f.valores.length);
     return `<div class="backlog-filtro">${filtros.map((f, i) => `
-        <label for="igFiltro-${i}">${IG.esc(f.rotulo)}:</label>
-        <select id="igFiltro-${i}" class="backlog-cidade-sel" data-ig-filtro="${i}">
-            <option value="">${IG.esc(f.todos)}</option>
-            ${f.opcoes.map(o => `<option value="${IG.esc(o.valor)}"${o.valor === f.valor ? " selected" : ""}>${IG.esc(o.rotulo)}</option>`).join("")}
-        </select>`).join("")}
+        <label>${IG.esc(f.rotulo)}:</label>
+        <details class="ig-multi" data-ig-filtro="${i}">
+            <summary class="backlog-cidade-sel${f.valores.length ? " ig-multi-ativo" : ""}">${IG.esc(igResumoMulti(f))}</summary>
+            <div class="ig-multi-painel">
+                <input type="search" class="ig-multi-busca" placeholder="Buscar ${IG.esc(f.rotulo.toLowerCase())}…">
+                <div class="ig-multi-acoes"><button type="button" data-ig-todos>Marcar visíveis</button><button type="button" data-ig-nenhum>Desmarcar tudo</button></div>
+                <div class="ig-multi-lista">${f.opcoes.map(o => `
+                    <label class="ig-multi-op"><input type="checkbox" value="${IG.esc(o.valor)}"${f.valores.includes(o.valor) ? " checked" : ""}>
+                        <span>${IG.esc(o.nome)}</span><em>${IG.fmt(o.n)}</em></label>`).join("")}</div>
+            </div>
+        </details>`).join("")}
         ${algum ? `<button type="button" class="backlog-limpar" data-ig-limpar title="Limpar filtros">✕</button>` : ""}
     </div>`;
 }
+
+// Marca/desmarca à vontade; o filtro só é aplicado quando a lista fecha (clique fora, Esc ou no próprio botão).
+function igLigarMulti(det, f) {
+    const caixas = () => [...det.querySelectorAll(".ig-multi-lista input")];
+    const marcados = () => caixas().filter(c => c.checked).map(c => c.value);
+    const busca = det.querySelector(".ig-multi-busca");
+    busca.addEventListener("input", () => {
+        const termo = typeof normalizarTexto === "function" ? normalizarTexto(busca.value) : busca.value.toLowerCase();
+        for (const op of det.querySelectorAll(".ig-multi-op")) {
+            const txt = op.textContent;
+            op.hidden = !!termo && !(typeof normalizarTexto === "function" ? normalizarTexto(txt) : txt.toLowerCase()).includes(termo);
+        }
+    });
+    det.querySelector("[data-ig-todos]").addEventListener("click", () => caixas().forEach(c => { if (!c.closest(".ig-multi-op").hidden) c.checked = true; }));
+    det.querySelector("[data-ig-nenhum]").addEventListener("click", () => caixas().forEach(c => { c.checked = false; }));
+    det.addEventListener("keydown", e => { if (e.key === "Escape") det.open = false; });
+    det.addEventListener("toggle", () => {
+        if (det.open) { busca.focus(); return; }
+        const novos = marcados();
+        if (novos.length !== f.valores.length || novos.some(v => !f.valores.includes(v))) f.aoMudar(novos);
+    });
+}
+
+document.addEventListener("click", e => {
+    document.querySelectorAll("details.ig-multi[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});
 
 function igLinhasDoRecorte() {
     if (!APP?.status?.baseCarregada || !APP.dados?.ordens?.size) return null;
