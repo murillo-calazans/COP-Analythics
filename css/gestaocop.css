@@ -93,3 +93,4 @@ html[data-tema="dark"] .backlog-cidade-sel{ background: var(--cor-superficie, #0
 html[data-tema="dark"] .backlog-hist-var.sobe{ color: #FCA5A5; }
 html[data-tema="dark"] .backlog-hist-var.desce{ color: #86EFAC; }
 .backlog-hist-tabela td:not(:first-child), .backlog-hist-tabela th:not(:first-child){ text-align: right; }
+.backlog-hist-sub{ font-size: 13px; margin-top: 4px; color: var(--cor-texto-suave); }

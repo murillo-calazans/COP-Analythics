@@ -385,6 +385,7 @@ const IndicatorEngine = {
         let ultimoEncerramento = null;
         let primeiroAgendamento = null;
         let temReabertura = false;
+        let reaberturaTecnicoErrado = false;
         let temReagendamento = false;
 
         const segmentosSolucao = [];
@@ -422,6 +423,7 @@ const IndicatorEngine = {
                 }
                 if (nomeEventoNormalizado === alvoReabertura) {
                     temReabertura = true;
+                    if (classificarMotivoReabertura(mov.mensagem) === "tecnico_errado") reaberturaTecnicoErrado = true;
                     if (!ultimaReabertura || (mov.data && ultimaReabertura.data && mov.data > ultimaReabertura.data)) {
                         ultimaReabertura = mov;
 
@@ -486,9 +488,12 @@ const IndicatorEngine = {
         const mensagemParaClassificar = [fechamentoAntesDaUltimaReabertura?.mensagem, ultimaReabertura?.mensagem]
             .filter(Boolean)
             .join(" ");
-        const motivoReabertura = (temReabertura && ultimaReabertura)
+        const motivoUltimaReabertura = (temReabertura && ultimaReabertura)
             ? classificarMotivoReabertura(mensagemParaClassificar)
             : null;
+        const motivoReabertura = reaberturaTecnicoErrado && motivoUltimaReabertura !== "servico_nao_executado"
+            ? "tecnico_errado"
+            : motivoUltimaReabertura;
 
         const fechamentoEfetivo = escolherFechamentoEfetivo(motivoReabertura, { primeiroFechamento, ultimoFechamento, ultimaReabertura });
 

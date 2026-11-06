@@ -25,11 +25,12 @@ async function backlogHistTodas(montar) {
     }
 }
 
+let backlogHistAgora = null;
+
 async function backlogHistAtual() {
-    if (agendaBacklogCache?.itens) return agendaBacklogCache;
     const linhas = typeof buscarOsPendentesCacheado === "function" ? await buscarOsPendentesCacheado() : [];
-    if (!agendaBacklogCache) agendaBacklogCache = montarBacklog(linhas);
-    return agendaBacklogCache;
+    if (backlogHistAgora?.linhas !== linhas) backlogHistAgora = { linhas, model: montarBacklog(linhas, new Date()) };
+    return backlogHistAgora.model;
 }
 
 async function backlogHistRetratoSalvo(dia) {
@@ -100,11 +101,11 @@ function backlogHistComparar(retrato, atual) {
 }
 
 const BACKLOG_HIST_COLUNAS = [
-    { id: "antes", rotulo: "Na virada" },
-    { id: "seguem", rotulo: "Seguem em aberto" },
-    { id: "sairam", rotulo: "Saíram" },
-    { id: "entraram", rotulo: "Entraram depois" },
-    { id: "agora", rotulo: "Em aberto agora" }
+    { id: "antes", rotulo: "Na virada", sub: "OS de campo em aberto na virada" },
+    { id: "seguem", rotulo: "Seguem em aberto", sub: "Estavam em aberto na virada e continuam" },
+    { id: "sairam", rotulo: "Saíram", sub: "Estavam em aberto na virada e já não estão" },
+    { id: "entraram", rotulo: "Entraram depois", sub: "Em aberto agora, mas não estavam na virada" },
+    { id: "agora", rotulo: "Em aberto agora", sub: "OS de campo em aberto agora" }
 ];
 
 function backlogHistAgrupar(comp, chave) {
@@ -150,6 +151,7 @@ function desenharBacklogHistorico(dados) {
     const alvo = document.getElementById("agendaBacklogHistConteudo");
     if (!alvo) return;
     const { dia, retrato, comp } = dados;
+    const capturado = dados.atual.capturadoEm ? new Date(dados.atual.capturadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
     const diaTxt = dia.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
     const fonte = retrato.fonte === "retrato"
@@ -161,11 +163,8 @@ function desenharBacklogHistorico(dados) {
         <button type="button" class="stat-tile stat-tile-link backlog-tile" data-bh-cartao="${c.id}">
             <div class="stat-label">${c.id === "antes" ? `Em aberto em ${diaTxt.slice(0, 5)}` : c.rotulo}</div>
             <div class="stat-valor">${valor[c.id].toLocaleString("pt-BR")}</div>
-        </button>`).join("") + `
-        <div class="stat-tile backlog-tile">
-            <div class="stat-label">Variação</div>
-            <div class="stat-valor">${backlogHistVariacao(valor.antes, valor.agora)}</div>
-        </div>`;
+            ${c.id === "agora" ? `<div class="backlog-hist-sub">${backlogHistVariacao(valor.antes, valor.agora)} vs ${diaTxt.slice(0, 5)}</div>` : ""}
+        </button>`).join("");
 
     const porAssunto = backlogHistAgrupar(comp, i => assuntoUnificado(i.assunto));
     const porCidade = backlogHistAgrupar(comp, i => i.cidade || "—");
@@ -176,7 +175,7 @@ function desenharBacklogHistorico(dados) {
     alvo.innerHTML = `
         <div class="backlog-filtro">
             <div class="escala-segmentado" role="group" aria-label="Dia anterior ou mês anterior">${seletor}</div>
-            <span class="resumo-filtro">Fim do dia <strong>${diaTxt}</strong> comparado com o que está em aberto agora · OS de campo</span>
+            <span class="resumo-filtro">Fim do dia <strong>${diaTxt}</strong> comparado com o que está em aberto agora${capturado ? ` (robô às ${capturado})` : ""} · OS de campo</span>
         </div>
         <p class="resumo-filtro">${fonte}</p>
         <div class="kpi-row">${kpis}</div>
@@ -189,16 +188,17 @@ function desenharBacklogHistorico(dados) {
         renderizarBacklogHistorico();
     }));
 
-    const rotulo = id => BACKLOG_HIST_COLUNAS.find(c => c.id === id).rotulo;
+    const coluna = id => BACKLOG_HIST_COLUNAS.find(c => c.id === id);
+    const popup = (titulo, id, oss) => abrirPopupBacklog(`${titulo} · virada de ${diaTxt.slice(0, 5)}`, oss, coluna(id).sub, dados.atual);
     alvo.querySelectorAll("[data-bh-cartao]").forEach(b => b.addEventListener("click", () => {
         const id = b.dataset.bhCartao;
-        abrirPopupBacklog(`${rotulo(id)} · virada de ${diaTxt.slice(0, 5)}`, comp[id]);
+        popup(coluna(id).rotulo, id, comp[id]);
     }));
     for (const [prefixo, grupos, nome] of [["bh-assunto", porAssunto, backlogAssuntoCurto], ["bh-cidade", porCidade, n => n]]) {
         alvo.querySelectorAll(`[data-${prefixo}]`).forEach(b => b.addEventListener("click", () => {
             const [gi, col] = b.getAttribute(`data-${prefixo}`).split("|");
             const g = grupos[+gi];
-            abrirPopupBacklog(`${nome(g.nome)} · ${rotulo(col)} · virada de ${diaTxt.slice(0, 5)}`, g[col]);
+            popup(`${nome(g.nome)} · ${coluna(col).rotulo}`, col, g[col]);
         }));
     }
 }
@@ -209,15 +209,13 @@ async function renderizarBacklogHistorico(forcar = false) {
 
     const dia = BACKLOG_HIST_RECORTES[backlogHistRecorte].dia();
     const chave = `${backlogHistRecorte}|${backlogHistIso(dia)}`;
-    if (!forcar && backlogHistCache.has(chave) && backlogHistCache.get(chave).atual === agendaBacklogCache) {
-        desenharBacklogHistorico(backlogHistCache.get(chave));
-        return;
-    }
 
     backlogHistCarregando = true;
     alvo.innerHTML = `<div class="ixc-vazio"><p>Montando o backlog de ${escaparHtml(BACKLOG_HIST_RECORTES[backlogHistRecorte].rotulo.toLowerCase())}…</p></div>`;
     try {
         const atual = await backlogHistAtual();
+        const guardado = backlogHistCache.get(chave);
+        if (!forcar && guardado?.atual === atual) { desenharBacklogHistorico(guardado); return; }
         const retrato = await backlogHistRetratoSalvo(dia) || await backlogHistReconstruir(dia, atual);
         const dados = { dia, atual, retrato, comp: backlogHistComparar(retrato, atual) };
         backlogHistCache.set(chave, dados);

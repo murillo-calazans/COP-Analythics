@@ -13,9 +13,7 @@
 
     const REGIOES_PADRAO = [
         "Agro Brasil e Sambaetiba = Agro Brasil; Sambaetiba",
-        "Japuíba e Papucaia = Japuíba; Papucaia",
-
-        "Sul - Mury / Ponte da Saudade = Ponte da Saudade; Mury; Stucky"
+        "Japuíba e Papucaia = Japuíba; Papucaia"
     ].join("\n");
 
     const URL_MAPA_REGIOES = "https://murillo-calazans.github.io/mapa-logistico-cop/mapa-regioes.html";

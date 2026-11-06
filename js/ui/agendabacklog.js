@@ -5,12 +5,11 @@ let backlogCidade = "";
 const BACKLOG_DIAS_ANTIGA = 3;
 const BACKLOG_TETO = 300;
 
-function montarBacklog(linhas) {
+function montarBacklog(linhas, hoje = ixcMeiaNoite()) {
     const rows = linhas.map(l => l.dados);
     const capturadoEm = linhas.reduce((max, l) => (l.capturado_em && (!max || l.capturado_em > max) ? l.capturado_em : max), null);
     if (!rows.length || typeof Motor === "undefined") return { total: 0, agendadas: 0, antigas: 0, itens: [], grupos: [], capturadoEm, eventosPorOs: {}, osInfo: {} };
 
-    const hoje = ixcMeiaNoite();
     const limiteAntiga = Date.now() - BACKLOG_DIAS_ANTIGA * 86400000;
 
     const agDate = {}, aberturaDate = {}, eventosPorOs = {}, osInfo = {};
@@ -376,11 +375,13 @@ async function desenharBairrosBacklog(itens, sufixo) {
         }));
 }
 
-function abrirPopupBacklog(titulo, oss) {
+function abrirPopupBacklog(titulo, oss, subtitulo = "OS de campo em aberto", fonte = agendaBacklogCache) {
     fecharPopupBacklog();
     const lista = oss.slice(0, BACKLOG_TETO);
     const linhas = lista.map(o => {
-        const tagAg = o.agendada && o.agendamento
+        const tagAg = o.fechamento
+            ? `<span class="escala-tag">✓ finalizada ${o.fechamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>`
+            : o.agendada && o.agendamento
             ? `<span class="escala-tag ixc-data">📅 ${o.agendamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>`
             : `<span class="escala-tag">sem agendamento</span>`;
         const tagAntiga = o.antiga ? `<span class="escala-tag ixc-data-vencida">${escaparHtml(backlogHaDias(o.abertura))}</span>` : "";
@@ -396,7 +397,7 @@ function abrirPopupBacklog(titulo, oss) {
     fundo.innerHTML = `
       <div class="ixc-popup" role="dialog" aria-modal="true" aria-label="${escaparHtml(titulo)}">
         <div class="ixc-popup-topo">
-          <div><h2>${escaparHtml(titulo)} <span class="escala-pilula">${oss.length.toLocaleString("pt-BR")} OS</span></h2><p>OS de campo em aberto${oss.length > BACKLOG_TETO ? ` — mostrando as ${BACKLOG_TETO} mais antigas` : ""}</p></div>
+          <div><h2>${escaparHtml(titulo)} <span class="escala-pilula">${oss.length.toLocaleString("pt-BR")} OS</span></h2><p>${escaparHtml(subtitulo)}${oss.length > BACKLOG_TETO ? ` — mostrando as ${BACKLOG_TETO} mais antigas` : ""}</p></div>
           <button type="button" class="ixc-popup-fechar" aria-label="Fechar">✕</button>
         </div>
         <div class="ixc-popup-corpo">${lista.length ? `<ul class="ixc-lista">${linhas}</ul>` : '<p class="alerta-vazio">Nenhuma OS aqui.</p>'}</div>
@@ -406,7 +407,7 @@ function abrirPopupBacklog(titulo, oss) {
     fundo.addEventListener("click", e => { if (e.target === fundo) fecharPopupBacklog(); });
     fundo.querySelector(".ixc-popup-fechar").addEventListener("click", fecharPopupBacklog);
     fundo.querySelectorAll("[data-bk-os]").forEach(li =>
-        li.addEventListener("click", () => abrirTimelineIxc(li.dataset.bkOs, agendaBacklogCache)));
+        li.addEventListener("click", () => abrirTimelineIxc(li.dataset.bkOs, fonte)));
     fundo.querySelector(".ixc-popup-fechar").focus();
 }
 

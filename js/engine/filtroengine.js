@@ -137,6 +137,7 @@ const FiltroEngine = {
         let ultimaReabertura = null;
 
         let fechamentoAntesDaUltimaReabertura = null;
+        let reaberturaTecnicoErrado = false;
 
         for (const mov of ordem.movimentacoes) {
             if (mov.evento === null || mov.evento === undefined) continue;
@@ -153,6 +154,7 @@ const FiltroEngine = {
             }
 
             if (nomeNormalizado === alvoReabertura) {
+                if (classificarMotivoReabertura(mov.mensagem) === "tecnico_errado") reaberturaTecnicoErrado = true;
                 if (!ultimaReabertura || (mov.data && ultimaReabertura.data && mov.data > ultimaReabertura.data)) {
                     ultimaReabertura = mov;
                     fechamentoAntesDaUltimaReabertura = ultimoFechamento;
@@ -163,7 +165,8 @@ const FiltroEngine = {
         const mensagemParaClassificar = [fechamentoAntesDaUltimaReabertura?.mensagem, ultimaReabertura?.mensagem]
             .filter(Boolean)
             .join(" ");
-        const motivo = ultimaReabertura ? classificarMotivoReabertura(mensagemParaClassificar) : null;
+        const motivoUltima = ultimaReabertura ? classificarMotivoReabertura(mensagemParaClassificar) : null;
+        const motivo = reaberturaTecnicoErrado && motivoUltima !== "servico_nao_executado" ? "tecnico_errado" : motivoUltima;
         return escolherFechamentoEfetivo(motivo, { primeiroFechamento, ultimoFechamento, ultimaReabertura });
     },
 
