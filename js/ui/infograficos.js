@@ -179,9 +179,24 @@ async function renderizarInfografico(nome) {
     if (token !== _igToken) return;
     if (!cartoes || !cartoes.length) { alvo.innerHTML = ""; return; }
     _igAcoes = [];
-    alvo.innerHTML = `<div class="ig-grade">${cartoes.map(igCartao).join("")}</div>`;
+    alvo.innerHTML = `${igBarraFiltros(cartoes.filtros)}<div class="ig-grade">${cartoes.map(igCartao).join("")}</div>`;
     const acoes = _igAcoes;
     alvo.querySelectorAll("[data-ig-acao]").forEach(el => el.addEventListener("click", () => acoes[+el.dataset.igAcao]?.()));
+    alvo.querySelectorAll("[data-ig-filtro]").forEach(sel => sel.addEventListener("change", () => cartoes.filtros[+sel.dataset.igFiltro].aoMudar(sel.value)));
+    alvo.querySelector("[data-ig-limpar]")?.addEventListener("click", () => cartoes.limparFiltros?.());
+}
+
+function igBarraFiltros(filtros) {
+    if (!filtros?.length) return "";
+    const algum = filtros.some(f => f.valor);
+    return `<div class="backlog-filtro">${filtros.map((f, i) => `
+        <label for="igFiltro-${i}">${IG.esc(f.rotulo)}:</label>
+        <select id="igFiltro-${i}" class="backlog-cidade-sel" data-ig-filtro="${i}">
+            <option value="">${IG.esc(f.todos)}</option>
+            ${f.opcoes.map(o => `<option value="${IG.esc(o.valor)}"${o.valor === f.valor ? " selected" : ""}>${IG.esc(o.rotulo)}</option>`).join("")}
+        </select>`).join("")}
+        ${algum ? `<button type="button" class="backlog-limpar" data-ig-limpar title="Limpar filtros">✕</button>` : ""}
+    </div>`;
 }
 
 function igLinhasDoRecorte() {

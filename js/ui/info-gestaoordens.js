@@ -33,11 +33,11 @@ const IGO_PRIO_GRUPOS = [
     { id: "finalizada", rotulo: "Finalizadas hoje", cor: "verde" }
 ];
 
-function igoPrioridades(modelo, hoje) {
+function igoPrioridades(modelo, itens, hoje, passa) {
     const grupos = Object.fromEntries(IGO_PRIO_GRUPOS.map(g => [g.id, []]));
     if (typeof PrioridadeEngine === "undefined") return null;
     const norm = typeof ixcNorm === "function" ? ixcNorm : (t => String(t ?? "").toLowerCase());
-    for (const o of modelo.itens) {
+    for (const o of itens) {
         const pedidos = PrioridadeEngine.pedidosDaOS(modelo.eventosPorOs?.[String(o.id)]);
         if (!pedidos.length) continue;
         const st = norm(o.status);
@@ -52,7 +52,7 @@ function igoPrioridades(modelo, hoje) {
     const amanha = hoje.getTime() + 86400000;
     for (const ordem of APP?.dados?.ordens?.values?.() ?? []) {
         const df = ordem.dataFechamento;
-        if (!df || df.getTime() < hoje.getTime() || df.getTime() >= amanha || norm(ordem.statusAtual) !== "finalizada") continue;
+        if (!df || df.getTime() < hoje.getTime() || df.getTime() >= amanha || norm(ordem.statusAtual) !== "finalizada" || !passa(ordem)) continue;
         const pedidos = PrioridadeEngine.pedidosDaOS(ordem.movimentacoes);
         if (pedidos.length) grupos.finalizada.push({ id: ordem.id, cliente: ordem.cliente, cidade: ordem.cidade, bairro: ordem.bairro, assunto: ordem.assunto, hora: df, pedidos, fechada: true });
     }
@@ -124,14 +124,44 @@ async function igoCartaoBairros(itens) {
     };
 }
 
+const igoFiltro = { cidade: "", assunto: "" };
+
+function igoOpcoesFiltro(lista, chave) {
+    const m = new Map();
+    for (const o of lista) { const k = chave(o); m.set(k, (m.get(k) ?? 0) + 1); }
+    return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR"));
+}
+
 registrarInfografico("agenda-hoje", async () => {
     const modelo = await igoBacklog();
     if (!modelo || !modelo.total) return [];
     const hoje = typeof ixcMeiaNoite === "function" ? ixcMeiaNoite() : new Date(new Date().setHours(0, 0, 0, 0));
-    const itens = modelo.itens;
+    const unificar = typeof assuntoUnificado === "function" ? assuntoUnificado : (a => a);
+    const cidadeDe = o => o.cidade || "—";
+    const passaCidade = o => !igoFiltro.cidade || cidadeDe(o) === igoFiltro.cidade;
+    const passaAssunto = o => !igoFiltro.assunto || unificar(o.assunto) === igoFiltro.assunto;
+    const passa = o => passaCidade(o) && passaAssunto(o);
+
+    const opCidades = igoOpcoesFiltro(modelo.itens.filter(passaAssunto), cidadeDe);
+    const opAssuntos = igoOpcoesFiltro(modelo.itens.filter(passaCidade), o => unificar(o.assunto));
+    if (igoFiltro.cidade && !opCidades.some(([c]) => c === igoFiltro.cidade)) igoFiltro.cidade = "";
+    if (igoFiltro.assunto && !opAssuntos.some(([a]) => a === igoFiltro.assunto)) igoFiltro.assunto = "";
+
+    const itens = modelo.itens.filter(passa);
     const total = itens.length;
-    const pop = (titulo, oss) => () => abrirPopupBacklog(titulo, oss);
+    const recorte = [igoFiltro.cidade, igoFiltro.assunto && IG.assuntoCurto(igoFiltro.assunto)].filter(Boolean).join(" · ");
+    const pop = (titulo, oss) => () => abrirPopupBacklog(recorte ? `${titulo} · ${recorte}` : titulo, oss);
     const cartoes = [];
+    const refazer = () => renderizarInfografico("agenda-hoje");
+    cartoes.filtros = [
+        { rotulo: "Cidade", todos: `Todas as cidades (${IG.fmt(modelo.itens.filter(passaAssunto).length)})`, valor: igoFiltro.cidade,
+            opcoes: opCidades.map(([c, n]) => ({ valor: c, rotulo: `${c} (${IG.fmt(n)})` })),
+            aoMudar: v => { igoFiltro.cidade = v; refazer(); } },
+        { rotulo: "Assunto", todos: `Todos os assuntos (${IG.fmt(modelo.itens.filter(passaCidade).length)})`, valor: igoFiltro.assunto,
+            opcoes: opAssuntos.map(([a, n]) => ({ valor: a, rotulo: `${IG.assuntoCurto(a)} (${IG.fmt(n)})` })),
+            aoMudar: v => { igoFiltro.assunto = v; refazer(); } }
+    ];
+    cartoes.limparFiltros = () => { igoFiltro.cidade = ""; igoFiltro.assunto = ""; refazer(); };
 
     const agendadas = itens.filter(i => i.agendada);
     const semAgenda = itens.filter(i => !i.agendada);
@@ -139,7 +169,7 @@ registrarInfografico("agenda-hoje", async () => {
     const assumidas = itens.filter(i => i.assumida);
     const antigas = itens.filter(i => i.antiga);
     cartoes.push({
-        titulo: "OS de campo em aberto", sub: "Agendadas × sem agendamento", cor: "azul", icone: "caixa",
+        titulo: "OS de campo em aberto", sub: recorte || "Agendadas × sem agendamento", cor: "azul", icone: "caixa",
         blocos: [
             { t: "destaque", fatias: [{ rotulo: "Agendadas", n: agendadas.length, cor: "azul" }, { rotulo: "Sem agendamento", n: semAgenda.length, cor: "laranja" }],
                 centro: IG.fmt(total), sub: "em aberto", valor: IG.pctDe(semAgenda.length, total), corValor: "laranja", texto: "ainda <b>sem agendamento</b>" },
@@ -169,7 +199,7 @@ registrarInfografico("agenda-hoje", async () => {
         ]
     });
 
-    const prio = igoPrioridades(modelo, hoje);
+    const prio = igoPrioridades(modelo, itens, hoje, passa);
     if (prio) {
         const gruposComOs = IGO_PRIO_GRUPOS.filter(g => prio.grupos[g.id].length);
         const abrir = g => () => {
@@ -189,7 +219,6 @@ registrarInfografico("agenda-hoje", async () => {
         });
     }
 
-    const unificar = typeof assuntoUnificado === "function" ? assuntoUnificado : (a => a);
     const porAssunto = new Map();
     for (const o of itens) {
         const k = unificar(o.assunto);
@@ -206,7 +235,7 @@ registrarInfografico("agenda-hoje", async () => {
     for (const o of itens) { const c = o.cidade || "—"; if (!porCidade.has(c)) porCidade.set(c, []); porCidade.get(c).push(o); }
     const cidades = [...porCidade].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "pt-BR")).slice(0, 12);
     cartoes.push({
-        titulo: "Por cidade", sub: "OS de campo em aberto", cor: "azul", icone: "mapa", span: 2,
+        titulo: "Por cidade", sub: igoFiltro.assunto ? `${IG.assuntoCurto(igoFiltro.assunto)} em aberto` : "OS de campo em aberto", cor: "azul", icone: "mapa", span: 2,
         blocos: [{ t: "colunas", cor: "azul", itens: cidades.map(([c, oss]) => ({ rotulo: c, n: oss.length, acao: pop(c, oss) })) }]
     });
 
