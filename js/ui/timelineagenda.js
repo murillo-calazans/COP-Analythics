@@ -75,18 +75,38 @@ function tlTecnicoDesloc(msg) {
     return m ? m[1].trim() : null;
 }
 
+// Eventos que tiram a OS da mão do técnico sem fechar (alteração de setor,
+// agendamento, reagendar): encerram a visita como "não concluída".
+const TL_EV_INTERROMPE = new Set([4, 5, 10]);
+
+// Uma OS pode ter várias visitas no dia (ex.: cliente ausente de manhã, outro
+// técnico volta à tarde e finaliza). Cada deslocamento abre uma visita nova;
+// ela termina no fechamento ou num evento de TL_EV_INTERROMPE.
 function tlPorOs(mov) {
     const porOs = new Map();
     for (const e of mov) {
         const id = String(e.ordem_id);
         let o = porOs.get(id);
-        if (!o) { o = { id, desloc: null, exec: null, fim: null, tec: null, status: null, ultData: null }; porOs.set(id, o); }
+        if (!o) { o = { id, visitas: [], aberta: null }; porOs.set(id, o); }
         const ev = +e.evento;
         const dt = e.data ? new Date(e.data) : null;
-        if (ev === 2) { if (!o.desloc) o.desloc = dt; const t = tlTecnicoDesloc(e.mensagem); if (t) o.tec = t; }
-        if (ev === 9 && !o.exec) o.exec = dt;
-        if (ev === 6) o.fim = dt;
-        if (dt && (!o.ultData || dt > o.ultData)) { o.ultData = dt; o.status = e.status; }
+        const tecDesloc = ev === 2 ? tlTecnicoDesloc(e.mensagem) : null;
+        const novaVisita = () => { const v = { desloc: null, exec: null, fim: null, encerrada: null, motivo: null, tec: null }; o.visitas.push(v); o.aberta = v; return v; };
+
+        if (ev === 2 && (tecDesloc || tlNorm(e.status).includes("desloc"))) {
+            const v = novaVisita();
+            v.desloc = dt; v.tec = tecDesloc;
+        } else if (ev === 9) {
+            const v = o.aberta || novaVisita();
+            if (!v.exec) v.exec = dt;
+        } else if (ev === 6) {
+            const v = o.aberta || novaVisita();
+            v.fim = dt; o.aberta = null;
+        } else if (TL_EV_INTERROMPE.has(ev) && o.aberta) {
+            o.aberta.encerrada = dt;
+            o.aberta.motivo = tlNorm(e.status).includes("encaminh") ? "encaminhada" : "reagendada";
+            o.aberta = null;
+        }
     }
     return porOs;
 }
@@ -143,26 +163,32 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
     for (const [id, o] of porOs) {
         const info = ordensMap.get(id) || {};
         if (TL_EXCLUIR.test(tlNorm(info.assunto))) continue;
-        const tec = o.tec || info.tecnico_responsavel;
-        if (!tec) continue;
-        const lt = destino(tec, info.cidade);
-        const exp = tlEsperado(info.assunto, lt.dupla);
-        const ini = o.desloc || o.exec;
-        if (!ini && !o.fim) continue;
-        const start = ini || new Date(o.fim.getTime() - exp * 60000);
-        const descFim = (o.desloc && o.exec && o.desloc < o.exec) ? o.exec : null;
-        let estado, perf = "";
-        if (o.fim) {
-            const act = (o.fim - (o.exec || o.desloc || start)) / 60000;
-            estado = act > exp ? "fin-over" : "fin";
-            perf = act > exp ? `▲ +${Math.round(act - exp)}min` : "✔ no tempo";
-        } else if (tlNorm(o.status).includes("execu") || o.exec) {
-            estado = "exec";
-        } else {
-            estado = "desloc";
+        for (const v of o.visitas) {
+            const tec = v.tec || info.tecnico_responsavel;
+            if (!tec) continue;
+            const lt = destino(tec, info.cidade);
+            const exp = tlEsperado(info.assunto, lt.dupla);
+            const ini = v.desloc || v.exec;
+            if (!ini && !v.fim) continue;
+            const start = ini || new Date(v.fim.getTime() - exp * 60000);
+            const descFim = (v.desloc && v.exec && v.desloc < v.exec) ? v.exec : null;
+            let estado, perf = "", fim = v.fim;
+            if (v.fim) {
+                const act = (v.fim - (v.exec || v.desloc || start)) / 60000;
+                estado = act > exp ? "fin-over" : "fin";
+                perf = act > exp ? `▲ +${Math.round(act - exp)}min` : "✔ no tempo";
+            } else if (v.encerrada) {
+                estado = "interr";
+                perf = `↺ não concluída · ${v.motivo}`;
+                fim = v.encerrada;
+            } else if (v.exec) {
+                estado = "exec";
+            } else {
+                estado = "desloc";
+            }
+            lt.blocos.push({ tipo: "os", id, cli: info.cliente, a: info.assunto, exp, estado, perf,
+                ini: start, descFim, fim: fim || null, execIni: v.exec || start });
         }
-        lt.blocos.push({ tipo: "os", id, cli: info.cliente, a: info.assunto, exp, estado, perf,
-            ini: start, descFim, fim: o.fim || null, execIni: o.exec || start });
     }
 
     const prevPorTec = new Map();
@@ -199,11 +225,13 @@ const TL_CSS = `
   --tl-verde:#15803d; --tl-verde-bg:#e6f4ea; --tl-azul:#2563eb; --tl-azul-bg:#e6edfd;
   --tl-amarelo:#b45309; --tl-amarelo-bg:#fbecd6; --tl-vermelho:#dc2626; --tl-vermelho-bg:#fbe4e4;
   --tl-cinza:#64748b; --tl-cinza-bg:#eef1f6; --tl-agora:#e5352b;
+  --tl-roxo:#7c3aed; --tl-roxo-bg:#efe7fd; --tl-rosa:#db2777; --tl-rosa-bg:#fce7f1;
   --tl-nome-bg:#e6effd; --tl-nome-fg:#1d4ed8; --tl-nome-marca:#60a5fa; --tl-zebra:rgba(30,60,110,.035); }
 html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-fg:#d7e8fb; --tl-head-line:rgba(255,255,255,.12);
   --tl-verde:#34d399; --tl-verde-bg:#143227; --tl-azul:#60a5fa; --tl-azul-bg:#15274a;
   --tl-amarelo:#fbbf24; --tl-amarelo-bg:#3a2d12; --tl-vermelho:#f87171; --tl-vermelho-bg:#3a1a1a;
   --tl-cinza:#94a3b8; --tl-cinza-bg:#1b2740; --tl-agora:#fb5a50;
+  --tl-roxo:#a78bfa; --tl-roxo-bg:#2a1f4a; --tl-rosa:#f472b6; --tl-rosa-bg:#3d1a2e;
   --tl-nome-bg:#1c3a63; --tl-nome-fg:#e3efff; --tl-nome-marca:#93c5fd; --tl-zebra:rgba(255,255,255,.028); }
 
 .tl-tabs{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }
@@ -219,7 +247,8 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-sw.fin{ background:var(--tl-verde-bg); border:1.5px solid var(--tl-verde); }
 .tl-sw.over{ background:var(--tl-amarelo-bg); border:1.5px solid var(--tl-amarelo); }
 .tl-sw.exec{ background:var(--tl-azul-bg); border:1.5px solid var(--tl-azul); }
-.tl-sw.desloc{ background:var(--tl-cinza-bg); border:1.5px dashed var(--tl-cinza); }
+.tl-sw.desloc{ background:var(--tl-roxo-bg); border:1.5px dashed var(--tl-roxo); }
+.tl-sw.interr{ background:var(--tl-rosa-bg); border:1.5px dashed var(--tl-rosa); }
 .tl-sw.prev{ background:transparent; border:1.5px dashed var(--cor-texto-suave); }
 .tl-sw.atras{ background:var(--tl-vermelho-bg); border:1.5px dashed var(--tl-vermelho); }
 .tl-sw.agora{ width:3px; height:14px; border-radius:2px; background:var(--tl-agora); }
@@ -255,7 +284,7 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-blk.fin-over{ background:var(--tl-amarelo-bg); border:1px solid var(--tl-amarelo); color:var(--tl-amarelo); }
 .tl-blk.exec{ background:var(--tl-azul-bg); border:1px solid var(--tl-azul); color:var(--tl-azul); box-shadow:0 0 0 2px color-mix(in srgb,var(--tl-azul) 16%,transparent); }
 .tl-blk.exec.over{ background:var(--tl-amarelo-bg); border-color:var(--tl-amarelo); color:var(--tl-amarelo); }
-.tl-blk.desloc{ background:var(--tl-cinza-bg); border:1px dashed var(--tl-cinza); color:var(--tl-cinza); }
+.tl-blk.desloc{ background:var(--tl-roxo-bg); border:1px dashed var(--tl-roxo); color:var(--tl-roxo); }
 .tl-blk.prev{ background:transparent; border:1px dashed var(--cor-texto-suave); color:var(--cor-texto-suave); }
 .tl-blk.prev.fila{ background:var(--cor-fundo-suave,rgba(0,0,0,.04)); }
 
@@ -265,13 +294,16 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-os.fin-over{ border-color:var(--tl-amarelo); }
 .tl-os.exec{ border-color:var(--tl-azul); }
 .tl-os.exec.over{ border-color:var(--tl-amarelo); }
-.tl-seg-desl{ position:absolute; left:0; top:0; bottom:0; background:repeating-linear-gradient(45deg,var(--tl-cinza-bg) 0 5px,transparent 5px 10px),var(--tl-cinza-bg); border-right:1px solid var(--cor-borda); }
+.tl-seg-desl{ position:absolute; left:0; top:0; bottom:0; background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--tl-roxo) 22%,transparent) 0 5px,transparent 5px 10px),var(--tl-roxo-bg); border-right:1px solid var(--cor-borda); }
 .tl-corpo{ position:absolute; top:0; right:0; bottom:0; left:0; padding:3px 8px; display:flex; flex-direction:column; justify-content:center; gap:1px; overflow:hidden; }
 .tl-os.fin .tl-corpo{ background:var(--tl-verde-bg); color:var(--tl-verde); }
 .tl-os.fin-over .tl-corpo{ background:var(--tl-amarelo-bg); color:var(--tl-amarelo); }
 .tl-os.exec .tl-corpo{ background:var(--tl-azul-bg); color:var(--tl-azul); }
 .tl-os.exec.over .tl-corpo{ background:var(--tl-amarelo-bg); color:var(--tl-amarelo); }
-.tl-corpo.desl{ background:var(--tl-cinza-bg); color:var(--tl-cinza); }
+.tl-corpo.desl{ background:var(--tl-roxo-bg); color:var(--tl-roxo); }
+.tl-os.desloc{ border-color:var(--tl-roxo); border-style:dashed; }
+.tl-os.interr{ border-style:dashed; border-color:var(--tl-rosa); }
+.tl-os.interr .tl-corpo{ background:var(--tl-rosa-bg); color:var(--tl-rosa); }
 .tl-os .os{ font-size:11px; font-weight:700; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tl-os .cli{ font-size:10px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:.82; }
 .tl-os .perf{ font-size:10px; font-weight:700; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -374,6 +406,7 @@ function tlRender() {
         <span class="it"><span class="tl-sw over"></span> Passou do tempo</span>
         <span class="it"><span class="tl-sw exec"></span> Em execução</span>
         <span class="it"><span class="tl-sw desloc"></span> Deslocamento</span>
+        <span class="it"><span class="tl-sw interr"></span> Não concluída (reagendada)</span>
         <span class="it"><span class="tl-sw prev"></span> Prevista</span>
         <span class="it"><span class="tl-sw atras"></span> Não iniciada (atrasada)</span>
         <span class="it"><span class="tl-sw agora"></span> Agora</span>
