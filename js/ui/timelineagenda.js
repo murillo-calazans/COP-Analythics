@@ -198,11 +198,13 @@ const TL_CSS = `
 #agendaTimelineConteudo{ --tl-head-bg:#2b3a57; --tl-head-fg:#eef2fb; --tl-head-line:rgba(255,255,255,.16);
   --tl-verde:#15803d; --tl-verde-bg:#e6f4ea; --tl-azul:#2563eb; --tl-azul-bg:#e6edfd;
   --tl-amarelo:#b45309; --tl-amarelo-bg:#fbecd6; --tl-vermelho:#dc2626; --tl-vermelho-bg:#fbe4e4;
-  --tl-cinza:#64748b; --tl-cinza-bg:#eef1f6; --tl-agora:#e5352b; }
+  --tl-cinza:#64748b; --tl-cinza-bg:#eef1f6; --tl-agora:#e5352b;
+  --tl-nome-bg:#e6effd; --tl-nome-fg:#1d4ed8; --tl-nome-marca:#60a5fa; --tl-zebra:rgba(30,60,110,.035); }
 html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-fg:#d7e8fb; --tl-head-line:rgba(255,255,255,.12);
   --tl-verde:#34d399; --tl-verde-bg:#143227; --tl-azul:#60a5fa; --tl-azul-bg:#15274a;
   --tl-amarelo:#fbbf24; --tl-amarelo-bg:#3a2d12; --tl-vermelho:#f87171; --tl-vermelho-bg:#3a1a1a;
-  --tl-cinza:#94a3b8; --tl-cinza-bg:#1b2740; --tl-agora:#fb5a50; }
+  --tl-cinza:#94a3b8; --tl-cinza-bg:#1b2740; --tl-agora:#fb5a50;
+  --tl-nome-bg:#1c3a63; --tl-nome-fg:#e3efff; --tl-nome-marca:#93c5fd; --tl-zebra:rgba(255,255,255,.028); }
 
 .tl-tabs{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }
 .tl-tab{ font:inherit; font-size:13px; font-weight:600; color:var(--cor-texto-suave); background:var(--cor-superficie);
@@ -232,8 +234,12 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-htick{ position:absolute; top:0; bottom:0; display:flex; align-items:center; padding-left:7px; font-size:12px; font-weight:600; color:var(--tl-head-fg); border-left:1px solid var(--tl-head-line); font-variant-numeric:tabular-nums; }
 .tl-cidade-sep{ grid-column:1/-1; position:sticky; left:0; background:var(--cor-fundo-suave,rgba(0,0,0,.05)); font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cor-texto); padding:6px 14px 6px 284px; border-bottom:1px solid var(--cor-borda); }
 
-.tl-name{ padding:8px 14px; display:flex; flex-direction:column; justify-content:center; gap:3px; }
-.tl-name .nm{ font-size:13.5px; font-weight:600; line-height:1.2; overflow-wrap:anywhere; }
+.tl-name{ padding:8px 14px 8px 16px; display:flex; flex-direction:column; justify-content:center; gap:3px;
+  background:var(--tl-nome-bg); box-shadow:inset 3px 0 0 var(--tl-nome-marca); }
+.tl-name .nm{ font-size:13.5px; font-weight:650; line-height:1.2; overflow-wrap:anywhere; color:var(--tl-nome-fg); }
+.tl-name.zebra{ background:linear-gradient(var(--tl-zebra),var(--tl-zebra)),var(--tl-nome-bg); }
+.tl-name.semos, .tl-name.fora{ box-shadow:inset 3px 0 0 var(--cor-borda); }
+.tl-lane.zebra{ background-color:var(--tl-zebra); }
 .tl-name .mt{ display:flex; align-items:center; gap:6px; font-size:11px; color:var(--cor-texto-suave); }
 .tl-pill{ font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px; }
 .tl-pill.dupla{ color:var(--tl-azul); background:var(--tl-azul-bg); }
@@ -414,20 +420,22 @@ function tlDesenharGrade() {
     for (let h = TL_DIA_INI; h < TL_DIA_FIM; h++) html += `<span class="tl-htick" style="left:${tlX(h)}px">${h}h</span>`;
     html += `</div>`;
 
-    let cidadeAtual = null;
+    let cidadeAtual = null, nLinha = 0;
     lista.forEach(lt => {
         if (tlCidade === "__all__" && lt.cidade !== cidadeAtual) {
             cidadeAtual = lt.cidade;
+            nLinha = 0;
             html += `<div class="tl-cidade-sep">${escaparHtml(cidadeAtual)}</div>`;
         }
+        const zebra = nLinha++ % 2 ? " zebra" : "";
 
         const faixas = tlFaixas(lt.blocos);
         const alturaLinha = Math.max(1, faixas.n) * TL_ROW + 8;
         const tag = lt.fora ? "" : (lt.dupla ? `<span class="tl-pill dupla">dupla</span>` : `<span class="tl-pill solo">sozinho</span>`);
         const sub = lt.setor ? (tlCidade === "__all__" ? lt.setor : lt.setor) : (lt.fora ? "fora da escala" : "");
-        html += `<div class="tl-cell tl-name${lt.blocos.length ? "" : " semos"}${lt.fora ? " fora" : ""}" style="min-height:${alturaLinha}px">
+        html += `<div class="tl-cell tl-name${zebra}${lt.blocos.length ? "" : " semos"}${lt.fora ? " fora" : ""}" style="min-height:${alturaLinha}px">
             <span class="nm">${escaparHtml(lt.nome)}</span><span class="mt">${tag}${sub ? `<span>${escaparHtml(sub)}</span>` : ""}</span></div>`;
-        let lane = `<div class="tl-cell tl-lane" style="min-height:${alturaLinha}px">`;
+        let lane = `<div class="tl-cell tl-lane${zebra}" style="min-height:${alturaLinha}px">`;
         if (!lt.blocos.length) lane += `<span class="tl-semos-chip">sem OS hoje</span>`;
         lt.blocos.forEach((b, i) => lane += tlBlocoHtml(b, faixas.de[i]));
         lane += `</div>`;
