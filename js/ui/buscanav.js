@@ -19,7 +19,7 @@
             "clientes-cto": "Cadastro na CTO", alertas: "Alertas de recorrência", "ctos-lacres": "CTOs e Lacres", enderecos: "Endereços a corrigir",
             terceiras: "Terceiras — Painel", "terceiras-fechamento": "Terceiras — Fechamento mensal", "terceiras-lpu": "Terceiras — LPU", "terceiras-qualidade": "Terceiras — Qualidade",
             auditoria: "Auditoria operacional", "auditoria-ia": "Auditor IA",
-            "agenda-hoje": "Agenda do dia", "escala-hoje": "Escala técnica",
+            "agenda-hoje": "Agenda do dia", "escala-hoje": "Escala técnica", "escala-contatos": "Contatos dos técnicos",
             usuarios: "Usuários", configuracoes: "Configurações"
         };
 

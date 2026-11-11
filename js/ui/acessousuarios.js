@@ -8,7 +8,7 @@ const NOMES_MODULO_ACESSO = {
     escala: "Escala"
 };
 
-const NOMES_SECAO_ACESSO = { "agenda-hoje": "Agenda do dia", "escala-hoje": "Escala de hoje" };
+const NOMES_SECAO_ACESSO = { "agenda-hoje": "Agenda do dia", "escala-hoje": "Escala de hoje", "escala-contatos": "Contatos" };
 
 let acessosUsuarios = null;
 let acessoAberto = null;
