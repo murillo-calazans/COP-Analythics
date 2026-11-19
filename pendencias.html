@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pendências do COP</title>
+<!-- Mesmo projeto/sessão de login do COP Analytics (index.html).
+     Dados: tabela pendencias_cop (database/pendencias_cop.sql), gravada pelo bot do WhatsApp às 13h e 18h
+     (C:\cop-robo\relatorios\pendencias-banco.js). Aqui só se marca status/observação. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2/dist/umd/supabase.js"
+    integrity="sha384-OUpie84zd1LdwNlK9uJJQRwab0BLqo3eKYKFh7hSVL58FSk7wPp2l0kfUMIIoaQd"
+    crossorigin="anonymous"></script>
+<script src="js/config/supabase.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#fff; --borda:#e2e6ec; --texto:#1f2530; --muted:#6b7585;
+    --azul:#1d4ed8; --azul-bg:#dbeafe; --verde:#047857; --verde-bg:#d1fae5; --amarelo:#92400e; --amarelo-bg:#fef3c7;
+    --roxo:#6d28d9; --roxo-bg:#ede9fe; --vermelho:#b91c1c; --vermelho-bg:#fee2e2; --cinza:#475569; --cinza-bg:#eef1f5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--texto);font-size:14px}
+  header{background:#1f2937;color:#fff;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:17px;margin:0;flex:1;min-width:200px}
+  header .quem{font-size:12px;opacity:.8}
+  header button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px}
+  main{max-width:1100px;margin:0 auto;padding:14px 16px 60px}
+  .contadores{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .cont{background:var(--card);border:1px solid var(--borda);border-radius:8px;padding:8px 12px;min-width:96px}
+  .cont b{display:block;font-size:20px}
+  .cont span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .filtros{background:var(--card);border:1px solid var(--borda);border-radius:8px;padding:10px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .filtros label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+  .filtros select,.filtros input{font:inherit;padding:6px 8px;border:1px solid var(--borda);border-radius:6px;background:#fff;min-width:130px}
+  .filtros input[type=search]{min-width:200px}
+  .equipe{margin-bottom:18px}
+  .equipe>h2{font-size:15px;margin:0 0 8px;display:flex;gap:8px;align-items:baseline}
+  .equipe>h2 small{color:var(--muted);font-weight:normal}
+  details.cidade{background:var(--card);border:1px solid var(--borda);border-radius:8px;margin-bottom:8px}
+  details.cidade>summary{cursor:pointer;padding:9px 12px;font-weight:600;list-style:none;display:flex;gap:8px;align-items:center}
+  details.cidade>summary::-webkit-details-marker{display:none}
+  details.cidade>summary::before{content:"▸";color:var(--muted)}
+  details.cidade[open]>summary::before{content:"▾"}
+  details.cidade>summary .n{color:var(--muted);font-weight:normal;font-size:12px}
+  .os{border-top:1px solid var(--borda);padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:6px 14px}
+  .os.tratada{background:#fafbfc}
+  .os .topo{font-size:13px}
+  .os .topo b{font-size:14px}
+  .os .meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .os ul{margin:6px 0 0;padding-left:18px;color:var(--vermelho);font-size:13px}
+  .os .lado{display:flex;flex-direction:column;gap:6px;align-items:flex-end;min-width:240px}
+  .botoes{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+  .botoes button{font:inherit;font-size:12px;border:1px solid var(--borda);background:#fff;border-radius:999px;padding:4px 9px;cursor:pointer;color:var(--cinza)}
+  .botoes button.ativo[data-s=pendente]{background:var(--amarelo-bg);color:var(--amarelo);border-color:var(--amarelo-bg)}
+  .botoes button.ativo[data-s=cobrado]{background:var(--azul-bg);color:var(--azul);border-color:var(--azul-bg)}
+  .botoes button.ativo[data-s=reaberta]{background:var(--roxo-bg);color:var(--roxo);border-color:var(--roxo-bg)}
+  .botoes button.ativo[data-s=auditoria]{background:var(--vermelho-bg);color:var(--vermelho);border-color:var(--vermelho-bg)}
+  .botoes button.ativo[data-s=resolvido]{background:var(--verde-bg);color:var(--verde);border-color:var(--verde-bg)}
+  .botoes button.ativo[data-s=nao_procede]{background:var(--cinza-bg);color:var(--cinza);border-color:#cbd2dc}
+  .os textarea{font:inherit;font-size:12px;width:100%;min-height:32px;border:1px solid var(--borda);border-radius:6px;padding:5px 7px;resize:vertical}
+  .os .tratou{font-size:11px;color:var(--muted)}
+  .vazio{background:var(--card);border:1px dashed var(--borda);border-radius:8px;padding:30px;text-align:center;color:var(--muted)}
+  .aviso{background:var(--amarelo-bg);color:var(--amarelo);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+  .hidden{display:none!important}
+  #login{position:fixed;inset:0;background:rgba(20,24,32,.92);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+  #login .caixa{background:#fff;border-radius:10px;padding:22px;width:100%;max-width:340px}
+  #login h3{margin:0 0 4px}
+  #login p{margin:0 0 14px;color:var(--muted);font-size:13px}
+  #login input{width:100%;font:inherit;padding:8px 10px;border:1px solid var(--borda);border-radius:6px;margin:4px 0 12px}
+  #login button{width:100%;font:inherit;padding:9px;border:0;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer}
+  #loginErro{color:var(--vermelho);font-size:12px;margin:-6px 0 10px}
+  @media (max-width:700px){
+    .os{grid-template-columns:1fr}
+    .os .lado{align-items:stretch;min-width:0}
+    .botoes{justify-content:flex-start}
+    .filtros label{flex:1 1 140px}
+    .filtros select,.filtros input,.filtros input[type=search]{min-width:0;width:100%}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 Pendências para reabrir / cobrar</h1>
+  <span class="quem" id="quem"></span>
+  <button id="atualizarBtn" title="Recarregar a lista">↻ Atualizar</button>
+  <button id="sairBtn">Sair</button>
+</header>
+<main>
+  <div id="aviso" class="aviso hidden"></div>
+  <div class="contadores" id="contadores"></div>
+  <div class="filtros">
+    <label>Mostrar
+      <select id="fMostrar">
+        <option value="abertas">Em aberto (pendente, cobrado, reaberta, auditoria)</option>
+        <option value="pendente">Só sem tratamento</option>
+        <option value="tratadas">Resolvidas / não procede</option>
+        <option value="todas">Todas</option>
+      </select>
+    </label>
+    <label>Dia <select id="fDia"><option value="">Todos</option></select></label>
+    <label>Equipe <select id="fEquipe"><option value="">Todas</option></select></label>
+    <label>Cidade <select id="fCidade"><option value="">Todas</option></select></label>
+    <label>Buscar <input type="search" id="fBusca" placeholder="OS, técnico, cliente, problema"></label>
+  </div>
+  <div id="lista"></div>
+</main>
+
+<div id="login" class="hidden">
+  <div class="caixa">
+    <h3>Pendências do COP</h3>
+    <p>Entre com a mesma conta do COP Analytics.</p>
+    <label>E-mail<input type="email" id="loginEmail" autocomplete="username"></label>
+    <label>Senha<input type="password" id="loginSenha" autocomplete="current-password"></label>
+    <div id="loginErro" class="hidden"></div>
+    <button id="loginBtn">Entrar</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var STATUS = [
+    ["pendente", "Pendente"], ["cobrado", "Cobrado"], ["reaberta", "OS reaberta"],
+    ["auditoria", "Auditoria aberta"], ["resolvido", "Resolvido"], ["nao_procede", "Não procede"]
+  ];
+  var ROTULO = {}; STATUS.forEach(function(s){ ROTULO[s[0]] = s[1]; });
+  var ABERTOS = ["pendente", "cobrado", "reaberta", "auditoria"];
+  var EQUIPES = ["INTERNA", "VELOZ", "TECHNOMAIS", "AZUL"];
+  var NOME_EQUIPE = { INTERNA: "Equipe interna", VELOZ: "VELOZ", TECHNOMAIS: "TECHNOMAIS", AZUL: "AZUL" };
+  var LS_FILTROS = "pendencias_cop_filtros";
+
+  var linhas = [], nomeUsuario = "", abertosCidades = {};
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = function(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); };
+  var titulo = function(s){ return String(s || "").toLowerCase().replace(/\s+/g, " ").trim().replace(/(^|\s)(\S)/g, function(m, a, b){ return a + b.toUpperCase(); }).replace(/\b(Da|De|Do|Dos|Das|E)\b/g, function(x){ return x.toLowerCase(); }); };
+  var nomeTec = function(t){ return titulo(String(t || "").replace(/\s*-\s*(AZUL|VELOZ|TE\w*MAIS)\s*$/i, "")); };
+  var assunto = function(s){ return titulo(String(s || "").replace(/\s*\(\d+\)/g, "").replace(/\s+-\s+(TERCEIRIZADO|EQUIPE T[EÉ]CNICA).*/i, "")); };
+  var diaBR = function(d){ return d ? d.split("-").reverse().slice(0, 2).join("/") : ""; };
+  var horaBR = function(iso){ if(!iso) return ""; var d = new Date(iso); return d.toLocaleDateString("pt-BR").slice(0, 5) + " " + d.toTimeString().slice(0, 5); };
+  var iso = function(d){ return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+
+  // ---------- login (mesma conta do COP Analytics; precisa ter perfil cadastrado) ----------
+  function mostrarLogin(msg){
+    $("login").classList.remove("hidden");
+    $("loginErro").textContent = msg || ""; $("loginErro").classList.toggle("hidden", !msg);
+  }
+  function aposSessao(sessao){
+    if(!sessao){ mostrarLogin(); return; }
+    supabaseClient.from("perfis").select("papel,nome").eq("id", sessao.user.id).maybeSingle().then(function(r){
+      if(r.error || !r.data){ mostrarLogin(r.error ? "Não consegui conferir seu acesso: " + r.error.message : "Sua conta ainda não tem acesso ao COP Analytics. Fale com o administrador."); return; }
+      nomeUsuario = r.data.nome || sessao.user.email;
+      $("quem").textContent = nomeUsuario;
+      $("login").classList.add("hidden");
+      carregar();
+    });
+  }
+  function entrar(){
+    var email = $("loginEmail").value.trim(), senha = $("loginSenha").value;
+    if(!email || !senha) return;
+    supabaseClient.auth.signInWithPassword({ email: email, password: senha }).then(function(r){
+      if(r.error){ mostrarLogin(/Invalid login/.test(r.error.message) ? "E-mail ou senha incorretos." : "Erro ao entrar: " + r.error.message); return; }
+      aposSessao(r.data.session);
+    });
+  }
+  $("loginBtn").addEventListener("click", entrar);
+  ["loginEmail", "loginSenha"].forEach(function(id){ $(id).addEventListener("keydown", function(e){ if(e.key === "Enter") entrar(); }); });
+  $("sairBtn").addEventListener("click", function(){ supabaseClient.auth.signOut().then(function(){ linhas = []; desenhar(); mostrarLogin(); }); });
+
+  // ---------- dados ----------
+  // em aberto de qualquer dia + tudo dos últimos 15 dias (resolvidas antigas não descem do banco)
+  function carregar(){
+    var d15 = new Date(); d15.setDate(d15.getDate() - 15);
+    $("lista").innerHTML = '<div class="vazio">Carregando…</div>';
+    supabaseClient.from("pendencias_cop").select("*")
+      .or("status.in.(" + ABERTOS.join(",") + "),dia.gte." + iso(d15))
+      .order("dia", { ascending: false }).limit(2000)
+      .then(function(r){
+        if(r.error){
+          $("lista").innerHTML = "";
+          aviso(/pendencias_cop/.test(r.error.message) && /exist|find/i.test(r.error.message)
+            ? "A tabela de pendências ainda não foi criada no banco (database/pendencias_cop.sql)."
+            : "Não consegui carregar: " + r.error.message);
+          return;
+        }
+        aviso("");
+        linhas = r.data || [];
+        montarOpcoes(); desenhar();
+      });
+  }
+  function aviso(t){ $("aviso").textContent = t; $("aviso").classList.toggle("hidden", !t); }
+
+  function salvar(l, mudanca, el){
+    var antes = { status: l.status, obs: l.obs, tratado_por: l.tratado_por, tratado_em: l.tratado_em };
+    var dados = Object.assign({ tratado_por: nomeUsuario, tratado_em: new Date().toISOString() }, mudanca);
+    Object.assign(l, dados);
+    desenhar();
+    supabaseClient.from("pendencias_cop").update(dados).eq("os_id", l.os_id).select("os_id").then(function(r){
+      if(r.error || !r.data || !r.data.length){
+        Object.assign(l, antes); desenhar();
+        alert("Não salvou a OS " + l.os_id + ": " + (r.error ? r.error.message : "sem permissão para alterar."));
+      }
+    });
+  }
+
+  // ---------- filtros ----------
+  function filtrosSalvos(){ try { return JSON.parse(localStorage.getItem(LS_FILTROS) || "{}"); } catch(e){ return {}; } }
+  function guardarFiltros(){ try { localStorage.setItem(LS_FILTROS, JSON.stringify({ mostrar: $("fMostrar").value, equipe: $("fEquipe").value, cidade: $("fCidade").value })); } catch(e){} }
+  function preencher(sel, valores, rotulo){
+    var atual = sel.value, primeiro = sel.options[0].outerHTML;
+    sel.innerHTML = primeiro + valores.map(function(v){ return '<option value="' + esc(v) + '">' + esc(rotulo ? rotulo(v) : v) + "</option>"; }).join("");
+    if(valores.indexOf(atual) >= 0) sel.value = atual;
+  }
+  var primeiraVez = true;
+  function montarOpcoes(){
+    var dias = {}, eqs = {}, cids = {};
+    linhas.forEach(function(l){ dias[l.dia] = 1; eqs[l.equipe] = 1; cids[l.cidade || "Sem cidade"] = 1; });
+    preencher($("fDia"), Object.keys(dias).sort().reverse(), diaBR);
+    preencher($("fEquipe"), EQUIPES.filter(function(e){ return eqs[e]; }).concat(Object.keys(eqs).filter(function(e){ return EQUIPES.indexOf(e) < 0; })), function(e){ return NOME_EQUIPE[e] || e; });
+    preencher($("fCidade"), Object.keys(cids).sort());
+    if(primeiraVez){
+      primeiraVez = false;
+      var f = filtrosSalvos();
+      if(f.mostrar) $("fMostrar").value = f.mostrar;
+      if(f.equipe && eqs[f.equipe]) $("fEquipe").value = f.equipe;
+      if(f.cidade && cids[f.cidade]) $("fCidade").value = f.cidade;
+    }
+  }
+  ["fMostrar", "fDia", "fEquipe", "fCidade"].forEach(function(id){ $(id).addEventListener("change", function(){ guardarFiltros(); desenhar(); }); });
+  $("fBusca").addEventListener("input", desenhar);
+  $("atualizarBtn").addEventListener("click", carregar);
+
+  function passa(l){
+    var m = $("fMostrar").value, aberta = ABERTOS.indexOf(l.status) >= 0;
+    if(m === "abertas" && !aberta) return false;
+    if(m === "pendente" && l.status !== "pendente") return false;
+    if(m === "tratadas" && aberta) return false;
+    if($("fDia").value && l.dia !== $("fDia").value) return false;
+    if($("fEquipe").value && l.equipe !== $("fEquipe").value) return false;
+    if($("fCidade").value && (l.cidade || "Sem cidade") !== $("fCidade").value) return false;
+    var b = $("fBusca").value.trim().toLowerCase();
+    if(b){
+      var txt = [l.os_id, l.tecnico, l.cliente, l.assunto, l.diagnostico, l.obs].concat(l.problemas || []).join(" ").toLowerCase();
+      if(txt.indexOf(b) < 0) return false;
+    }
+    return true;
+  }
+
+  // ---------- tela ----------
+  function desenhar(){
+    // contadores respeitam dia/equipe/cidade, não o "mostrar"
+    var base = linhas.filter(function(l){
+      return (!$("fDia").value || l.dia === $("fDia").value) && (!$("fEquipe").value || l.equipe === $("fEquipe").value) && (!$("fCidade").value || (l.cidade || "Sem cidade") === $("fCidade").value);
+    });
+    var c = {}; base.forEach(function(l){ c[l.status] = (c[l.status] || 0) + 1; });
+    var abertas = ABERTOS.reduce(function(s, k){ return s + (c[k] || 0); }, 0);
+    $("contadores").innerHTML = '<div class="cont"><b>' + abertas + '</b><span>Em aberto</span></div>' +
+      STATUS.map(function(s){ return '<div class="cont"><b>' + (c[s[0]] || 0) + "</b><span>" + s[1] + "</span></div>"; }).join("");
+
+    var vis = linhas.filter(passa);
+    if(!vis.length){ $("lista").innerHTML = '<div class="vazio">' + (linhas.length ? "Nada com esses filtros. 🎉" : "Nenhuma pendência gravada ainda.") + "</div>"; return; }
+
+    var porEq = {};
+    vis.forEach(function(l){ var e = porEq[l.equipe] = porEq[l.equipe] || {}; (e[l.cidade || "Sem cidade"] = e[l.cidade || "Sem cidade"] || []).push(l); });
+    var ordemEq = EQUIPES.filter(function(e){ return porEq[e]; }).concat(Object.keys(porEq).filter(function(e){ return EQUIPES.indexOf(e) < 0; }));
+    var html = "";
+    ordemEq.forEach(function(eq){
+      var cids = porEq[eq], total = 0; for(var k in cids) total += cids[k].length;
+      html += '<section class="equipe"><h2>' + esc(NOME_EQUIPE[eq] || eq) + " <small>" + total + " OS</small></h2>";
+      Object.keys(cids).sort(function(a, b){ return cids[b].length - cids[a].length || a.localeCompare(b); }).forEach(function(cid){
+        var chave = eq + "|" + cid, aberto = abertosCidades[chave] !== false;
+        html += '<details class="cidade" data-chave="' + esc(chave) + '"' + (aberto ? " open" : "") + '><summary>📍 ' + esc(cid) + ' <span class="n">' + cids[cid].length + "</span></summary>";
+        cids[cid].sort(function(a, b){ return nomeTec(a.tecnico).localeCompare(nomeTec(b.tecnico)) || a.os_id - b.os_id; }).forEach(function(l){
+          var aberta = ABERTOS.indexOf(l.status) >= 0;
+          html += '<div class="os' + (aberta ? "" : " tratada") + '" data-os="' + l.os_id + '">' +
+            "<div>" +
+              '<div class="topo"><b>OS ' + l.os_id + "</b> · " + esc(nomeTec(l.tecnico)) + " · " + esc(assunto(l.assunto)) + "</div>" +
+              '<div class="meta">' + esc(titulo(l.cliente)) + (l.diagnostico ? " · diag.: " + esc(titulo(l.diagnostico)) : "") + (l.finalizada_em ? " · finalizada " + esc(String(l.finalizada_em).slice(0, 16)) : "") + " · relatório de " + diaBR(l.dia) + "</div>" +
+              "<ul>" + (l.problemas || []).map(function(p){ return "<li>" + esc(p) + "</li>"; }).join("") + "</ul>" +
+            "</div>" +
+            '<div class="lado">' +
+              '<div class="botoes">' + STATUS.map(function(s){ return '<button data-s="' + s[0] + '"' + (l.status === s[0] ? ' class="ativo"' : "") + ">" + s[1] + "</button>"; }).join("") + "</div>" +
+              '<textarea placeholder="Observação (o que foi feito, nº da auditoria…)">' + esc(l.obs || "") + "</textarea>" +
+              (l.tratado_por ? '<div class="tratou">' + esc(ROTULO[l.status] || l.status) + " · " + esc(l.tratado_por) + " · " + horaBR(l.tratado_em) + "</div>" : "") +
+            "</div>" +
+          "</div>";
+        });
+        html += "</details>";
+      });
+      html += "</section>";
+    });
+    $("lista").innerHTML = html;
+  }
+
+  // cliques e observação (delegação)
+  $("lista").addEventListener("click", function(e){
+    var b = e.target.closest(".botoes button"); if(!b) return;
+    var os = +b.closest(".os").dataset.os, l = linhas.find(function(x){ return x.os_id === os; });
+    if(l && l.status !== b.dataset.s) salvar(l, { status: b.dataset.s });
+  });
+  $("lista").addEventListener("change", function(e){
+    if(e.target.tagName !== "TEXTAREA") return;
+    var os = +e.target.closest(".os").dataset.os, l = linhas.find(function(x){ return x.os_id === os; });
+    var v = e.target.value.trim();
+    if(l && v !== (l.obs || "")) salvar(l, { obs: v || null });
+  });
+  $("lista").addEventListener("toggle", function(e){
+    if(e.target.matches && e.target.matches("details.cidade")) abertosCidades[e.target.dataset.chave] = e.target.open;
+  }, true);
+  // volta para a aba → recarrega (marcações de outra pessoa)
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden && nomeUsuario) carregar(); });
+
+  supabaseClient.auth.getSession().then(function(r){ aposSessao(r.data && r.data.session); });
+})();
+</script>
+</body>
+</html>
