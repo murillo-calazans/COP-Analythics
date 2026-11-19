@@ -106,10 +106,12 @@ const gravarCache = (nome, v) => { fs.mkdirSync(PASTA_CACHE, { recursive: true }
 async function referencias(pagina) {
     const c = lerCache("referencias.json");
     if (c && c.dia === isoDia(new Date())) return c;
-    const [setores, funcs] = await rodar(pagina, `return [
+    const [setores, funcs, resps] = await rodar(pagina, `return [
         (await todas("empresa_setor", "empresa_setor.id", "0", ">")).map(s => [s["empresa_setor.id"], s["empresa_setor.setor"]]),
-        (await todas("funcionarios", "funcionarios.id", "0", ">")).map(f => [f["funcionarios.id"], f["funcionarios.funcionario"], f["funcionarios.ativo"]])];`);
-    const r = { dia: isoDia(new Date()), setorNome: Object.fromEntries(setores.map(([id, n]) => [id, String(n || "").trim()])), funcId: {} };
+        (await todas("funcionarios", "funcionarios.id", "0", ">")).map(f => [f["funcionarios.id"], f["funcionarios.funcionario"], f["funcionarios.ativo"]]),
+        (await todas("su_oss_respostas", "su_oss_respostas.id", "0", ">")).map(s => [s["su_oss_respostas.id"], s["su_oss_respostas.titulo"]])];`);
+    const r = { dia: isoDia(new Date()), setorNome: Object.fromEntries(setores.map(([id, n]) => [id, String(n || "").trim()])), funcId: {},
+        respostas: Object.fromEntries(resps.map(([id, t]) => [id, String(t ?? "")])) };
     // mesmo nome em 2 cadastros (ex.: MARCELO COELHO DA SILVA 923 ativo / 1035 inativo): fica o ativo,
     // e entre iguais o de id maior
     const melhor = {};
@@ -149,21 +151,50 @@ async function mensagensDe(pagina, ids) {
         (await grid("su_oss_chamado_mensagem", "su_oss_chamado_mensagem.id_chamado", id, "=", 1000, 1)).map(m => [
             m["su_oss_chamado_mensagem.data"], m["su_oss_chamado_mensagem.status"], m["su_oss_chamado_mensagem.historico"],
             m["su_oss_chamado_mensagem.mensagem"], m["funcionarios.funcionario"], m["su_oss_chamado_mensagem.id_operador"],
-            m["su_equipe.descricao"], m["wfl_tarefa.descricao"]]), 8);`, ids);
+            m["su_equipe.descricao"], m["wfl_tarefa.descricao"], m["su_oss_chamado_mensagem.id"]]), 8);`, ids);
     return new Map(res);
 }
 
+// ---------- registro completo de cada mensagem (action=recupera, o mesmo do formulário) ----------
+// Traz o que a grid não traz: id_evento, id_tecnico e id_resposta (resposta padrão).
+// Mensagem não muda depois de criada: cada uma é aberta UMA vez e fica em disco.
+const ARQ_DET = "msgs-detalhe.json";
+let _det = null;
+const detCache = () => (_det = _det || lerCache(ARQ_DET) || {});
+const MAX_DET_POR_VEZ = 2500; // ~75 s; o resto entra nas próximas rodadas (até lá vale a dedução)
+
+async function detalhesMsgs(pagina, idsMsg, log) {
+    const c = detCache();
+    const falta = [...new Set(idsMsg.filter(Boolean))].filter(id => !c[id]).slice(0, MAX_DET_POR_VEZ);
+    if (!falta.length) return c;
+    const res = await rodar(pagina, `return varias(arg, async id => {
+        const r = await fetch("aplicativo/su_oss_chamado_mensagem/action/action.php?action=recupera&id=" + id,
+            { method: "POST", body: "action=recupera&id=" + id, credentials: "include", headers: H });
+        const tx = await r.text();
+        if (!tx.startsWith("[")) { if (/login/i.test(tx.slice(0, 2000)) && !tx.startsWith("{")) throw new Error("SESSAO_CAIU"); return null; }
+        const v = Object.fromEntries(JSON.parse(tx).filter(x => x.campo).map(x => [x.campo, x.valor]));
+        return [v.id_evento || "", v.id_tecnico || "", v.id_resposta || ""];
+    }, 8);`, falta);
+    let ok = 0;
+    for (const [id, v] of res) if (v) { c[id] = v; ok++; }
+    gravarCache(ARQ_DET, c);
+    if (log) log(`  grids: ${ok} mensagem(ns) abertas (evento/técnico/resposta padrão)${falta.length < idsMsg.length ? "" : ""}`);
+    return c;
+}
+
 /** monta as linhas no formato da visão do QB (uma por movimentação) */
-function linhasQB(os, msgsBrutas, ref, logins, filtroData) {
+function linhasQB(os, msgsBrutas, ref, logins, filtroData, det = {}) {
     const msgs = msgsBrutas.map(m => ({ data: limpo(m[0]), quando: paraDataBR(m[0]), status: limpo(m[1]), historico: limpo(m[2]),
-        mensagem: limpo(m[3]), tecnico: limpo(m[4]), operador: limpo(m[5]), equipe: limpo(m[6]), tarefa: limpo(m[7]) }))
+        mensagem: limpo(m[3]), tecnico: limpo(m[4]), operador: limpo(m[5]), equipe: limpo(m[6]), tarefa: limpo(m[7]), idMsg: limpo(m[8]) }))
         .filter(m => m.quando).sort((a, b) => a.quando - b.quando);
     const evs = eventosDaOs(msgs);
     const lg = logins[os.login] || {};
     const out = [];
     msgs.forEach((m, i) => {
         if (filtroData && !filtroData(m.quando)) return;
-        const tec = m.tecnico ? (ref.funcId[semAc(m.tecnico).trim()] || "0") : "0";
+        const d = det[m.idMsg]; // [id_evento, id_tecnico, id_resposta] do registro; sem ele, dedução
+        const tec = d ? (d[1] || "0") : m.tecnico ? (ref.funcId[semAc(m.tecnico).trim()] || "0") : "0";
+        const resposta = d && d[2] && d[2] !== "0" ? (ref.respostas || {})[d[2]] || "" : "";
         const op = (m.operador.match(/^(\d+)/) || [, "0"])[1];
         out.push({
             su_oss_chamado_mensagem_su_oss_chamado_id: os.id,
@@ -173,9 +204,9 @@ function linhasQB(os, msgsBrutas, ref, logins, filtroData) {
             su_oss_chamado_mensagem_id_tecnico: tec,
             su_oss_chamado_mensagem_id_operador: op,
             su_oss_chamado_mensagem_su_equipe_descricao: m.equipe,
-            su_oss_chamado_mensagem_id_evento: evs[i],
+            su_oss_chamado_mensagem_id_evento: d && d[0] ? d[0] : evs[i],
             su_oss_chamado_mensagem_status: STATUS_COD[semAc(m.status)] || m.status,
-            su_oss_chamado_mensagem_su_oss_respostas_titulo: "",
+            su_oss_chamado_mensagem_su_oss_respostas_titulo: resposta,
             su_oss_chamado_su_diagnostico_descricao: os.diag,
             su_oss_chamado_mensagem_wfl_tarefa_descricao: m.tarefa,
             su_oss_chamado_mensagem_mensagem: m.mensagem,
@@ -245,10 +276,14 @@ async function puxar529Grid(pagina, janela, { log = () => {} } = {}) {
     if (falhas > Math.max(5, os.length * 0.02)) throw new Error(`grids: ${falhas} de ${os.length} OS sem mensagens (IXC instável)`);
 
     const filtro = janela ? (d => d >= janela.ini && d <= janela.fim) : null;
+    // abre as mensagens ainda não vistas (as da janela primeiro: são as que vão pro banco agora)
+    const idsMsg = [];
+    for (const o of os) for (const m of msgs.get(o.id) || []) if (!filtro || filtro(paraDataBR(m[0]))) idsMsg.push(limpo(m[8]));
+    const det = await detalhesMsgs(pagina, idsMsg, log);
     const linhas = [];
-    for (const o of os) { const m = msgs.get(o.id); if (m) linhas.push(...linhasQB(o, m, ref, logins, filtro)); }
+    for (const o of os) { const m = msgs.get(o.id); if (m) linhas.push(...linhasQB(o, m, ref, logins, filtro, det)); }
     log(`  grids 529${janela ? " (janela)" : " (retrato)"}: ${os.length} OS (${buscar.length} com mensagens buscadas), ${linhas.length} linha(s)${falhas ? `, ${falhas} OS falharam` : ""} — OS ${Math.round(tOS / 1000)}s, total ${Math.round((Date.now() - t0) / 1000)}s`);
     return linhas;
 }
 
-module.exports = { puxar529Grid, eventosDaOs, linhasQB, mapOS, referencias, dadosLogins, mensagensDe, garantirIxc, rodar, GRID_JS };
+module.exports = { puxar529Grid, eventosDaOs, linhasQB, mapOS, referencias, dadosLogins, mensagensDe, detalhesMsgs, garantirIxc, rodar, GRID_JS };
