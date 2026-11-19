@@ -56,8 +56,35 @@ function ixcDiaPedidoDaOs(msgs) {
     return null;
 }
 
+// OS em aberto pelo arquivo que o robô publica no Cloudflare R2 (19/11): o Worker confere o login
+// e responde 304 quando o arquivo não mudou — não gasta a cota do Supabase. Falhou = Supabase.
+const COP_DADOS_URL = "https://cop-dados.calazansmurillo.workers.dev/dados/";
+let _osR2Etag = null, _osR2Linhas = null;
+async function buscarOsPendentesR2() {
+    const { data } = await supabaseClient.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if (!token) throw new Error("sem sessão");
+    const h = { Authorization: "Bearer " + token };
+    if (_osR2Etag && _osR2Linhas) h["If-None-Match"] = _osR2Etag;
+    const r = await fetch(COP_DADOS_URL + "os-pendentes.json", { headers: h, cache: "no-store" });
+    if (r.status === 304 && _osR2Linhas) return _osR2Linhas;
+    if (!r.ok) throw new Error("R2 " + r.status);
+    const j = await r.json();
+    if (!j || !Array.isArray(j.colunas) || !Array.isArray(j.linhas) || !j.linhas.length) throw new Error("arquivo vazio");
+    const cap = j.geradoEm;
+    _osR2Linhas = j.linhas.map((v, i) => {
+        const dados = {};
+        j.colunas.forEach((c, k) => { dados[c] = v[k]; });
+        return { id: i + 1, dados, capturado_em: cap };
+    });
+    _osR2Etag = r.headers.get("ETag");
+    return _osR2Linhas;
+}
+
 async function buscarOsPendentes() {
     if (typeof supabaseClient === "undefined") return [];
+    try { return await buscarOsPendentesR2(); }
+    catch (e) { console.warn("OS em aberto: arquivo do R2 indisponível, lendo do banco —", e.message); }
 
     if (typeof buscarTodasLinhasKeysetParalelo === "function")
         return buscarTodasLinhasKeysetParalelo("os_pendentes", "id, dados, capturado_em", "id");

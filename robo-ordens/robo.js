@@ -365,12 +365,39 @@ function montarPayload(molde, start, length, draw, janela) {
 /** Puxa as linhas da visão (filtrada por `janela`, ou o molde inteiro se
  *  null), paginando até o fim. O corte é feito no servidor (no filtro do
  *  pedido), então aqui é só juntar as páginas. */
+// Arquivo das OS em aberto no R2 (19/11): o site lê os-pendentes.json pelo Worker cop-dados em
+// vez de baixar os_pendentes do Supabase. Formato colunar: { geradoEm, colunas, linhas: [[...]] }.
+// Uma publicação por vez; se pedirem de novo no meio, publica outra vez no fim.
+let _r2Publicando = false, _r2DeNovo = false, _r2Versao = -1;
+async function publicarOsPendentesR2() {
+    if (process.env.R2_OS_PENDENTES === "0") return;
+    if (_r2Publicando) { _r2DeNovo = true; return; }
+    _r2Publicando = true;
+    try {
+        do {
+            _r2DeNovo = false;
+            const r = require("./ixc-grid").retrato529();
+            if (!r || r.versao === _r2Versao) break;
+            const colunas = Object.values(PARA_PLANILHA);
+            const linhas = r.linhas.map(x => { const d = paraLinhaPlanilha(x); return colunas.map(c => d[c] ?? ""); });
+            const corpo = JSON.stringify({ geradoEm: new Date(r.em).toISOString(), nOs: r.nOs, colunas, linhas });
+            const t0 = Date.now();
+            await require("./r2").enviar("os-pendentes.json", corpo);
+            _r2Versao = r.versao;
+            log(`  R2: os-pendentes.json — ${r.nOs} OS, ${linhas.length} linhas, ${(corpo.length / 1048576).toFixed(1)} MB em ${Math.round((Date.now() - t0) / 1000)}s`);
+        } while (_r2DeNovo);
+    } catch (e) { log("  R2: os-pendentes.json falhou — " + e.message); }
+    finally { _r2Publicando = false; }
+}
+
 async function puxarRecentes(pagina, molde, janela) {
     // 529 pelas telas comuns (19/11): mesmo formato de linha, sem Query Builder.
     // GRID_529=0 no .env volta ao QB.
     if (process.env.GRID_529 !== "0" && VISAO_PENDENTES && String(molde.viewId) === String(VISAO_PENDENTES)) {
         try {
-            return await require("./ixc-grid").puxar529Grid(pagina, janela, { log });
+            const linhas = await require("./ixc-grid").puxar529Grid(pagina, janela, { log });
+            publicarOsPendentesR2();   // sem await: não segura a rodada
+            return linhas;
         } catch (e) {
             if (e.message === "SESSAO_CAIU" || /has been closed|Target closed/i.test(e.message)) throw e;
             if (/aborted|AbortError/i.test(e.message)) throw new Error("PULL_TIMEOUT");

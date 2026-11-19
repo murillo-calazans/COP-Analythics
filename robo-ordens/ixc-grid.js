@@ -282,8 +282,30 @@ async function puxar529Grid(pagina, janela, { log = () => {} } = {}) {
     const det = await detalhesMsgs(pagina, idsMsg, log);
     const linhas = [];
     for (const o of os) { const m = msgs.get(o.id); if (m) linhas.push(...linhasQB(o, m, ref, logins, filtro, det)); }
+
+    // retrato em memória (arquivo do R2): retrato = troca tudo; janela = OS mexidas entram com
+    // TODAS as mensagens e as que fecharam/saíram do filtro somem
+    if (!janela) {
+        RETRATO.os = new Map();
+        RETRATO.completo = true;
+    }
+    if (RETRATO.completo) {
+        if (janela) for (const id of vistos) RETRATO.os.delete(id);
+        for (const o of os) { const m = msgs.get(o.id); if (m) RETRATO.os.set(o.id, linhasQB(o, m, ref, logins, null, det)); }
+        RETRATO.em = Date.now();
+        RETRATO.versao++;
+    }
     log(`  grids 529${janela ? " (janela)" : " (retrato)"}: ${os.length} OS (${buscar.length} com mensagens buscadas), ${linhas.length} linha(s)${falhas ? `, ${falhas} OS falharam` : ""} — OS ${Math.round(tOS / 1000)}s, total ${Math.round((Date.now() - t0) / 1000)}s`);
     return linhas;
 }
 
-module.exports = { puxar529Grid, eventosDaOs, linhasQB, mapOS, referencias, dadosLogins, mensagensDe, detalhesMsgs, garantirIxc, rodar, GRID_JS };
+// Retrato completo da 529 em memória (todas as OS em aberto, todas as mensagens) — o robô
+// publica no R2 depois de cada atualização. Só vale depois do 1º retrato completo do processo.
+const RETRATO = { os: new Map(), completo: false, em: 0, versao: 0 };
+function retrato529() {
+    if (!RETRATO.completo) return null;
+    const linhas = []; for (const l of RETRATO.os.values()) linhas.push(...l);
+    return { em: RETRATO.em, versao: RETRATO.versao, nOs: RETRATO.os.size, linhas };
+}
+
+module.exports = { puxar529Grid, retrato529, eventosDaOs, linhasQB, mapOS, referencias, dadosLogins, mensagensDe, detalhesMsgs, garantirIxc, rodar, GRID_JS };
