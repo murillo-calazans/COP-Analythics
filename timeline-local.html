@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timeline do dia</title>
+<!-- Versão SEM banco (temporária, enquanto o Supabase está fora): o robô grava
+     timeline-dados.js nesta mesma pasta a cada ~10 min. Abra este arquivo direto
+     do disco (duplo clique). Gerada a partir de timeline.html. -->
+<style>
+  /* variáveis que o CSS da timeline (timelineagenda.js) usa */
+  :root{
+    --cor-fundo:#eef1f7; --cor-superficie:#ffffff; --cor-fundo-card:#ffffff; --cor-borda:#dbe2ee;
+    --cor-texto:#1e2a3e; --cor-texto-suave:#5a6b86; --cor-fundo-suave:#f1f4f9;
+  }
+  html[data-tema="dark"]{
+    --cor-fundo:#0b1424; --cor-superficie:#0f1a2e; --cor-fundo-card:#0f1a2e; --cor-borda:#22314d;
+    --cor-texto:#e6edf7; --cor-texto-suave:#8a9bb5; --cor-fundo-suave:#132036;
+  }
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--cor-fundo); color:var(--cor-texto);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+
+  /* login */
+  #tltvLogin{ min-height:100vh; display:grid; place-items:center; padding:24px; }
+  .tltv-login-card{ width:100%; max-width:380px; background:var(--cor-superficie); border:1px solid var(--cor-borda);
+    border-radius:18px; padding:30px 26px; box-shadow:0 24px 60px rgba(0,0,0,.35); }
+  .tltv-login-card h1{ font-size:21px; margin:0 0 4px; }
+  .tltv-login-card p{ color:var(--cor-texto-suave); font-size:13.5px; margin:0 0 20px; }
+  .tltv-login-card label{ display:block; font-size:12.5px; color:var(--cor-texto-suave); margin:0 0 5px; }
+  .tltv-login-card input{ width:100%; padding:11px 13px; margin:0 0 14px; border-radius:10px;
+    border:1px solid var(--cor-borda); background:var(--cor-fundo-suave); color:var(--cor-texto); font-size:15px; }
+  .tltv-login-card button{ width:100%; padding:12px; border:none; border-radius:10px; cursor:pointer;
+    background:#2563eb; color:#fff; font-weight:800; font-size:15px; }
+  #tltvLoginErro{ color:#dc2626; font-size:13px; margin:0 0 12px; }
+
+  /* painel */
+  #tltvPainel{ height:100vh; display:flex; flex-direction:column; padding:16px 20px 8px; }
+  .tltv-topo{ display:flex; align-items:center; gap:20px; margin-bottom:10px; }
+  .tltv-marca{ font-size:20px; font-weight:800; white-space:nowrap; }
+  .tltv-marca small{ display:block; font-size:11.5px; font-weight:700; color:var(--cor-texto-suave); letter-spacing:.08em; text-transform:uppercase; }
+  .tltv-centro{ flex:1; min-width:0; text-align:center; }
+  #tltvCidade{ font-size:38px; font-weight:800; line-height:1.05; text-transform:uppercase; letter-spacing:.02em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tltv-sub{ display:flex; justify-content:center; gap:18px; font-size:17px; font-weight:700; margin-top:4px; }
+  #tltvContador{ color:var(--cor-texto-suave); }
+  #tltvPerf{ display:flex; gap:16px; }
+  #tltvPerf .ok{ color:#15a06a; } #tltvPerf .bad{ color:#d97706; }
+  html[data-tema="dark"] #tltvPerf .ok{ color:#34d399; } html[data-tema="dark"] #tltvPerf .bad{ color:#fbbf24; }
+  .tltv-dir{ text-align:right; white-space:nowrap; }
+  #tltvRelogio{ font-size:34px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  #tltvData{ font-size:13px; color:var(--cor-texto-suave); text-transform:capitalize; }
+  #tltvSair{ display:none !important; }
+  #tltvErro{ background:#fde4e4; color:#991b1b; border:1px solid #f1b4b4; padding:7px 14px; border-radius:10px; font-size:14px; margin-bottom:8px; }
+
+  /* a timeline ocupa o resto da tela; cidade é escolhida pelo giro (sem abas) */
+  #agendaTimelineConteudo{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  #agendaTimelineConteudo .tl-topo, #agendaTimelineConteudo .tl-cards, #agendaTimelineConteudo .tl-at{ display:none; }
+  #agendaTimelineConteudo .tl-legend{ margin-bottom:8px; }
+  #agendaTimelineConteudo .tl-board{ flex:1; min-height:0; }
+  #agendaTimelineConteudo .tl-cidade-sep{ font-size:17px; padding:9px 0; letter-spacing:.05em; }
+
+  /* rodapé */
+  .tltv-rodape{ display:flex; align-items:center; gap:14px; padding:8px 2px 0; color:var(--cor-texto-suave); font-size:13px; }
+  .tltv-ponto{ width:9px; height:9px; border-radius:999px; background:#15a06a; box-shadow:0 0 0 4px rgba(52,211,153,.18); }
+  .tltv-dots{ display:flex; gap:7px; }
+  .tltv-dot{ width:9px; height:9px; border-radius:999px; border:none; background:var(--cor-borda); cursor:pointer; padding:0; transition:width .2s; }
+  .tltv-dot.ativo{ background:#2563eb; width:22px; }
+  .tltv-rodape .dir{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .tltv-rodape button:not(.tltv-dot){ background:none; border:1px solid var(--cor-borda); color:var(--cor-texto-suave);
+    border-radius:8px; padding:5px 11px; font-size:13px; cursor:pointer; font-family:inherit; }
+  .tltv-rodape button:not(.tltv-dot):hover{ color:var(--cor-texto); }
+  #tltvGira.parado{ color:#d97706; border-color:#d97706; font-weight:700; }
+  #tltvZoomVal{ min-width:40px; text-align:center; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+
+  <!-- Login (uma vez por TV; a sessão fica salva no navegador) -->
+  <div id="tltvLogin" hidden>
+    <form class="tltv-login-card" id="tltvLoginForm">
+      <h1>COP · Timeline do dia</h1>
+      <p>Entre uma vez nesta TV. A sessão fica salva no navegador.</p>
+      <div id="tltvLoginErro" hidden></div>
+      <label for="tltvEmail">E-mail</label>
+      <input type="email" id="tltvEmail" autocomplete="username" required>
+      <label for="tltvSenha">Senha</label>
+      <input type="password" id="tltvSenha" autocomplete="current-password" required>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <div id="tltvPainel" hidden>
+    <div class="tltv-topo">
+      <div class="tltv-marca">COP <small>Timeline do dia</small></div>
+      <div class="tltv-centro">
+        <div id="tltvCidade">—</div>
+        <div class="tltv-sub"><span id="tltvContador"></span><span id="tltvPerf"></span></div>
+      </div>
+      <div class="tltv-dir">
+        <div id="tltvRelogio">--:--</div>
+        <div id="tltvData">—</div>
+      </div>
+    </div>
+
+    <div id="tltvErro" hidden></div>
+    <div id="tltvResumo" hidden></div>
+    <div id="agendaTimelineConteudo"></div>
+
+    <div class="tltv-rodape">
+      <span class="tltv-ponto"></span>
+      <span id="tltvAtualizado">conectando…</span>
+      <span id="tltvDots" class="tltv-dots"></span>
+      <span class="dir">
+        <button type="button" id="tltvZoomMenos" title="Diminuir (tecla −)">A−</button>
+        <span id="tltvZoomVal">100%</span>
+        <button type="button" id="tltvZoomMais" title="Aumentar (tecla +)">A+</button>
+        <button type="button" id="tltvGira">⏸ Parar nesta cidade</button>
+        <button type="button" id="tltvTema">☀ Claro</button>
+        <button type="button" id="tltvFull">⛶ Tela cheia</button>
+        <button type="button" id="tltvSair">Sair</button>
+      </span>
+    </div>
+  </div>
+
+  <script src="timeline-dados.js" id="tlLocalDados"></script>
+  <script src="js/ui/timelinelocal.js?v=1"></script>
+  <script src="js/agendador/motor.js?v=36"></script>
+  <script src="js/agendador/escala-dia.js?v=1"></script>
+  <script src="js/ui/timelineagenda.js?v=8"></script>
+  <script src="js/ui/timelineresumo.js?v=2"></script>
+  <script src="js/ui/timelinetv.js?v=3"></script>
+</body>
+</html>

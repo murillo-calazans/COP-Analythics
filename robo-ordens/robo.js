@@ -44,6 +44,8 @@ const IXC_HOME = BASE + "/adm.php";   // sistema principal do IXC (onde você tr
 const SUPA_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPA_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const JANELA_DIAS = Number(process.env.JANELA_DIAS || 3);
+// de quantas em quantas horas a conferência das OS em aberto roda (0 = toda rodada)
+const CONFERENCIA_HORAS = Number(process.env.CONFERENCIA_HORAS || 1);
 
 const TAM_PAGINA = 2000;      // linhas por pedido ao IXC
 const MAX_PAGINAS = 80;       // trava de segurança (~160 mil linhas)
@@ -53,6 +55,8 @@ const COL_DATA = 14;          // índice da coluna su_oss_chamado_mensagem_data 
 // prende a sessão do IXC enquanto puxa, por isso é incremental (só o que mudou
 // desde a anterior); a puxada completa do pré-agendamento fica só na 1ª do dia.
 // Puxada extra = botão "Atualizar banco".
+// SO_TIMELINE=1 no .env: pausa rodadas/offline/comandos/tarefas e deixa só a timeline local (+ pulso da sessão)
+const SO_TIMELINE = process.env.SO_TIMELINE === "1";
 const HORARIOS_RODADA = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 const MINUTO_RODADA = 30;   // roda nos :30 de cada hora (7h30, 8h30…19h30), não na hora cheia
 // Logins offline (rompimentos) mudam rápido — atualizam a CADA 30 min, das
@@ -270,6 +274,19 @@ function resolverSetor(operadores, tecnico) {
 
 // ---------- Supabase (REST) ----------
 
+// Supabase bloqueado (402, cota estourada): pausa as rodadas que gravam no banco
+// por 30 min em vez de retentar todo minuto — senão elas seguram o robô e a
+// timeline local (que não usa banco) nunca consegue rodar.
+let supaBloqueadoAte = 0;
+const supabaseBloqueado = () => Date.now() < supaBloqueadoAte;
+
+// IXC lento (17/11/2026 — o servidor do IXC caiu por memória em 16/11 ~16h): quando
+// uma puxada estoura o tempo, NÃO repete. O pedido abandonado continua rodando no
+// servidor; repetir empilha o mesmo processamento várias vezes. Pausa as puxadas
+// automáticas do robô (rodada, offline, timeline, comandos) por 30 min.
+let ixcLentoAte = 0;
+const ixcLento = () => Date.now() < ixcLentoAte;
+
 async function supabase(metodo, caminho, corpo, prefer) {
     const r = await fetch(`${SUPA_URL}/rest/v1/${caminho}`, {
         method: metodo,
@@ -277,6 +294,10 @@ async function supabase(metodo, caminho, corpo, prefer) {
             ...(prefer ? { Prefer: prefer } : {}) },
         body: corpo === undefined ? undefined : JSON.stringify(corpo)
     });
+    if (r.status === 402) {
+        if (!supabaseBloqueado()) log("Supabase bloqueado (402) — rodadas que gravam no banco pausadas por 30 min; timeline local segue.");
+        supaBloqueadoAte = Date.now() + 30 * 60000;
+    }
     if (!r.ok) throw new Error(`Supabase ${metodo} ${caminho.split("?")[0]}: ${r.status} ${await r.text()}`);
     const t = await r.text();
     return t ? JSON.parse(t) : null;
@@ -350,9 +371,9 @@ async function puxarRecentes(pagina, molde, janela) {
 
     for (let i = 0; i < MAX_PAGINAS; i++) {
         const body = montarPayload(molde, i * TAM_PAGINA, TAM_PAGINA, i + 1, janela);
-        // Uma página lenta do IXC estoura o AbortController (180s). Isso NÃO é a
-        // sessão caindo — é só o IXC demorando. Tenta de novo até 3x na MESMA
-        // página; só então desiste (PULL_TIMEOUT) — sem reiniciar o navegador.
+        // Uma página lenta do IXC estoura o AbortController (180s). NÃO tenta de
+        // novo (17/11): o servidor continua processando o pedido abandonado, e
+        // repetir empilha consultas pesadas (ver ixcLento). Desiste na 1ª e pausa.
         let txt;
         for (let tent = 1; ; tent++) {
             try {
@@ -373,14 +394,20 @@ async function puxarRecentes(pagina, molde, janela) {
                 break;
             } catch (e) {
                 const timeout = /aborted|AbortError|timed? ?out/i.test(e && e.message || "");
-                if (timeout && tent < 3) { log(`  visão ${molde.viewId} pág ${i}: IXC demorou >180s (tentativa ${tent}/3), repetindo...`); continue; }
-                if (timeout) throw new Error("PULL_TIMEOUT");   // 3 falhas seguidas = sessão travada → rodar() reinicia pra relogar
+                if (timeout) {
+                    ixcLentoAte = Date.now() + 30 * 60000;
+                    log(`  visão ${molde.viewId} pág ${i}: IXC demorou >180s — NÃO vou repetir; puxadas automáticas pausadas por 30 min.`);
+                    throw new Error("PULL_TIMEOUT");
+                }
                 throw e;
             }
         }
 
         if (txt.status === 401 || /\/login/.test(txt.texto)) throw new Error("SESSAO_CAIU");
         let j; try { j = JSON.parse(txt.texto); } catch { throw new Error("resposta não-JSON do IXC (sessão caiu?)"); }
+        // IXC com o Query Builder quebrado responde 200 + {status:false, message}: é erro,
+        // não "visão vazia" — senão a timeline/TV seria sobrescrita com zero (16/11, erro 1045).
+        if (j && j.status === false) throw new Error("IXC_QB_ERRO: " + String(j.message || "").slice(0, 200));
         const bloco = j.data || j.result || [];
         if (i === 0) total = j.recordsTotal ?? null;
 
@@ -730,8 +757,10 @@ async function sincronizarPendentes(pagina, moldes, simular, { finalizadas, esta
         await supabase("DELETE", "os_pendentes?id=gt.0", undefined, "return=minimal");
         for (const lote of emLotes(dados, TAM_LOTE_SUPA)) await supabase("POST", "os_pendentes", lote, "return=minimal");
         log(`  os_pendentes atualizada: ${linhas.length} eventos, ${idsOs} OS em aberto.`);
+        await refletirReaberturas(linhas);
         estado.pendentesCompletaDia = hoje;
         estado.pendentesDesde = inicio.toISOString();
+        estado.conferenciaEm = inicio.toISOString();   // o retrato já é a conferência
         delete estado.pendentesForcarCompleta;
         return;
     }
@@ -801,6 +830,96 @@ async function sincronizarPendentes(pagina, moldes, simular, { finalizadas, esta
     } catch (e) {
         logErro(`gravar os_pendentes [passo: ${passo}]`, e);
         throw e;
+    }
+    await refletirReaberturas(linhas);
+
+    // conferência: a incremental só tira OS que vieram finalizadas na 343; troca
+    // de setor/assunto ou OS que sumiu por outro motivo só sairia no retrato do
+    // dia seguinte. Falhar aqui não derruba a rodada (a incremental já gravou).
+    const horas = (inicio - new Date(estado.conferenciaEm || 0)) / 3600000;
+    if (horas >= CONFERENCIA_HORAS - 0.1) {
+        try { await conferirAbertas(pagina, molde, simular); estado.conferenciaEm = inicio.toISOString(); }
+        catch (e) {
+            if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
+            logErro("conferência das OS em aberto", e);
+            log(`  conferência das OS em aberto falhou (${e.message}) — tento na próxima rodada.`);
+        }
+    }
+}
+
+/**
+ * Conferência (06/11): puxa a 529 inteira (= as OS que o IXC diz estarem em
+ * aberto agora) e acerta os_pendentes sem regravar tudo:
+ *  - OS que estão no banco e não vieram do IXC saem;
+ *  - OS novas, com assunto trocado ou com nº de movimentações diferente têm as
+ *    linhas apagadas e reinseridas como vieram do IXC.
+ * Do banco só lê id + ID OS + ASSUNTO (pouco egress).
+ */
+async function conferirAbertas(pagina, molde, simular) {
+    log(`Conferência: visão ${VISAO_PENDENTES} inteira pra ver quais OS seguem em aberto...`);
+    const linhas = await puxarRecentes(pagina, molde, null);
+    const ixc = new Map();
+    for (const r of linhas) {
+        const d = paraLinhaPlanilha(r), id = String(d[ID_OS] ?? "");
+        if (!id) continue;
+        if (!ixc.has(id)) ixc.set(id, new Map());
+        ixc.get(id).set(chavePendente(d), d);
+    }
+    const banco = new Map();
+    for (const l of await buscarTodas("os_pendentes", `id,os:${FILTRO_ID_OS},assunto:dados->>ASSUNTO`, "id")) {
+        const id = String(l.os ?? "");
+        if (!banco.has(id)) banco.set(id, { n: 0, assuntos: new Set() });
+        const b = banco.get(id); b.n++; b.assuntos.add(l.assunto);
+    }
+    // puxada pela metade (IXC devolveu bem menos que o banco tem): não mexe em nada
+    if (!ixc.size || ixc.size < banco.size * 0.7) {
+        log(`  conferência: IXC devolveu ${ixc.size} OS e o banco tem ${banco.size} — parece puxada incompleta, não mexi.`);
+        return;
+    }
+    const sair = [...banco.keys()].filter(id => !ixc.has(id));
+    const trocar = [...ixc].filter(([id, movs]) => {
+        const b = banco.get(id);
+        if (!b || b.n !== movs.size) return true;
+        const assunto = [...movs.values()][0].ASSUNTO;
+        return b.assuntos.size !== 1 || !b.assuntos.has(assunto);
+    }).map(([id]) => id);
+
+    if (simular) { log(`  (simulação) conferência: ${sair.length} OS sairiam, ${trocar.length} seriam regravadas — não gravou.`); return; }
+    for (const lote of emLotes([...sair, ...trocar], 150))
+        await supabase("DELETE", `os_pendentes?${FILTRO_ID_OS}=in.${listaIn(lote)}`, undefined, "return=minimal");
+    const novas = trocar.flatMap(id => [...ixc.get(id).values()].map(d => ({ dados: d })));
+    for (const lote of emLotes(novas, TAM_LOTE_SUPA)) await supabase("POST", "os_pendentes", lote, "return=minimal");
+    log(`  conferência: ${ixc.size} OS em aberto no IXC · ${sair.length} saíram do banco · ${trocar.length} regravadas (${novas.length} movimentações).`);
+}
+
+/**
+ * OS reaberta no IXC: a 343 só traz OS finalizadas na janela, então a
+ * reabertura nunca chegava em `ordens`/`movimentacoes` e o site seguia
+ * mostrando "Finalizada" com o técnico antigo até alguém fechar de novo.
+ * A 529 tem as MESMAS colunas da 343: as OS que estão em aberto aqui mas
+ * finalizadas no banco passam pelo mesmo processarEGravar (dedup igual), e o
+ * resumo da OS vira o status/operador da última movimentação.
+ * Falha aqui não derruba a rodada (tenta de novo na próxima).
+ */
+async function refletirReaberturas(linhas) {
+    try {
+        const ultimaPorOs = new Map();
+        for (const r of linhas) {
+            const id = texto(r.su_oss_chamado_mensagem_su_oss_chamado_id);
+            const data = paraData(r.su_oss_chamado_mensagem_data);
+            if (id === null || !data) continue;
+            if (!ultimaPorOs.has(id) || data > ultimaPorOs.get(id)) ultimaPorOs.set(id, data);
+        }
+        const reabertas = new Set();
+        for (const lote of emLotes([...ultimaPorOs.keys()], 150))
+            for (const o of await buscarTodas("ordens", "id,data_fechamento", "id", `&status_atual=eq.Finalizada&id=in.${listaIn(lote)}`))
+                if (!o.data_fechamento || ultimaPorOs.get(o.id) > new Date(o.data_fechamento)) reabertas.add(o.id);
+        if (!reabertas.size) return;
+        const r = await processarEGravar(linhas.filter(l => reabertas.has(texto(l.su_oss_chamado_mensagem_su_oss_chamado_id))), { simular: false });
+        log(`  reabertas: ${reabertas.size} OS finalizadas no banco estão em aberto no IXC — ${r.inseridas} movimentação(ões) gravada(s).`);
+    } catch (e) {
+        if (e.message === "SESSAO_CAIU") throw e;
+        logErro("refletir reaberturas", e);
     }
 }
 
@@ -1068,19 +1187,29 @@ async function sincronizarClientesOffline(pagina, moldes, simular, { inicio }) {
     if (!VISAO_OFFLINE) return;
     // só dentro da janela (7h30–18h30); fora dela mantém o último retrato
     if (!simular && !dentroJanelaOffline(inicio)) return;
+    const sincronizadoEm = inicio.toISOString();
+    const dados = await puxarClientesOffline(pagina, moldes, sincronizadoEm, true);
+    if (!dados) return;
+    await gravarClientesOffline(dados, simular, sincronizadoEm);
+}
+
+/** Lê a visão de logins offline (551) inteira e devolve uma linha por login
+ *  (null se não deu: sem molde, visão vazia ou sem coluna de login). Também
+ *  usada pela página de rompimentos local (sem Supabase). */
+async function puxarClientesOffline(pagina, moldes, sincronizadoEm, comLog = false) {
+    if (!VISAO_OFFLINE) return null;
     const alvo = VISAO_OFFLINE.trim().toUpperCase();
     const molde = moldes.find(m => m.viewId === VISAO_OFFLINE || String(m.viewName ?? "").trim().toUpperCase() === alvo);
-    if (!molde) { log(`molde da visão ${VISAO_OFFLINE} (logins offline) não encontrado em templates.json — rode o capturar-dados.js`); return; }
+    if (!molde) { log(`molde da visão ${VISAO_OFFLINE} (logins offline) não encontrado em templates.json — rode o capturar-dados.js`); return null; }
 
-    log(`Logins offline: visão ${molde.viewId} "${molde.viewName}" — retrato completo...`);
+    if (comLog) log(`Logins offline: visão ${molde.viewId} "${molde.viewName}" — retrato completo...`);
     const linhas = await puxarRecentes(pagina, molde, null);
-    if (linhas.length === 0) { log("  a visão voltou vazia — tabela clientes_offline mantida como estava."); return; }
+    if (linhas.length === 0) { log("  a visão de logins offline voltou vazia — mantido o último retrato."); return null; }
 
     const mapa = mapearColunasOffline(Object.keys(linhas[0]));
-    log(`  colunas: ${COLUNAS_OFFLINE.map(([c]) => `${c}=${mapa[c] ?? "(não achei)"}`).join(" | ")}`);
-    if (!mapa.login) { log("  ⚠ não achei a coluna de login na visão — não gravou. Ajuste COLUNAS_OFFLINE."); return; }
+    if (comLog) log(`  colunas: ${COLUNAS_OFFLINE.map(([c]) => `${c}=${mapa[c] ?? "(não achei)"}`).join(" | ")}`);
+    if (!mapa.login) { log("  ⚠ não achei a coluna de login na visão de logins offline. Ajuste COLUNAS_OFFLINE."); return null; }
 
-    const sincronizadoEm = inicio.toISOString();
     const porLogin = new Map();
     for (const r of linhas) {
         const login = valorOffline(r[mapa.login]);
@@ -1101,10 +1230,12 @@ async function sincronizarClientesOffline(pagina, moldes, simular, { inicio }) {
             sincronizado_em: sincronizadoEm
         });
     }
-    const dados = [...porLogin.values()];
+    return [...porLogin.values()];
+}
 
+async function gravarClientesOffline(dados, simular, sincronizadoEm) {
     if (simular) {
-        log(`  (simulação) ${linhas.length} linhas -> ${dados.length} logins offline — não gravou.`);
+        log(`  (simulação) ${dados.length} logins offline — não gravou.`);
         dados.slice(0, 5).forEach(r => log(`    ${JSON.stringify(r)}`));
         return;
     }
@@ -1161,19 +1292,290 @@ async function publicarAgendaSeNaHora() {
     }
 }
 
+/** Comando "puxar_mes:AAAA-MM" (pedido pelo site, só admin): relê as OS
+ *  finalizadas no mês escolhido e grava o que faltar (o repetido é ignorado no
+ *  dedup). Não mexe no estado da puxada normal (ordensDesde). */
+async function puxarMesInteiro(pagina, moldes, mesTxt) {
+    const m = /^(\d{4})-(\d{2})$/.exec(mesTxt || "");
+    if (!m || +m[2] < 1 || +m[2] > 12) throw new Error(`mês inválido: "${mesTxt}"`);
+    const ini = new Date(+m[1], +m[2] - 1, 1);
+    if (ini > new Date()) throw new Error(`mês ${mesTxt} ainda não começou`);
+    const fim = new Date(Math.min(new Date(+m[1], +m[2], 1).getTime() - 1, fimDoDia(new Date()).getTime()));
+    const fatias = fatiarJanela(ini, fim);
+    const tot = { mes: mesTxt, ordens: 0, inseridas: 0, ignoradas: 0 };
+    for (const id of VISOES_PARA_SINCRONIZAR) {
+        const molde = moldes.find(x => x.viewId === id);
+        if (!molde) { log(`molde da visão ${id} não encontrado em templates.json`); continue; }
+        log(`Puxar mês ${mesTxt}: visão ${id} em ${fatias.length} pedaço(s)...`);
+        for (const fat of fatias) {
+            log(`  ${fat.ini.toLocaleString("pt-BR")} → ${fat.fim.toLocaleString("pt-BR")}...`);
+            const linhas = await puxarRecentes(pagina, molde, { ini: fat.ini, fim: fat.fim });
+            const r = await processarEGravar(linhas, { simular: false });
+            tot.ordens += r.ordens; tot.inseridas += r.inseridas; tot.ignoradas += r.ignoradas;
+            log(`  gravado: ${r.ordens} OS, ${r.inseridas} movimentação(ões) nova(s), ${r.ignoradas} já existiam.`);
+        }
+    }
+    return tot;
+}
+
+/** Papel (admin/editor/leitor) de quem pediu o comando, pelo e-mail. */
+async function papelDoSolicitante(email) {
+    if (!email) return null;
+    const r = await fetch(`${SUPA_URL}/auth/v1/admin/users?per_page=1000`, {
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+    });
+    if (!r.ok) throw new Error(`não consegui conferir o usuário (HTTP ${r.status})`);
+    const j = await r.json();
+    const u = (j.users || []).find(x => String(x.email || "").toLowerCase() === String(email).toLowerCase());
+    if (!u) return null;
+    const p = await supabase("GET", `perfis?select=papel&id=eq.${u.id}`);
+    return p && p[0] ? p[0].papel : null;
+}
+
+// ---------- Timeline local (sem Supabase) ----------
+// Enquanto o Supabase estiver bloqueado: a cada TIMELINE_MIN minutos puxa do IXC
+// só o dia de hoje e grava timeline-dados.js numa pasta (OneDrive), junto com a
+// página "Timeline do dia.html", que lê o arquivo direto do disco.
+const PASTA_AUTOMACAO = path.join(process.env.USERPROFILE || "", "OneDrive - AMO TIC TECNOLOGIA DA INFORMACAO LTDA",
+    "02 - CONTROLE DE OPERAÇÕES", "01 - GESTÃO", "08 - Automação");
+const TIMELINE_PASTA = process.env.TIMELINE_PASTA || path.join(PASTA_AUTOMACAO, "Timeline do dia");
+const TIMELINE_SITE = process.env.TIMELINE_SITE || path.join(PASTA_AUTOMACAO, "COP-Analytics");
+const TIMELINE_MIN = Number(process.env.TIMELINE_MIN || 10);   // 0 = desliga
+const TIMELINE_ARQUIVOS = [
+    ["timeline-local.html", "Timeline do dia.html"],
+    ["js/agendador/motor.js", "js/agendador/motor.js"],
+    ["js/agendador/escala-dia.js", "js/agendador/escala-dia.js"],
+    ["js/ui/timelineagenda.js", "js/ui/timelineagenda.js"],
+    ["js/ui/timelinetv.js", "js/ui/timelinetv.js"],
+    ["js/ui/timelineresumo.js", "js/ui/timelineresumo.js"],
+    ["js/ui/timelinelocal.js", "js/ui/timelinelocal.js"]
+];
+let _tlAgendadasHoje = { em: 0, dia: null, linhas: [] };   // 529 inteira, no máx. 1x por hora
+let _tl529 = { em: 0, linhas: [] };                          // a mesma foto inteira (linhas planilha)
+
+// Ordens comerciais em aberto (sem Supabase): mesma regra do site (assunto com
+// "comercial"), foto da 529 + movimentações do dia; página em outra pasta.
+const COMERCIAIS_PASTA = process.env.COMERCIAIS_PASTA || path.join(PASTA_AUTOMACAO, "Ordens comerciais");
+const COMERCIAIS_ARQUIVOS = [
+    ["comerciais-local.html", "Ordens comerciais.html"],
+    ["js/ui/comerciaislocal.js", "js/ui/comerciaislocal.js"]
+];
+const semAcento = t => String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
+
+function gravarComerciaisLocal(agora, linhas529mov, idsFinalizadasHoje) {
+    const porOs = new Map(), vistos = new Set();
+    const somar = d => {
+        const id = String(d[ID_OS] || "").trim();
+        if (!id || !semAcento(d.ASSUNTO).includes("comercial")) return;
+        const k = chavePendente(d);
+        if (vistos.has(k)) return;
+        vistos.add(k);
+        const linha = { ...d, MENSAGEM: String(d.MENSAGEM || "").slice(0, 400) };
+        delete linha["HISTARICO"];
+        (porOs.get(id) || porOs.set(id, []).get(id)).push(linha);
+    };
+    _tl529.linhas.forEach(somar);
+    linhas529mov.forEach(somar);
+    for (const id of idsFinalizadasHoje) porOs.delete(id);
+    let versaoPagina = 0;
+    for (const [de] of COMERCIAIS_ARQUIVOS) { try { versaoPagina = Math.max(versaoPagina, fs.statSync(path.join(TIMELINE_SITE, de)).mtimeMs); } catch {} }
+    fs.mkdirSync(path.join(COMERCIAIS_PASTA, "js", "ui"), { recursive: true });
+    const dados = { geradoEm: agora.toISOString(), fotoEm: _tl529.em ? new Date(_tl529.em).toISOString() : null, versaoPagina, linhas: [...porOs.values()].flat() };
+    const destino = path.join(COMERCIAIS_PASTA, "comerciais-dados.js");
+    fs.writeFileSync(destino + ".tmp", "window.COM_DADOS = " + JSON.stringify(dados) + ";\n", "utf8");
+    fs.renameSync(destino + ".tmp", destino);
+    for (const [de, para] of COMERCIAIS_ARQUIVOS) {
+        try { fs.copyFileSync(path.join(TIMELINE_SITE, de), path.join(COMERCIAIS_PASTA, para)); }
+        catch (e) { log(`Comerciais local: não copiei ${de}: ${e.message}`); }
+    }
+    log(`Comerciais local: ${porOs.size} OS comerciais em aberto → ${COMERCIAIS_PASTA}`);
+}
+
+// Possíveis rompimentos (sem Supabase): logins offline da 551 + as OS em aberto
+// desses logins (foto da 529 + movimentações do dia). O agrupamento por OLT/PON
+// é o mesmo do site (js/ui/rompimentos.js), feito na página.
+const ROMP_PASTA = process.env.ROMP_PASTA || path.join(PASTA_AUTOMACAO, "Rompimentos");
+const ROMP_ARQUIVOS = [
+    ["rompimentos-local.html", "Rompimentos.html"],
+    ["js/ui/romplocal.js", "js/ui/romplocal.js"],
+    ["js/ui/rompimentos.js", "js/ui/rompimentos.js"],
+    ["js/agendador/motor.js", "js/agendador/motor.js"]
+];
+
+function gravarRompimentosLocal(agora, offline, linhas529mov) {
+    const logins = new Set(offline.map(o => semAcento(o.login)));
+    const osLinhas = [];
+    for (const d of [..._tl529.linhas, ...linhas529mov]) {
+        if (!logins.has(semAcento(d.LOGIN))) continue;
+        osLinhas.push({ "ID OS": d[ID_OS], LOGIN: d.LOGIN, CLIENTE: d.CLIENTE, ASSUNTO: d.ASSUNTO, AGENDAMENTO: d.AGENDAMENTO, DATA: d.DATA, STATUS: d.STATUS });
+    }
+    let versaoPagina = 0;
+    for (const [de] of ROMP_ARQUIVOS) { try { versaoPagina = Math.max(versaoPagina, fs.statSync(path.join(TIMELINE_SITE, de)).mtimeMs); } catch {} }
+    fs.mkdirSync(path.join(ROMP_PASTA, "js", "ui"), { recursive: true });
+    fs.mkdirSync(path.join(ROMP_PASTA, "js", "agendador"), { recursive: true });
+    const campos = ["login", "cliente", "bairro", "olt", "cto", "interface_pon", "causa", "status_acesso", "ultima_conexao"];
+    const dados = { geradoEm: agora.toISOString(), fotoEm: _tl529.em ? new Date(_tl529.em).toISOString() : null, versaoPagina,
+        offline: offline.map(o => Object.fromEntries(campos.map(c => [c, o[c] ?? null]))), osLinhas };
+    const destino = path.join(ROMP_PASTA, "rompimentos-dados.js");
+    fs.writeFileSync(destino + ".tmp", "window.ROMP_DADOS = " + JSON.stringify(dados) + ";\n", "utf8");
+    fs.renameSync(destino + ".tmp", destino);
+    for (const [de, para] of ROMP_ARQUIVOS) {
+        try { fs.copyFileSync(path.join(TIMELINE_SITE, de), path.join(ROMP_PASTA, para)); }
+        catch (e) { log(`Rompimentos local: não copiei ${de}: ${e.message}`); }
+    }
+    log(`Rompimentos local: ${offline.length} logins offline → ${ROMP_PASTA}`);
+}
+
+const tecnicoDoDeslocamento = msg => {
+    const m = String(msg || "").match(/usu[aá]rio\s+(.+?)\s*,\s*iniciou o deslocamento/i);
+    return m ? m[1].trim() : null;
+};
+
+async function escalaParaTimeline() {
+    const cache = path.join(TIMELINE_PASTA, "escala-cache.json");
+    try {
+        const r = await supabase("GET", "escala_tecnicos_dados?select=dados&id=eq.default");
+        const dados = Array.isArray(r?.[0]?.dados) ? r[0].dados : null;
+        if (dados && dados.length) { fs.writeFileSync(cache, JSON.stringify(dados), "utf8"); return dados; }
+    } catch { /* Supabase fora: usa a última escala salva */ }
+    try { return JSON.parse(fs.readFileSync(cache, "utf8")); } catch { return []; }
+}
+
+// Timeline pelas GRIDS do IXC (19/11): o Query Builder parou de responder (>180s) desde
+// 18/11 18h. timeline-grid.js monta o mesmo TL_DADOS pelas telas comuns (rápidas). As
+// partes que ainda dependem do QB (comerciais/rompimentos) rodam DEPOIS de gravar a
+// timeline e só se o QB não estiver em pausa. TIMELINE_GRID=0 no .env volta ao jeito antigo.
+const TIMELINE_GRID = process.env.TIMELINE_GRID !== "0";
+async function gerarTimelineLocalGrid(pagina, moldes) {
+    const agora = new Date();
+    fs.mkdirSync(path.join(TIMELINE_PASTA, "js", "ui"), { recursive: true });
+    fs.mkdirSync(path.join(TIMELINE_PASTA, "js", "agendador"), { recursive: true });
+    const { puxarTimelineGrid } = require("./timeline-grid");
+    const r = await puxarTimelineGrid(pagina, { log });
+    let versaoPagina = 0;
+    for (const [de] of TIMELINE_ARQUIVOS) { try { versaoPagina = Math.max(versaoPagina, fs.statSync(path.join(TIMELINE_SITE, de)).mtimeMs); } catch {} }
+    const dados = { geradoEm: agora.toISOString(), versaoPagina, fonte: "grids", movs: r.movs, ordens: r.ordens,
+        osHoje: r.osHoje, escala: await escalaParaTimeline() };
+    const destino = path.join(TIMELINE_PASTA, "timeline-dados.js");
+    fs.writeFileSync(destino + ".tmp", "window.TL_DADOS = " + JSON.stringify(dados) + ";\n", "utf8");
+    fs.renameSync(destino + ".tmp", destino);
+    for (const [de, para] of TIMELINE_ARQUIVOS) {
+        try { fs.copyFileSync(path.join(TIMELINE_SITE, de), path.join(TIMELINE_PASTA, para)); }
+        catch (e) { log(`Timeline local: não copiei ${de}: ${e.message}`); }
+    }
+    log(`Timeline local (grids): ${r.movs.length} movimentação(ões) de hoje em ${r.ordens.length} OS, ${r.osHoje.length} previstas p/ hoje → ${TIMELINE_PASTA}`);
+
+    // extras que ainda usam o Query Builder: nunca seguram a timeline
+    const fatal = e => e.message === "SESSAO_CAIU" || /has been closed|Target closed/i.test(e.message);
+    let r529mov = [];
+    const m529 = VISAO_PENDENTES ? moldes.find(m => m.viewId === VISAO_PENDENTES) : null;
+    if (m529 && !ixcLento()) {
+        try {
+            const hoje0 = new Date(agora); hoje0.setHours(0, 0, 0, 0);
+            r529mov = await puxarRecentes(pagina, m529, { ini: hoje0, fim: fimDoDia(agora), porMovimentacao: true });
+            gravarComerciaisLocal(agora, r529mov.map(paraLinhaPlanilha), new Set());
+        } catch (e) { if (fatal(e)) throw e; log("Comerciais local (QB) falhou: " + e.message); }
+    }
+    if (!ixcLento()) {
+        try {
+            const offline = await puxarClientesOffline(pagina, moldes, agora.toISOString());
+            if (offline) gravarRompimentosLocal(agora, offline, r529mov.map(paraLinhaPlanilha));
+        } catch (e) { if (fatal(e)) throw e; log("Rompimentos local (QB) falhou: " + e.message); }
+    }
+}
+
+async function gerarTimelineLocal(pagina, moldes) {
+    if (TIMELINE_GRID) return gerarTimelineLocalGrid(pagina, moldes);
+    const agora = new Date();
+    const hoje0 = new Date(agora); hoje0.setHours(0, 0, 0, 0);
+    const janela = { ini: hoje0, fim: fimDoDia(agora) };
+    const dd = d => String(d).padStart(2, "0");
+    const prefixoHoje = `${dd(hoje0.getDate())}/${dd(hoje0.getMonth() + 1)}/${hoje0.getFullYear()}`;
+    fs.mkdirSync(path.join(TIMELINE_PASTA, "js", "ui"), { recursive: true });
+    fs.mkdirSync(path.join(TIMELINE_PASTA, "js", "agendador"), { recursive: true });
+
+    const brutas = [];
+    let r343 = [], r529mov = [];
+    // 343 desligada na timeline local (17/11): estourava o tempo toda rodada e pesava no
+    // IXC. Só volta com TIMELINE_343=1 no .env.
+    const m343 = process.env.TIMELINE_343 === "1" ? moldes.find(m => m.viewId === VISOES_PARA_SINCRONIZAR[0]) : null;
+    if (m343) { r343 = await puxarRecentes(pagina, m343, janela); brutas.push(...r343); }
+    const m529 = VISAO_PENDENTES ? moldes.find(m => m.viewId === VISAO_PENDENTES) : null;
+    if (m529) {
+        try { r529mov = await puxarRecentes(pagina, m529, { ...janela, porMovimentacao: true }); brutas.push(...r529mov); }
+        catch (e) { if (e.message === "SESSAO_CAIU" || /has been closed|Target closed/i.test(e.message)) throw e; log("Timeline local: 529 por movimentação falhou: " + e.message); }
+        if (_tlAgendadasHoje.dia !== prefixoHoje || Date.now() - _tlAgendadasHoje.em > 60 * 60000) {
+            const todas = (await puxarRecentes(pagina, m529, null)).map(paraLinhaPlanilha);
+            _tl529 = { em: Date.now(), linhas: todas };
+            _tlAgendadasHoje = { em: Date.now(), dia: prefixoHoje,
+                linhas: todas.filter(d => String(d.AGENDAMENTO || "").startsWith(prefixoHoje)) };
+        }
+    }
+    try {
+        const finalizadasHoje = new Set(r343.map(r => String(r.su_oss_chamado_mensagem_su_oss_chamado_id || "")).filter(Boolean));
+        gravarComerciaisLocal(agora, r529mov.map(paraLinhaPlanilha), finalizadasHoje);
+    } catch (e) { log("Comerciais local falhou: " + e.message); }
+    try {
+        const offline = await puxarClientesOffline(pagina, moldes, agora.toISOString());
+        if (offline) gravarRompimentosLocal(agora, offline, r529mov.map(paraLinhaPlanilha));
+    } catch (e) {
+        if (e.message === "SESSAO_CAIU" || /has been closed|Target closed/i.test(e.message)) throw e;
+        log("Rompimentos local falhou: " + e.message);
+    }
+
+    const ordens = {}, movs = [], vistos = new Set(), tecPorOs = {};
+    const ordenadas = brutas.map(converterLinha).filter(c => c.id && c.mov.data).sort((a, b) => a.mov.data - b.mov.data);
+    for (const c of ordenadas) {
+        ordens[c.id] = ordens[c.id] || { id: c.id, cliente: c.ordem.cliente, cidade: c.ordem.cidade, assunto: c.ordem.assunto };
+        const t = c.mov.evento === "2" ? tecnicoDoDeslocamento(c.mov.mensagem) : null;
+        if (t) tecPorOs[c.id] = t;
+        if (c.mov.data < hoje0) continue;
+        const chave = [c.id, c.mov.data.getTime(), c.mov.evento, c.mov.status].join("|");
+        if (vistos.has(chave)) continue;
+        vistos.add(chave);
+        movs.push({ ordem_id: c.id, data: c.mov.data.toISOString(), evento: c.mov.evento, status: c.mov.status,
+            mensagem: c.mov.evento === "2" ? c.mov.mensagem : "" });
+    }
+    for (const id of Object.keys(ordens)) ordens[id].tecnico_responsavel = tecPorOs[id] || null;
+
+    // "versão" da página = data de alteração mais recente dos arquivos copiados:
+    // quando muda, a TV aberta se recarrega sozinha (sem precisar de F5)
+    let versaoPagina = 0;
+    for (const [de] of TIMELINE_ARQUIVOS) { try { versaoPagina = Math.max(versaoPagina, fs.statSync(path.join(TIMELINE_SITE, de)).mtimeMs); } catch {} }
+    const dados = { geradoEm: agora.toISOString(), versaoPagina, movs, ordens: Object.values(ordens),
+        osHoje: _tlAgendadasHoje.linhas.map(d => ({ dados: d })), escala: await escalaParaTimeline() };
+    const destino = path.join(TIMELINE_PASTA, "timeline-dados.js");
+    fs.writeFileSync(destino + ".tmp", "window.TL_DADOS = " + JSON.stringify(dados) + ";\n", "utf8");
+    fs.renameSync(destino + ".tmp", destino);
+    for (const [de, para] of TIMELINE_ARQUIVOS) {
+        try { fs.copyFileSync(path.join(TIMELINE_SITE, de), path.join(TIMELINE_PASTA, para)); }
+        catch (e) { log(`Timeline local: não copiei ${de}: ${e.message}`); }
+    }
+    log(`Timeline local: ${movs.length} movimentação(ões) de hoje em ${Object.keys(ordens).length} OS, ${dados.osHoje.length} linha(s) agendadas p/ hoje → ${TIMELINE_PASTA}`);
+}
+
 async function umaPassada(pagina, moldes, simular) {
     const inicio = new Date();
+    // banco fora (402): não puxa nada do IXC à toa (16/11 o robô puxava 9 dias da 343 e só
+    // depois descobria que não dava pra gravar). Se o Supabase recusar, para aqui.
+    if (!simular) await supabase("GET", "ref_operadores?select=*&limit=1");
     const estado = lerEstado();
     const finalizadas = new Set();   // OS finalizadas na janela (saem do pré-agendamento)
 
-    // ordens: OS finalizadas desde a última puxada (1ª vez: últimos JANELA_DIAS dias)
+    // ordens: OS finalizadas desde a última puxada (1ª vez: últimos JANELA_DIAS dias).
+    // OS reaberta e refechada com a data antiga (mês passado) não cai aqui: quem
+    // precisa dela pede o "puxar mês" pelo site (só admin) — ver puxarMesInteiro.
     const ini = estado.ordensDesde ? desdeComFolga(estado.ordensDesde) : new Date(inicio.getTime() - JANELA_DIAS * 86400000);
     const fimJanela = fimDoDia(inicio);
     // Fatia janelas grandes (1ª rodada / backfill) em pedaços de MAX_DIAS_JANELA
     // dias, senão o IXC estoura o timeout de 90s numa página só (ver fatiarJanela).
     // Grava CADA pedaço na hora: se um pedaço falhar, o que já entrou fica (dedup
     // ignora repetido) e a próxima rodada retoma do mesmo ponto sem perder nada.
-    const fatias = fatiarJanela(ini, fimJanela);
+    // Atraso grande (robô/banco parado dias): no MÁXIMO 1 dia por rodada (17/11). O resto
+    // fica para as próximas rodadas — o estado avança só até onde foi puxado.
+    const todasFatias = fatiarJanela(ini, fimJanela, 1);
+    const fatias = todasFatias.slice(0, 1);
+    if (todasFatias.length > 1) log(`Atraso de ${todasFatias.length} dia(s) na puxada: só 1 dia por rodada para não pesar no IXC (puxando até ${fatias[0].fim.toLocaleString("pt-BR")}).`);
     for (const id of VISOES_PARA_SINCRONIZAR) {
         const molde = moldes.find(m => m.viewId === id);
         if (!molde) { log(`molde da visão ${id} não encontrado em templates.json`); continue; }
@@ -1207,7 +1609,10 @@ async function umaPassada(pagina, moldes, simular) {
     }
     // só grava o estado com a rodada inteira OK: se o pré-agendamento falhar, a
     // próxima repete a janela das ordens (o repetido é ignorado) e não perde finalizadas
-    if (!simular) { estado.ordensDesde = inicio.toISOString(); salvarEstado(estado); }
+    if (!simular) {
+        estado.ordensDesde = (todasFatias.length > 1 ? fatias[0].fim : inicio).toISOString();
+        salvarEstado(estado);
+    }
     log(`Rodada concluída em ${Math.round((Date.now() - inicio.getTime()) / 1000)} s.`);
 }
 
@@ -1244,6 +1649,20 @@ async function principal() {
     const garantirNavegador = async () => {
         if (ctxFechado) {
             if (ctx) log("Navegador foi fechado — reabrindo...");
+            // Desliga o "Salvar senha?" do Chrome (a ficha do cliente no IXC tem e-mail + senha
+            // e o Chrome achava que era um login). Ajusta o Preferences do perfil antes de abrir.
+            try {
+                const fs = require("fs");
+                const arqPref = path.join(PERFIL, "Default", "Preferences");
+                if (fs.existsSync(arqPref)) {
+                    const p = JSON.parse(fs.readFileSync(arqPref, "utf8"));
+                    p.credentials_enable_service = false;
+                    p.credentials_enable_autosignin = false;
+                    p.profile = p.profile || {};
+                    p.profile.password_manager_enabled = false;
+                    fs.writeFileSync(arqPref, JSON.stringify(p));
+                }
+            } catch (e) { log("Aviso: não consegui desligar o salvar senha (" + e.message + ")"); }
             ctx = await chromium.launchPersistentContext(PERFIL, {
                 headless: false, viewport: null,   // usa o tamanho real da janela (maximizada)
                 acceptDownloads: true,
@@ -1327,7 +1746,8 @@ async function principal() {
     };
 
     const abertoEm = new Date();   // antes da 1ª rodada: ela pode terminar já na hora seguinte
-    await rodar();
+    if (SO_TIMELINE) log("MODO SÓ TIMELINE (SO_TIMELINE=1): rodadas, offline, comandos e tarefas PAUSADOS.");
+    else await rodar();
 
     if (simular || umaVez) { await ctx.close(); process.exit(0); }
 
@@ -1335,7 +1755,7 @@ async function principal() {
     // admin/editor) insere um pedido em robo_comandos; aqui a gente checa a
     // cada ~30s e, se tiver pedido 'pendente', atualiza na hora.
     const verificarComandos = async () => {
-        if (emExecucao) return;
+        if (SO_TIMELINE || emExecucao || ixcLento()) return;
         let cmd;
         try {
             const pend = await supabase("GET", "robo_comandos?status=eq.pendente&order=solicitado_em.asc&limit=1");
@@ -1346,15 +1766,26 @@ async function principal() {
         emExecucao = true;
         try {
             await supabase("PATCH", `robo_comandos?id=eq.${cmd.id}`, { status: "processando" }, "return=minimal");
-            log(`Comando #${cmd.id} de ${cmd.solicitado_por || "?"} — atualizando sob demanda...`);
-            try { await garantirNavegador(); await umaPassada(pagina, moldes, false); }
-            catch (e) {
-                if (!fechouNavegador(e)) throw e;
-                // aba/navegador fechou no meio: reabre e tenta mais uma vez
-                await garantirNavegador();
-                await umaPassada(pagina, moldes, false);
+            const mes = String(cmd.tipo || "").startsWith("puxar_mes:") ? cmd.tipo.slice("puxar_mes:".length) : null;
+            let resultado = { ok: true };
+            if (mes) {
+                // puxar um mês inteiro do IXC é pesado: só admin pode pedir
+                if (await papelDoSolicitante(cmd.solicitado_por) !== "admin") throw new Error("só admin pode pedir para puxar um mês");
+                log(`Comando #${cmd.id} de ${cmd.solicitado_por} — puxando o mês ${mes}...`);
+                const executar = async () => { await garantirNavegador(); resultado = { ok: true, ...(await puxarMesInteiro(pagina, moldes, mes)) }; };
+                try { await executar(); }
+                catch (e) { if (!fechouNavegador(e)) throw e; await executar(); }
+            } else {
+                log(`Comando #${cmd.id} de ${cmd.solicitado_por || "?"} — atualizando sob demanda...`);
+                try { await garantirNavegador(); await umaPassada(pagina, moldes, false); }
+                catch (e) {
+                    if (!fechouNavegador(e)) throw e;
+                    // aba/navegador fechou no meio: reabre e tenta mais uma vez
+                    await garantirNavegador();
+                    await umaPassada(pagina, moldes, false);
+                }
             }
-            await supabase("PATCH", `robo_comandos?id=eq.${cmd.id}`, { status: "concluido", processado_em: new Date(), resultado: { ok: true } }, "return=minimal");
+            await supabase("PATCH", `robo_comandos?id=eq.${cmd.id}`, { status: "concluido", processado_em: new Date(), resultado }, "return=minimal");
             log("Comando concluído.");
         } catch (e) {
             await supabase("PATCH", `robo_comandos?id=eq.${cmd.id}`, { status: "erro", processado_em: new Date(), resultado: { erro: e.message } }, "return=minimal").catch(() => {});
@@ -1398,6 +1829,7 @@ async function principal() {
     // a rodada da abertura já vale pelo horário, se o robô abriu dentro de um (ex.: 7h20)
     const rodadasFeitas = new Set([chaveRodada(abertoEm)]);
     const agenda = async () => {
+        if (SO_TIMELINE || supabaseBloqueado() || ixcLento()) return;
         const agora = new Date();
         if (!HORARIOS_RODADA.includes(agora.getHours())) return;
         if (agora.getMinutes() < MINUTO_RODADA) return;   // só a partir dos :30 da hora
@@ -1410,6 +1842,7 @@ async function principal() {
     // na janela 7h30–18h30. Uma vez por :00.
     const offlineFeitas = new Set();
     const agendaOffline = async () => {
+        if (SO_TIMELINE || supabaseBloqueado() || ixcLento()) return;
         const agora = new Date();
         if (agora.getMinutes() >= MINUTO_RODADA) return;   // :30 é da rodada completa
         if (!dentroJanelaOffline(agora)) return;
@@ -1418,11 +1851,68 @@ async function principal() {
         if (await rodarOffline()) offlineFeitas.add(chave);
     };
 
+    // tarefas avulsas (auditoria de OS etc.): um .js colocado em tarefas\ roda
+    // UMA vez, numa aba separada da mesma sessão do IXC (não mexe na tela de
+    // trabalho). O script exporta async ({ pagina, ctx, log, pasta }) => resultado;
+    // o resultado vai pra <nome>.resultado.json e o .js vira .js.feito.
+    const PASTA_TAREFAS = path.join(__dirname, "tarefas");
+    const verificarTarefas = async () => {
+        if (SO_TIMELINE || emExecucao) return;
+        let arqs;
+        try { arqs = fs.readdirSync(PASTA_TAREFAS).filter(f => f.endsWith(".js")).sort(); } catch { return; }
+        if (!arqs.length) return;
+        const arq = path.join(PASTA_TAREFAS, arqs[0]);
+        const base = arq.slice(0, -3);
+        emExecucao = true;
+        let aba = null;
+        try {
+            await garantirNavegador();
+            log(`Tarefa ${arqs[0]}...`);
+            delete require.cache[require.resolve(arq)];
+            const fn = require(arq);
+            aba = await ctx.newPage();
+            const pasta = base + "-arquivos";
+            fs.mkdirSync(pasta, { recursive: true });
+            const resultado = await Promise.race([
+                fn({ pagina: aba, ctx, log, pasta }),
+                new Promise((_, rej) => setTimeout(() => rej(new Error("tarefa passou de 5 min")), 5 * 60000))
+            ]);
+            fs.writeFileSync(base + ".resultado.json", JSON.stringify({ ok: true, resultado }, null, 2), "utf8");
+            log(`Tarefa ${arqs[0]} concluída.`);
+        } catch (e) {
+            fs.writeFileSync(base + ".resultado.json", JSON.stringify({ ok: false, erro: e.message, stack: e.stack }, null, 2), "utf8");
+            log(`Tarefa ${arqs[0]} falhou: ${e.message}`);
+        } finally {
+            try { fs.renameSync(arq, arq + ".feito"); } catch {}
+            if (aba) await aba.close().catch(() => {});
+            emExecucao = false;
+        }
+    };
+
+    // timeline local (sem Supabase): a cada TIMELINE_MIN min, 7h–19h59
+    let timelineEm = 0;
+    const agendaTimeline = async () => {
+        if (!TIMELINE_MIN || emExecucao || (!TIMELINE_GRID && ixcLento())) return;
+        const agora = new Date();
+        if (agora.getHours() < 7 || agora.getHours() > 19) return;
+        if (Date.now() - timelineEm < TIMELINE_MIN * 60000) return;
+        emExecucao = true;
+        timelineEm = Date.now();
+        try { await garantirNavegador(); await gerarTimelineLocal(pagina, moldes); }
+        catch (e) {
+            logErro("timeline local", e);
+            if (e.message === "SESSAO_CAIU" || e.message === "PULL_TIMEOUT" || ehFalhaDeRede(e))
+                await reiniciarNavegador().catch(x => log("Reinício do navegador não concluiu: " + x.message));
+        } finally { emExecucao = false; }
+    };
+
     log(`Pronto. Rodadas de hora em hora, das ${HORARIOS_RODADA[0]}h${MINUTO_RODADA} às ${HORARIOS_RODADA.at(-1)}h${MINUTO_RODADA} (offline a cada 30 min, 7h30–18h30; extra: botão "Atualizar banco"). Pode minimizar a janela (não feche).`);
     setInterval(pulso, PULSO_MS);
     setInterval(agenda, 60 * 1000);
     setInterval(agendaOffline, 60 * 1000);
     setInterval(verificarComandos, 30 * 1000);
+    setInterval(agendaTimeline, 60 * 1000);
+    setInterval(verificarTarefas, 15 * 1000);
 }
 
 principal().catch(e => { log("FALHOU: " + e.message); process.exit(1); });

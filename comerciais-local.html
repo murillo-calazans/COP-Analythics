@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordens comerciais</title>
+<!-- Versão SEM banco (temporária, enquanto o Supabase está fora): o robô grava
+     comerciais-dados.js nesta mesma pasta a cada ~10 min. Abra direto do disco. -->
+<style>
+  :root{ --fundo:#eef1f7; --sup:#fff; --borda:#dbe2ee; --txt:#1e2a3e; --txt2:#5a6b86; --suave:#f4f6fa;
+    --azul:#2563eb; --verde:#15803d; --amarelo:#b45309; --vermelho:#dc2626; --roxo:#7c3aed; --cinza:#64748b; }
+  html[data-tema="dark"]{ --fundo:#0b1424; --sup:#0f1a2e; --borda:#22314d; --txt:#e6edf7; --txt2:#8a9bb5; --suave:#132036;
+    --azul:#60a5fa; --verde:#34d399; --amarelo:#fbbf24; --vermelho:#f87171; --roxo:#a78bfa; --cinza:#94a3b8; }
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  body{ margin:0; background:var(--fundo); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  .pagina{ max-width:1600px; margin:0 auto; padding:18px 20px 30px; }
+  .topo{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
+  .topo h1{ margin:0; font-size:24px; font-weight:800; }
+  .topo h1 small{ display:block; font-size:12px; font-weight:700; color:var(--txt2); letter-spacing:.08em; text-transform:uppercase; }
+  #comAtualizado{ color:var(--txt2); font-size:13px; }
+  .topo .dir{ margin-left:auto; }
+  button{ font:inherit; }
+  .btn{ background:none; border:1px solid var(--borda); color:var(--txt2); border-radius:8px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .btn:hover{ color:var(--txt); }
+  #comAviso{ background:#fde4e4; color:#991b1b; border:1px solid #f1b4b4; padding:8px 14px; border-radius:10px; font-size:14px; margin-bottom:12px; }
+
+  #comKpis{ display:grid; grid-template-columns:repeat(7,1fr); gap:10px; margin-bottom:12px; }
+  .kpi{ text-align:left; background:var(--sup); border:1px solid var(--borda); border-radius:12px; padding:12px 14px; cursor:pointer; color:var(--txt); position:relative; overflow:hidden; }
+  .kpi::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--k,var(--cinza)); }
+  .kpi.on{ outline:2px solid var(--azul); }
+  .kpi .n{ display:block; font-size:32px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .kpi .r{ display:block; font-size:13px; color:var(--txt2); margin-top:6px; }
+  .k-todas{ --k:var(--azul); } .k-sem{ --k:var(--amarelo); } .k-hoje{ --k:var(--verde); } .k-vencida{ --k:var(--vermelho); }
+  .k-campo{ --k:var(--roxo); } .k-parada{ --k:var(--vermelho); } .k-reag{ --k:var(--cinza); }
+
+  .filtros{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .filtros input, .filtros select{ background:var(--sup); color:var(--txt); border:1px solid var(--borda); border-radius:8px; padding:7px 10px; font:inherit; font-size:14px; }
+  .filtros input{ min-width:260px; }
+  #comResumo{ color:var(--txt2); font-size:13px; margin-left:auto; }
+  #comAssuntos{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .chip{ background:var(--sup); border:1px solid var(--borda); color:var(--txt); border-radius:999px; padding:4px 12px; font-size:13px; cursor:pointer; }
+  .chip b{ color:var(--txt2); margin-left:4px; }
+  .chip.on{ background:var(--azul); border-color:var(--azul); color:#fff; } .chip.on b{ color:#fff; }
+
+  .caixa{ background:var(--sup); border:1px solid var(--borda); border-radius:14px; overflow:auto; }
+  .tabela{ width:100%; border-collapse:collapse; font-size:14px; }
+  .tabela th{ position:sticky; top:0; background:var(--suave); text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--txt2); padding:10px 12px; border-bottom:1px solid var(--borda); }
+  .tabela td{ padding:9px 12px; border-bottom:1px solid var(--borda); vertical-align:top; }
+  .tabela td small{ display:block; color:var(--txt2); font-size:12px; margin-top:2px; }
+  .tabela tr.linha{ cursor:pointer; }
+  .tabela tr.linha:hover, .tabela tr.aberta{ background:var(--suave); }
+  .tabela td.os{ font-weight:700; white-space:nowrap; }
+  .tabela td.alerta{ color:var(--vermelho); font-weight:700; }
+  .tabela td.msg{ color:var(--txt2); max-width:420px; }
+  .tag{ display:inline-block; white-space:nowrap; font-size:12px; font-weight:700; padding:2px 9px; border-radius:999px; border:1px solid var(--borda); color:var(--txt2); }
+  .tag.sem{ color:var(--amarelo); border-color:var(--amarelo); } .tag.hoje{ color:var(--verde); border-color:var(--verde); }
+  .tag.vencida{ color:var(--vermelho); border-color:var(--vermelho); } .tag.campo{ color:var(--roxo); border-color:var(--roxo); }
+  .hist td{ background:var(--suave); }
+  .hist ol{ margin:4px 0; padding-left:20px; display:flex; flex-direction:column; gap:6px; }
+  .hist li div{ color:var(--txt2); white-space:pre-wrap; margin-top:2px; }
+  .vazio{ padding:40px; text-align:center; color:var(--txt2); }
+  @media (max-width:1100px){ #comKpis{ grid-template-columns:repeat(3,1fr); } }
+</style>
+</head>
+<body>
+  <div class="pagina">
+    <div class="topo">
+      <h1><small>COP</small>Ordens comerciais em aberto</h1>
+      <span id="comAtualizado">carregando…</span>
+      <span class="dir"><button type="button" class="btn" id="comBtnTema">☀ Claro</button></span>
+    </div>
+    <div id="comAviso" hidden></div>
+    <div id="comKpis"></div>
+    <div class="filtros">
+      <input type="search" id="comBusca" placeholder="Buscar OS, cliente, login ou bairro…">
+      <select id="comCidade"></select>
+      <button type="button" class="btn" id="comLimpar">Limpar filtros</button>
+      <span id="comResumo"></span>
+    </div>
+    <div id="comAssuntos"></div>
+    <div class="caixa" id="comConteudo"><div class="vazio">Carregando…</div></div>
+  </div>
+  <script src="comerciais-dados.js" id="comDados"></script>
+  <script src="js/ui/comerciaislocal.js?v=1"></script>
+</body>
+</html>

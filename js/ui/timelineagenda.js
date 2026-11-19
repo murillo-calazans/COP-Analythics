@@ -94,6 +94,12 @@ function tlPorOs(mov) {
         const novaVisita = () => { const v = { desloc: null, exec: null, fim: null, encerrada: null, motivo: null, tec: null }; o.visitas.push(v); o.aberta = v; return v; };
 
         if (ev === 2 && (tecDesloc || tlNorm(e.status).includes("desloc"))) {
+            const ab = o.aberta;
+            // mesmo técnico apertando "deslocamento" de novo com a visita aberta
+            // (ex.: logo antes de finalizar) é a mesma visita, não uma nova
+            if (ab && (!tecDesloc || !ab.tec || tlNorm(ab.tec) === tlNorm(tecDesloc))) continue;
+            // outro técnico assumiu: a visita anterior termina aqui, sem conclusão
+            if (ab) { ab.encerrada = dt; ab.motivo = "outro técnico assumiu"; }
             const v = novaVisita();
             v.desloc = dt; v.tec = tecDesloc;
         } else if (ev === 9) {
@@ -114,10 +120,14 @@ function tlPorOs(mov) {
 function tlAgendadasPrevistas(linhasOsPendentes, jaTocadas) {
     const out = [];
     if (typeof Motor === "undefined" || typeof Motor.montarOS !== "function") return out;
-    let osM, agDate = {};
+    let osM, agDate = {}, tecLinha = {};
     try {
         const rows = linhasOsPendentes.map(l => l.dados);
-        for (const r of rows) { const d = ixcDataBR(r.AGENDAMENTO); if (d) agDate[String(r["ID OS"])] = d; }
+        for (const r of rows) {
+            const d = ixcDataBR(r.AGENDAMENTO); if (d) agDate[String(r["ID OS"])] = d;
+            // timeline local pelas grids do IXC (19/11): a linha já traz o técnico da OS
+            if (r["TECNICO AGENDA"]) tecLinha[String(r["ID OS"])] = r["TECNICO AGENDA"];
+        }
         osM = Motor.montarOS(rows, hojeMeiaNoite(), Motor.PADRAO_PARAMS).os;
     } catch (e) { return out; }
     const hoje = hojeMeiaNoite().getTime(), amanha = hoje + 86400000;
@@ -128,7 +138,7 @@ function tlAgendadasPrevistas(linhasOsPendentes, jaTocadas) {
         const ag = agDate[id];
         if (!ag || ag.getTime() < hoje || ag.getTime() >= amanha) continue;
         if (TL_EXCLUIR.test(tlNorm(o.assunto))) continue;
-        const tec = (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
+        const tec = tecLinha[id] || (o.agendaIxc && o.agendaIxc.tecnico) || (o.visitantes && o.visitantes[0]) || null;
         if (!tec) continue;
         out.push({ id, tec, cliente: o.cliente, cidade: o.cidade, assunto: o.assunto, agendamento: ag });
     }
@@ -152,10 +162,18 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
     const achaTec = nome => linhasTec.find(lt => bate(nome, lt.tech));
 
     const foraEscala = new Map();
+    // sem escala (ex.: banco fora, timeline local do robô): cada técnico que
+    // aparece no dia vira uma linha própria na cidade da OS
+    const semEscala = !linhasTec.length;
     function destino(nome, cidade) {
         const lt = achaTec(nome);
         if (lt) return lt;
         const c = cidade || "Sem cidade";
+        if (semEscala) {
+            const chave = `${c}|${tlNorm(nome)}`;
+            if (!foraEscala.has(chave)) foraEscala.set(chave, { nome, cidade: c, setor: "", dupla: false, blocos: [], semEscala: true });
+            return foraEscala.get(chave);
+        }
         if (!foraEscala.has(c)) foraEscala.set(c, { nome: "Fora da escala", cidade: c, setor: "", dupla: false, blocos: [], fora: true });
         return foraEscala.get(c);
     }
@@ -174,7 +192,7 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
             const descFim = (v.desloc && v.exec && v.desloc < v.exec) ? v.exec : null;
             let estado, perf = "", fim = v.fim;
             if (v.fim) {
-                const act = (v.fim - (v.exec || v.desloc || start)) / 60000;
+                const act = Math.round((v.fim - (v.exec || v.desloc || start)) / 60000);
                 estado = act > exp ? "fin-over" : "fin";
                 perf = act > exp ? `▲ +${Math.round(act - exp)}min` : "✔ no tempo";
             } else if (v.encerrada) {
@@ -219,6 +237,11 @@ function tlMontar(mov, ordensMap, previstas, escalaDia) {
 }
 
 let tlDados = null, tlCidade = "__all__", tlCarregando = false, tlEm = 0, tlTimer = null;
+// tela da TV: lista de cidades mostradas juntas (cada uma com o nome em cima dos
+// seus técnicos). null = vale o tlCidade (abas do site).
+let tlGrupo = null;
+const tlNoRecorte = lt => tlGrupo ? tlGrupo.includes(lt.cidade) : (tlCidade === "__all__" || lt.cidade === tlCidade);
+const tlComSeparador = () => tlGrupo ? tlGrupo.length > 1 : tlCidade === "__all__";
 
 const TL_CSS = `
 #agendaTimelineConteudo{ --tl-head-bg:#2b3a57; --tl-head-fg:#eef2fb; --tl-head-line:rgba(255,255,255,.16);
@@ -261,7 +284,9 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-corner{ z-index:22; display:flex; align-items:center; padding:0 14px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--tl-head-fg); background:var(--tl-head-bg); border-right-color:var(--tl-head-line); }
 .tl-hours{ position:relative; background:var(--tl-head-bg); }
 .tl-htick{ position:absolute; top:0; bottom:0; display:flex; align-items:center; padding-left:7px; font-size:12px; font-weight:600; color:var(--tl-head-fg); border-left:1px solid var(--tl-head-line); font-variant-numeric:tabular-nums; }
-.tl-cidade-sep{ grid-column:1/-1; position:sticky; left:0; background:var(--cor-fundo-suave,rgba(0,0,0,.05)); font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cor-texto); padding:6px 14px 6px 284px; border-bottom:1px solid var(--cor-borda); }
+.tl-cidade-sep{ grid-column:1/-1; position:sticky; left:0; background:var(--cor-fundo-suave,rgba(0,0,0,.05)); font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cor-texto); padding:6px 0; border-bottom:1px solid var(--cor-borda); }
+/* a faixa ocupa as 24h da grade: o nome gruda na esquerda visível mesmo com a grade rolada */
+.tl-cidade-sep span{ position:sticky; left:14px; display:inline-block; padding-left:14px; }
 
 .tl-name{ padding:8px 14px 8px 16px; display:flex; flex-direction:column; justify-content:center; gap:3px;
   background:var(--tl-nome-bg); box-shadow:inset 3px 0 0 var(--tl-nome-marca); }
@@ -348,7 +373,8 @@ function tlRegistrarCss() {
     document.head.appendChild(s);
 }
 
-async function carregarTimelineAgenda(forcar = false) {
+// silencioso: recarrega sem trocar a tela por "Montando…" (usado pela tela de TV)
+async function carregarTimelineAgenda(forcar = false, silencioso = false) {
     const alvo = document.getElementById("agendaTimelineConteudo");
     if (!alvo || tlCarregando) return;
     tlRegistrarCss();
@@ -356,7 +382,7 @@ async function carregarTimelineAgenda(forcar = false) {
     if (tlDados && !forcar && (Date.now() - tlEm) < 120000) { tlRender(); return; }
     tlCarregando = true;
     if (forcar) invalidarCacheOsPendentes();
-    alvo.innerHTML = `<div class="tl-vazio">Montando a timeline do dia…</div>`;
+    if (!(silencioso && tlDados)) alvo.innerHTML = `<div class="tl-vazio">Montando a timeline do dia…</div>`;
     try {
         const [mov, linhasOs, techsEscala] = await Promise.all([
             tlBuscarMovHoje(),
@@ -376,6 +402,7 @@ async function carregarTimelineAgenda(forcar = false) {
         if (!tlTimer) tlTimer = setInterval(tlTick, 30000);
     } catch (erro) {
         console.error("Timeline:", erro);
+        if (silencioso && tlDados) throw erro;
         alvo.innerHTML = `<div class="tl-vazio">Não consegui montar a timeline. ${escaparHtml(erro.message || "")}</div>`;
     } finally {
         tlCarregando = false;
@@ -443,7 +470,8 @@ function tlDesenharGrade() {
     const grid = document.getElementById("tlGrid"), board = document.getElementById("tlBoard");
     if (!grid || !board) return;
     const { linhasTec } = tlDados;
-    const lista = tlCidade === "__all__" ? linhasTec : linhasTec.filter(lt => lt.cidade === tlCidade);
+    const lista = linhasTec.filter(tlNoRecorte);
+    if (tlGrupo) lista.sort((a, b) => tlGrupo.indexOf(a.cidade) - tlGrupo.indexOf(b.cidade));
 
     const janela = TL_JANELA_FIM - TL_JANELA_INI;
     _tlHourW = Math.max(74, Math.floor((board.clientWidth - TL_NAMEW) / janela));
@@ -455,16 +483,16 @@ function tlDesenharGrade() {
 
     let cidadeAtual = null, nLinha = 0;
     lista.forEach(lt => {
-        if (tlCidade === "__all__" && lt.cidade !== cidadeAtual) {
+        if (tlComSeparador() && lt.cidade !== cidadeAtual) {
             cidadeAtual = lt.cidade;
             nLinha = 0;
-            html += `<div class="tl-cidade-sep">${escaparHtml(cidadeAtual)}</div>`;
+            html += `<div class="tl-cidade-sep"><span>${escaparHtml(cidadeAtual)}</span></div>`;
         }
         const zebra = nLinha++ % 2 ? " zebra" : "";
 
         const faixas = tlFaixas(lt.blocos);
         const alturaLinha = Math.max(1, faixas.n) * TL_ROW + 8;
-        const tag = lt.fora ? "" : (lt.dupla ? `<span class="tl-pill dupla">dupla</span>` : `<span class="tl-pill solo">sozinho</span>`);
+        const tag = (lt.fora || lt.semEscala) ? "" : (lt.dupla ? `<span class="tl-pill dupla">dupla</span>` : `<span class="tl-pill solo">sozinho</span>`);
         const sub = lt.setor ? (tlCidade === "__all__" ? lt.setor : lt.setor) : (lt.fora ? "fora da escala" : "");
         html += `<div class="tl-cell tl-name${zebra}${lt.blocos.length ? "" : " semos"}${lt.fora ? " fora" : ""}" style="min-height:${alturaLinha}px">
             <span class="nm">${escaparHtml(lt.nome)}</span><span class="mt">${tag}${sub ? `<span>${escaparHtml(sub)}</span>` : ""}</span></div>`;
@@ -529,8 +557,8 @@ function tlBlocoHtml(b, faixa) {
 
 function tlResumo() {
     const { linhasTec } = tlDados;
-    const lista = tlCidade === "__all__" ? linhasTec : linhasTec.filter(lt => lt.cidade === tlCidade);
-    const rotulo = tlCidade === "__all__" ? "todas as cidades" : tlCidade;
+    const lista = linhasTec.filter(tlNoRecorte);
+    const rotulo = tlGrupo ? tlGrupo.join(", ") : tlCidade === "__all__" ? "todas as cidades" : tlCidade;
     let ok = 0, bad = 0; const ass = {};
     lista.forEach(lt => lt.blocos.forEach(b => {
         if (b.id) ass[tlCurto(b.a)] = (ass[tlCurto(b.a)] || 0) + 1;
