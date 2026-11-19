@@ -366,6 +366,17 @@ function montarPayload(molde, start, length, draw, janela) {
  *  null), paginando até o fim. O corte é feito no servidor (no filtro do
  *  pedido), então aqui é só juntar as páginas. */
 async function puxarRecentes(pagina, molde, janela) {
+    // 529 pelas telas comuns (19/11): mesmo formato de linha, sem Query Builder.
+    // GRID_529=0 no .env volta ao QB.
+    if (process.env.GRID_529 !== "0" && VISAO_PENDENTES && String(molde.viewId) === String(VISAO_PENDENTES)) {
+        try {
+            return await require("./ixc-grid").puxar529Grid(pagina, janela, { log });
+        } catch (e) {
+            if (e.message === "SESSAO_CAIU" || /has been closed|Target closed/i.test(e.message)) throw e;
+            if (/aborted|AbortError/i.test(e.message)) throw new Error("PULL_TIMEOUT");
+            throw new Error("grids 529: " + e.message);
+        }
+    }
     const linhas = [];
     let total = null;
 

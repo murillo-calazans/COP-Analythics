@@ -8,6 +8,7 @@
 // A grid de mensagens não traz id_evento: o evento sai do status/histórico (ver eventoDe).
 // SÓ LEITURA no IXC.
 
+const { eventosDaOs } = require("./ixc-grid");
 const z = n => String(n).padStart(2, "0");
 const isoDia = d => `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 const brDia = d => `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()}`;
@@ -146,10 +147,10 @@ async function puxarTimelineGrid(pagina, { log = () => {}, completoACadaMin = 60
         let tecDesloc = null, temHoje = false;
         const ord = msgs.map(m => ({ data: paraDataBR(m[0]), status: limpo(m[1]), hist: limpo(m[2]), msg: limpo(m[3]) }))
             .filter(m => m.data).sort((a, b) => a.data - b.data);
-        let stAnt;
-        for (const m of ord) {
-            const ev = eventoDe(m.status, m.hist, m.msg, stAnt);
-            stAnt = m.status;
+        // regras de evento validadas contra a 529 (ixc-grid.js)
+        const evs = eventosDaOs(ord.map(m => ({ status: m.status, historico: m.hist, mensagem: m.msg })));
+        for (const [i, m] of ord.entries()) {
+            const ev = evs[i];
             const textoDesloc = /iniciou o deslocamento/i.test(m.hist) ? m.hist : m.msg;
             if (ev === "2") {
                 const t = String(textoDesloc).match(/usu[aá]rio\s+(.+?)\s*,\s*iniciou o deslocamento/i);
