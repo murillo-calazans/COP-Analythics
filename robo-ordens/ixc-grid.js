@@ -143,7 +143,8 @@ async function dadosLogins(pagina, logins, log) {
 }
 
 // OS -> { msgs, em }: vive enquanto o robô estiver aberto (reiniciou = 1º retrato busca tudo, ~4 min)
-const CACHE_MSGS = new Map();
+// no global: se alguma tarefa recarregar este módulo (delete require.cache), o cache e o retrato continuam
+const CACHE_MSGS = global.__copCacheMsgs || (global.__copCacheMsgs = new Map());
 
 /** mensagens de várias OS (grid de mensagens filtrada pelo nº da OS) */
 async function mensagensDe(pagina, ids) {
@@ -301,7 +302,7 @@ async function puxar529Grid(pagina, janela, { log = () => {} } = {}) {
 
 // Retrato completo da 529 em memória (todas as OS em aberto, todas as mensagens) — o robô
 // publica no R2 depois de cada atualização. Só vale depois do 1º retrato completo do processo.
-const RETRATO = { os: new Map(), completo: false, em: 0, versao: 0 };
+const RETRATO = global.__copRetrato529 || (global.__copRetrato529 = { os: new Map(), completo: false, em: 0, versao: 0 });
 function retrato529() {
     if (!RETRATO.completo) return null;
     const linhas = []; for (const l of RETRATO.os.values()) linhas.push(...l);
