@@ -1611,19 +1611,25 @@ async function umaPassada(pagina, moldes, simular) {
     // ignora repetido) e a próxima rodada retoma do mesmo ponto sem perder nada.
     // Atraso grande (robô/banco parado dias): no MÁXIMO 1 dia por rodada (17/11). O resto
     // fica para as próximas rodadas — o estado avança só até onde foi puxado.
+    // 19/11: com o IXC rápido, vai puxando dia a dia até 6 dias por rodada; se um dia demorar
+    // mais de 90 s (IXC pesado), para ali e o resto fica para a próxima rodada.
     const todasFatias = fatiarJanela(ini, fimJanela, 1);
-    const fatias = todasFatias.slice(0, 1);
-    if (todasFatias.length > 1) log(`Atraso de ${todasFatias.length} dia(s) na puxada: só 1 dia por rodada para não pesar no IXC (puxando até ${fatias[0].fim.toLocaleString("pt-BR")}).`);
+    const fatias = todasFatias.slice(0, 6);
+    if (todasFatias.length > 1) log(`Atraso de ${todasFatias.length} dia(s) na puxada: até ${fatias.length} dia(s) nesta rodada (para se o IXC ficar lento).`);
+    let fatiasFeitas = 0;
     for (const id of VISOES_PARA_SINCRONIZAR) {
         const molde = moldes.find(m => m.viewId === id);
         if (!molde) { log(`molde da visão ${id} não encontrado em templates.json`); continue; }
         if (fatias.length > 1) log(`Visão ${id} "${molde.viewName}": janela grande (${ini.toLocaleString("pt-BR")} → ${fimJanela.toLocaleString("pt-BR")}) — puxando em ${fatias.length} pedaços de até ${MAX_DIAS_JANELA} dias.`);
         for (const fat of fatias) {
+            const fatT0 = Date.now();
             log(`Visão ${id} "${molde.viewName}": OS finalizadas ${fat.ini.toLocaleString("pt-BR")} → ${fat.fim.toLocaleString("pt-BR")}...`);
             const linhas = await puxarRecentes(pagina, molde, { ini: fat.ini, fim: fat.fim });
             for (const r of linhas) if (!vazio(r.su_oss_chamado_mensagem_su_oss_chamado_id)) finalizadas.add(String(r.su_oss_chamado_mensagem_su_oss_chamado_id));
             const r = await processarEGravar(linhas, { simular });
             if (!simular) log(`  gravado: ${r.ordens} OS, ${r.inseridas} movimentação(ões) nova(s), ${r.ignoradas} já existiam.`);
+            fatiasFeitas++;
+            if (fatiasFeitas < fatias.length && Date.now() - fatT0 > 90000) { log(`  IXC lento nesse dia (${Math.round((Date.now() - fatT0) / 1000)} s) — o resto fica para a próxima rodada.`); break; }
         }
     }
     await sincronizarPendentes(pagina, moldes, simular, { finalizadas: [...finalizadas], estado, inicio });
@@ -1648,7 +1654,7 @@ async function umaPassada(pagina, moldes, simular) {
     // só grava o estado com a rodada inteira OK: se o pré-agendamento falhar, a
     // próxima repete a janela das ordens (o repetido é ignorado) e não perde finalizadas
     if (!simular) {
-        estado.ordensDesde = (todasFatias.length > 1 ? fatias[0].fim : inicio).toISOString();
+        estado.ordensDesde = (todasFatias.length <= 1 || fatiasFeitas >= todasFatias.length ? inicio : fatias[Math.max(0, fatiasFeitas - 1)].fim).toISOString();
         salvarEstado(estado);
     }
     log(`Rodada concluída em ${Math.round((Date.now() - inicio.getTime()) / 1000)} s.`);
