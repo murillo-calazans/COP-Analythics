@@ -21,6 +21,7 @@ const MODULO_DA_SECAO = {
     "agenda-hoje": "agendador",
     "escala-hoje": "escala",
     "escala-contatos": "escala",
+    "escala-capacidade": "escala",
     "usuarios": "admin",
     "configuracoes": "admin"
 };
@@ -132,6 +133,7 @@ function mostrarSecao(nome) {
     if (nome === "mapa-calor") renderizarMapaCalor();
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "escala-contatos" && typeof renderizarEscalaContatos === "function") renderizarEscalaContatos();
+    if (nome === "escala-capacidade" && typeof renderizarEscalaCapacidade === "function") renderizarEscalaCapacidade();
     if (nome === "agenda-hoje") {
         renderizarAgendaHoje();
         if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("aberto");
