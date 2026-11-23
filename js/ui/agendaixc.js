@@ -67,7 +67,7 @@ async function buscarOsPendentesR2() {
     const h = { Authorization: "Bearer " + token };
     if (_osR2Etag && _osR2Linhas) h["If-None-Match"] = _osR2Etag;
     const r = await fetch(COP_DADOS_URL + "os-pendentes.json", { headers: h, cache: "no-store" });
-    if (r.status === 304 && _osR2Linhas) return _osR2Linhas;
+    if (r.status === 304 && _osR2Linhas) { console.info("OS em aberto: arquivo da nuvem (R2) sem mudança — nada baixado"); return _osR2Linhas; }
     if (!r.ok) throw new Error("R2 " + r.status);
     const j = await r.json();
     if (!j || !Array.isArray(j.colunas) || !Array.isArray(j.linhas) || !j.linhas.length) throw new Error("arquivo vazio");
@@ -78,6 +78,7 @@ async function buscarOsPendentesR2() {
         return { id: i + 1, dados, capturado_em: cap };
     });
     _osR2Etag = r.headers.get("ETag");
+    console.info(`OS em aberto: lidas do arquivo da nuvem (R2) — ${j.nOs || "?"} OS, gerado em ${new Date(cap).toLocaleString("pt-BR")}`);
     return _osR2Linhas;
 }
 
