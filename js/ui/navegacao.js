@@ -19,6 +19,7 @@ const MODULO_DA_SECAO = {
     "auditoria": "auditoria",
     "auditoria-ia": "auditoria",
     "agenda-hoje": "agendador",
+    "agenda-agendadas": "agendador",
     "escala-hoje": "escala",
     "escala-contatos": "escala",
     "escala-capacidade": "escala",
@@ -32,6 +33,8 @@ function podeVerSecao(nome) {
     if (SECOES_SEMPRE_LIBERADAS.includes(nome)) return true;
     const abas = APP.usuario?.abasVisiveis;
     if (!abas || (typeof ehAdmin === "function" && ehAdmin())) return true;
+    // OS agendadas saiu de dentro da Agenda do dia (23/11): quem vê a agenda vê as agendadas
+    if (nome === "agenda-agendadas") return abas.includes("agenda-hoje");
     return abas.includes(nome);
 }
 
@@ -134,6 +137,7 @@ function mostrarSecao(nome) {
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "escala-contatos" && typeof renderizarEscalaContatos === "function") renderizarEscalaContatos();
     if (nome === "escala-capacidade" && typeof renderizarEscalaCapacidade === "function") renderizarEscalaCapacidade();
+    if (nome === "agenda-agendadas" && typeof carregarAgendaAgendadas === "function") carregarAgendaAgendadas();
     if (nome === "agenda-hoje") {
         renderizarAgendaHoje();
         if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("aberto");

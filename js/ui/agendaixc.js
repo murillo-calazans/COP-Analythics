@@ -677,10 +677,7 @@ function ativarAbaAgenda(aba) {
     const aberto = document.getElementById("agendaAbertoConteudo");
     const timeline = document.getElementById("agendaTimelineConteudo");
     const backlogHist = document.getElementById("agendaBacklogHistConteudo");
-    const agendadas = document.getElementById("agendaAgendadasConteudo");
     const navDia = document.getElementById("agendaNavDia");
-    if (agendadas) agendadas.hidden = aba !== "agendadas";
-    if (aba === "agendadas" && typeof carregarAgendaAgendadas === "function") carregarAgendaAgendadas();
     if (ia) ia.hidden = aba !== "ia";
     if (ixc) ixc.hidden = aba !== "ixc";
     if (aberto) aberto.hidden = aba !== "aberto";

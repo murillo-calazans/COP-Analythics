@@ -6,6 +6,7 @@
     let diaOffset = 1;                 // 0 = hoje, 1 = amanhã...
     let filtro = { setor: null, cidade: null };
     let busca = "";
+    let visao = "resumo";              // "resumo" (totais + setor × cidade) ou "lista" (OS)
     let cache = null;                  // { porOs: Map, geradoEm, temSetor }
 
     const norm = t => String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
@@ -112,16 +113,20 @@
             </div>
           </div>
 
-          <div class="ag-kpis">
-            <div class="ag-kpi ag-kpi-total"><span>OS agendadas</span><b>${todas.length}</b></div>
-            ${setores.slice(0, 4).map(([s, n]) => `<button type="button" class="ag-kpi ${ativoS(s) ? "on" : ""}" data-ag-setor="${esc(s)}"><span>${esc(s)}</span><b>${n}</b></button>`).join("")}
+          <div class="agenda-abas" role="tablist" aria-label="Resumo ou lista">
+            <button type="button" class="${visao === "resumo" ? "ativo" : ""}" data-ag-visao="resumo">Resumo por setor e cidade</button>
+            <button type="button" class="${visao === "lista" ? "ativo" : ""}" data-ag-visao="lista">Lista de OS <span class="ag-suave">(${todas.length})</span></button>
           </div>
 
           ${!cache.temSetor ? `<p class="ag-aviso">O setor das OS começa a vir na próxima atualização do robô — por enquanto aparece "Sem setor".</p>` : ""}
 
-          ${todas.length ? `
+          ${!todas.length ? `<div class="ag-card ag-vazio">Nenhuma OS em aberto agendada para ${esc(rotuloDia().toLowerCase())}.</div>` : visao === "resumo" ? `
+          <div class="ag-kpis">
+            <div class="ag-kpi ag-kpi-total"><span>OS agendadas</span><b>${todas.length}</b></div>
+            ${setores.slice(0, 4).map(([s, n]) => `<button type="button" class="ag-kpi" data-ag-setor="${esc(s)}" title="Ver as OS deste setor"><span>${esc(s)}</span><b>${n}</b></button>`).join("")}
+          </div>
           <div class="ag-card">
-            <div class="ag-card-tit">Setor × cidade <span class="ag-suave">clique num número para ver as OS</span></div>
+            <div class="ag-card-tit">Setor × cidade <span class="ag-suave">clique num número, setor ou cidade para ver a lista das OS</span></div>
             <div class="ag-matriz-wrap">
               <table class="ag-matriz">
                 <thead><tr><th>Setor</th>${cidades.map(([c]) => `<th><button type="button" class="${ativoC(c) ? "on" : ""}" data-ag-cidade="${esc(c)}">${esc(c)}</button></th>`).join("")}<th class="ag-tot">Total</th></tr></thead>
@@ -135,11 +140,12 @@
                 <tfoot><tr><th>Total</th>${cidades.map(([, n]) => `<td class="ag-tot">${n}</td>`).join("")}<td class="ag-tot">${todas.length}</td></tr></tfoot>
               </table>
             </div>
-          </div>
-
+          </div>` : `
           <div class="ag-card">
             <div class="ag-card-tit">
-              ${descFiltro ? `${esc(descFiltro)} <button type="button" class="ag-limpar" data-ag-limpar>× limpar</button>` : "Todas as OS do dia"}
+              <select class="ag-sel" data-ag-sel-setor aria-label="Setor"><option value="">Todos os setores</option>${setores.map(([s, n]) => `<option value="${esc(s)}" ${filtro.setor === s ? "selected" : ""}>${esc(s)} (${n})</option>`).join("")}</select>
+              <select class="ag-sel" data-ag-sel-cidade aria-label="Cidade"><option value="">Todas as cidades</option>${cidades.map(([c, n]) => `<option value="${esc(c)}" ${filtro.cidade === c ? "selected" : ""}>${esc(c)} (${n})</option>`).join("")}</select>
+              ${descFiltro ? `<button type="button" class="ag-limpar" data-ag-limpar>× limpar</button>` : ""}
               <span class="ag-suave">${lista.length} OS</span>
               <input type="search" class="ag-busca" placeholder="Buscar OS, cliente, bairro, assunto…" value="${esc(busca)}" data-ag-busca>
             </div>
@@ -157,7 +163,7 @@
                 </tr>`).join("")}</tbody>
               </table>
             </div>
-          </div>` : `<div class="ag-card ag-vazio">Nenhuma OS em aberto agendada para ${esc(rotuloDia().toLowerCase())}.</div>`}`;
+          </div>`}`;
 
         ligar(alvo, todas, lista);
     }
@@ -165,10 +171,14 @@
     function ligar(alvo, todas, lista) {
         alvo.querySelectorAll("[data-ag-dia]").forEach(b => b.addEventListener("click", () => { diaOffset += Number(b.dataset.agDia); filtro = { setor: null, cidade: null }; render(); }));
         alvo.querySelectorAll("[data-ag-ir]").forEach(b => b.addEventListener("click", () => { diaOffset = Number(b.dataset.agIr); filtro = { setor: null, cidade: null }; render(); }));
-        const alterna = (s, c) => { filtro = filtro.setor === s && filtro.cidade === c ? { setor: null, cidade: null } : { setor: s, cidade: c }; render(); };
-        alvo.querySelectorAll("[data-ag-setor]").forEach(b => b.addEventListener("click", () => alterna(b.dataset.agSetor, null)));
-        alvo.querySelectorAll("[data-ag-cidade]").forEach(b => b.addEventListener("click", () => alterna(null, b.dataset.agCidade)));
-        alvo.querySelectorAll("[data-ag-cel-s]").forEach(b => b.addEventListener("click", () => alterna(b.dataset.agCelS, b.dataset.agCelC)));
+        // clicar no resumo abre a lista já filtrada
+        const abrirLista = (s, c) => { filtro = { setor: s, cidade: c }; busca = ""; visao = "lista"; render(); };
+        alvo.querySelectorAll("[data-ag-setor]").forEach(b => b.addEventListener("click", () => abrirLista(b.dataset.agSetor, null)));
+        alvo.querySelectorAll("[data-ag-cidade]").forEach(b => b.addEventListener("click", () => abrirLista(null, b.dataset.agCidade)));
+        alvo.querySelectorAll("[data-ag-cel-s]").forEach(b => b.addEventListener("click", () => abrirLista(b.dataset.agCelS, b.dataset.agCelC)));
+        alvo.querySelectorAll("[data-ag-visao]").forEach(b => b.addEventListener("click", () => { visao = b.dataset.agVisao; render(); }));
+        alvo.querySelector("[data-ag-sel-setor]")?.addEventListener("change", e => { filtro.setor = e.target.value || null; render(); });
+        alvo.querySelector("[data-ag-sel-cidade]")?.addEventListener("change", e => { filtro.cidade = e.target.value || null; render(); });
         alvo.querySelector("[data-ag-limpar]")?.addEventListener("click", () => { filtro = { setor: null, cidade: null }; render(); });
         alvo.querySelector("[data-ag-recarregar]")?.addEventListener("click", () => carregar(true));
         const campo = alvo.querySelector("[data-ag-busca]");
@@ -278,6 +288,8 @@
 .ag-tot{font-weight:700;color:var(--cor-texto)}
 .ag-matriz tfoot td,.ag-matriz tfoot th{border-bottom:0;padding-top:8px}
 .ag-limpar{border:0;background:var(--cor-fundo-elevado);color:var(--cor-texto-suave);border-radius:999px;padding:2px 10px;font:inherit;font-size:.8rem;cursor:pointer}
+.ag-sel{border:1px solid var(--cor-borda);border-radius:999px;padding:6px 12px;background:var(--cor-fundo-card);color:var(--cor-texto);font:inherit;font-size:.86rem;max-width:340px}
+#agendaAgendadasConteudo .agenda-abas{margin:0}
 .ag-busca{margin-left:auto;min-width:220px;border:1px solid var(--cor-borda);border-radius:999px;padding:6px 14px;background:var(--cor-fundo);color:var(--cor-texto);font:inherit;font-size:.86rem}
 .ag-lista{width:100%;border-collapse:collapse;font-size:.86rem}
 .ag-lista th{text-align:left;font-size:.76rem;text-transform:uppercase;letter-spacing:.03em;color:var(--cor-texto-suave);padding:6px 8px;border-bottom:1px solid var(--cor-borda)}
