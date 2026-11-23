@@ -6,7 +6,6 @@
     let diaOffset = 1;                 // 0 = hoje, 1 = amanhã...
     let filtro = { setor: null, cidade: null };
     let busca = "";
-    let visao = "resumo";              // "resumo" (totais + setor × cidade) ou "lista" (OS)
     let cache = null;                  // { porOs: Map, geradoEm, temSetor }
 
     const norm = t => String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
@@ -75,29 +74,23 @@
         return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR"));
     }
 
+    // Dois lugares (23/11): aba "Ordens" = só o relatório (totais + setor × cidade);
+    // aba "Agenda" > "Agendadas" = a lista das OS. Mesmo dia e filtros nos dois.
+    const ID_REL = "agendaAgendadasConteudo", ID_LST = "agendaListaAgendadasConteudo";
+    const hora = d => d ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+
     function render() {
-        const alvo = document.getElementById("agendaAgendadasConteudo");
-        if (!alvo || !cache) return;
+        if (!cache) return;
         const todas = osDoDia();
-        const setores = contarPor(todas, "setorRot");
-        const cidades = contarPor(todas, "cidadeRot");
-        const celula = new Map();
-        for (const o of todas) { const k = o.setorRot + "\u0001" + o.cidadeRot; celula.set(k, (celula.get(k) || 0) + 1); }
-        const maxCel = Math.max(1, ...celula.values());
+        const ctx = { todas, setores: contarPor(todas, "setorRot"), cidades: contarPor(todas, "cidadeRot") };
+        const rel = document.getElementById(ID_REL), lst = document.getElementById(ID_LST);
+        if (rel) { rel.innerHTML = htmlTopo(ctx, "rel") + htmlRelatorio(ctx); ligar(rel, ctx); }
+        if (lst) { lst.innerHTML = htmlTopo(ctx, "lst") + htmlLista(ctx); ligar(lst, ctx); }
+    }
 
-        const q = norm(busca);
-        const lista = todas.filter(o => (!filtro.setor || o.setorRot === filtro.setor) && (!filtro.cidade || o.cidadeRot === filtro.cidade)
-            && (!q || norm(`${o.id} ${o.cliente} ${o.bairro} ${o.assunto} ${o.equipe}`).includes(q)))
-            .sort((a, b) => a.cidadeRot.localeCompare(b.cidadeRot, "pt-BR") || (a.agenda - b.agenda) || a.setorRot.localeCompare(b.setorRot, "pt-BR"));
-
-        const hora = d => d ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
-        const ativoS = s => filtro.setor === s && !filtro.cidade;
-        const ativoC = c => filtro.cidade === c && !filtro.setor;
-        const ativoCel = (s, c) => filtro.setor === s && filtro.cidade === c;
-        const descFiltro = [filtro.setor, filtro.cidade].filter(Boolean).join(" · ");
+    function htmlTopo({ todas }, modo) {
         const atualizado = cache.geradoEm ? new Date(cache.geradoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
-
-        alvo.innerHTML = `
+        return `
           <div class="ag-topo">
             <div class="ag-dia">
               <button type="button" class="ag-seta" data-ag-dia="-1" aria-label="Dia anterior">‹</button>
@@ -108,44 +101,59 @@
             </div>
             <div class="ag-acoes">
               ${atualizado ? `<span class="ag-suave">Dados do IXC às ${atualizado}</span>` : ""}
-              <button type="button" class="ag-btn" data-ag-csv ${todas.length ? "" : "disabled"}>⬇ Planilha</button>
+              ${modo === "lst" ? `<button type="button" class="ag-btn" data-ag-csv ${todas.length ? "" : "disabled"}>⬇ Planilha</button>` : ""}
               <button type="button" class="ag-btn" data-ag-recarregar title="Buscar de novo">↻</button>
             </div>
           </div>
+          ${!cache.temSetor ? `<p class="ag-aviso">O setor das OS começa a vir na próxima atualização do robô — por enquanto aparece "Sem setor".</p>` : ""}`;
+    }
 
-          <div class="agenda-abas" role="tablist" aria-label="Resumo ou lista">
-            <button type="button" class="${visao === "resumo" ? "ativo" : ""}" data-ag-visao="resumo">Resumo por setor e cidade</button>
-            <button type="button" class="${visao === "lista" ? "ativo" : ""}" data-ag-visao="lista">Lista de OS <span class="ag-suave">(${todas.length})</span></button>
-          </div>
+    const vazio = () => `<div class="ag-card ag-vazio">Nenhuma OS em aberto agendada para ${esc(rotuloDia().toLowerCase())}.</div>`;
 
-          ${!cache.temSetor ? `<p class="ag-aviso">O setor das OS começa a vir na próxima atualização do robô — por enquanto aparece "Sem setor".</p>` : ""}
-
-          ${!todas.length ? `<div class="ag-card ag-vazio">Nenhuma OS em aberto agendada para ${esc(rotuloDia().toLowerCase())}.</div>` : visao === "resumo" ? `
+    function htmlRelatorio({ todas, setores, cidades }) {
+        if (!todas.length) return vazio();
+        const celula = new Map();
+        for (const o of todas) { const k = o.setorRot + "\u0001" + o.cidadeRot; celula.set(k, (celula.get(k) || 0) + 1); }
+        const maxCel = Math.max(1, ...celula.values());
+        return `
           <div class="ag-kpis">
             <div class="ag-kpi ag-kpi-total"><span>OS agendadas</span><b>${todas.length}</b></div>
-            ${setores.slice(0, 4).map(([s, n]) => `<button type="button" class="ag-kpi" data-ag-setor="${esc(s)}" title="Ver as OS deste setor"><span>${esc(s)}</span><b>${n}</b></button>`).join("")}
+            ${setores.slice(0, 4).map(([s, n]) => `<button type="button" class="ag-kpi" data-ag-setor="${esc(s)}" title="Ver as OS deste setor na Agenda"><span>${esc(s)}</span><b>${n}</b></button>`).join("")}
           </div>
           <div class="ag-card">
-            <div class="ag-card-tit">Setor × cidade <span class="ag-suave">clique num número, setor ou cidade para ver a lista das OS</span></div>
+            <div class="ag-card-tit">Setor × cidade <span class="ag-suave">clique num número, setor ou cidade para ver as OS na Agenda</span></div>
             <div class="ag-matriz-wrap">
               <table class="ag-matriz">
-                <thead><tr><th>Setor</th>${cidades.map(([c]) => `<th><button type="button" class="${ativoC(c) ? "on" : ""}" data-ag-cidade="${esc(c)}">${esc(c)}</button></th>`).join("")}<th class="ag-tot">Total</th></tr></thead>
+                <thead><tr><th>Setor</th>${cidades.map(([c]) => `<th><button type="button" data-ag-cidade="${esc(c)}">${esc(c)}</button></th>`).join("")}<th class="ag-tot">Total</th></tr></thead>
                 <tbody>
                   ${setores.map(([s, n]) => `<tr>
-                    <th><button type="button" class="${ativoS(s) ? "on" : ""}" data-ag-setor="${esc(s)}">${esc(s)}</button></th>
+                    <th><button type="button" data-ag-setor="${esc(s)}">${esc(s)}</button></th>
                     ${cidades.map(([c]) => { const v = celula.get(s + "\u0001" + c) || 0;
-                        return v ? `<td><button type="button" class="ag-cel ${ativoCel(s, c) ? "on" : ""}" style="--i:${(0.12 + 0.6 * v / maxCel).toFixed(2)}" data-ag-cel-s="${esc(s)}" data-ag-cel-c="${esc(c)}">${v}</button></td>` : `<td class="ag-zero">·</td>`; }).join("")}
+                        return v ? `<td><button type="button" class="ag-cel" style="--i:${(0.12 + 0.6 * v / maxCel).toFixed(2)}" data-ag-cel-s="${esc(s)}" data-ag-cel-c="${esc(c)}">${v}</button></td>` : `<td class="ag-zero">·</td>`; }).join("")}
                     <td class="ag-tot">${n}</td></tr>`).join("")}
                 </tbody>
                 <tfoot><tr><th>Total</th>${cidades.map(([, n]) => `<td class="ag-tot">${n}</td>`).join("")}<td class="ag-tot">${todas.length}</td></tr></tfoot>
               </table>
             </div>
-          </div>` : `
+          </div>`;
+    }
+
+    function listaFiltrada(todas) {
+        const q = norm(busca);
+        return todas.filter(o => (!filtro.setor || o.setorRot === filtro.setor) && (!filtro.cidade || o.cidadeRot === filtro.cidade)
+            && (!q || norm(`${o.id} ${o.cliente} ${o.bairro} ${o.assunto} ${o.equipe}`).includes(q)))
+            .sort((a, b) => a.cidadeRot.localeCompare(b.cidadeRot, "pt-BR") || (a.agenda - b.agenda) || a.setorRot.localeCompare(b.setorRot, "pt-BR"));
+    }
+
+    function htmlLista({ todas, setores, cidades }) {
+        if (!todas.length) return vazio();
+        const lista = listaFiltrada(todas);
+        return `
           <div class="ag-card">
             <div class="ag-card-tit">
               <select class="ag-sel" data-ag-sel-setor aria-label="Setor"><option value="">Todos os setores</option>${setores.map(([s, n]) => `<option value="${esc(s)}" ${filtro.setor === s ? "selected" : ""}>${esc(s)} (${n})</option>`).join("")}</select>
               <select class="ag-sel" data-ag-sel-cidade aria-label="Cidade"><option value="">Todas as cidades</option>${cidades.map(([c, n]) => `<option value="${esc(c)}" ${filtro.cidade === c ? "selected" : ""}>${esc(c)} (${n})</option>`).join("")}</select>
-              ${descFiltro ? `<button type="button" class="ag-limpar" data-ag-limpar>× limpar</button>` : ""}
+              ${filtro.setor || filtro.cidade ? `<button type="button" class="ag-limpar" data-ag-limpar>× limpar</button>` : ""}
               <span class="ag-suave">${lista.length} OS</span>
               <input type="search" class="ag-busca" placeholder="Buscar OS, cliente, bairro, assunto…" value="${esc(busca)}" data-ag-busca>
             </div>
@@ -163,20 +171,24 @@
                 </tr>`).join("")}</tbody>
               </table>
             </div>
-          </div>`}`;
-
-        ligar(alvo, todas, lista);
+          </div>`;
     }
 
-    function ligar(alvo, todas, lista) {
+    /** relatório → lista: vai para a aba Agenda, sub-aba Agendadas, já filtrada */
+    function abrirNaAgenda(s, c) {
+        filtro = { setor: s, cidade: c }; busca = "";
+        if (typeof mostrarSecao === "function") mostrarSecao("agenda-hoje");
+        if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("agendadas");
+        else render();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function ligar(alvo, ctx) {
         alvo.querySelectorAll("[data-ag-dia]").forEach(b => b.addEventListener("click", () => { diaOffset += Number(b.dataset.agDia); filtro = { setor: null, cidade: null }; render(); }));
         alvo.querySelectorAll("[data-ag-ir]").forEach(b => b.addEventListener("click", () => { diaOffset = Number(b.dataset.agIr); filtro = { setor: null, cidade: null }; render(); }));
-        // clicar no resumo abre a lista já filtrada
-        const abrirLista = (s, c) => { filtro = { setor: s, cidade: c }; busca = ""; visao = "lista"; render(); };
-        alvo.querySelectorAll("[data-ag-setor]").forEach(b => b.addEventListener("click", () => abrirLista(b.dataset.agSetor, null)));
-        alvo.querySelectorAll("[data-ag-cidade]").forEach(b => b.addEventListener("click", () => abrirLista(null, b.dataset.agCidade)));
-        alvo.querySelectorAll("[data-ag-cel-s]").forEach(b => b.addEventListener("click", () => abrirLista(b.dataset.agCelS, b.dataset.agCelC)));
-        alvo.querySelectorAll("[data-ag-visao]").forEach(b => b.addEventListener("click", () => { visao = b.dataset.agVisao; render(); }));
+        alvo.querySelectorAll("[data-ag-setor]").forEach(b => b.addEventListener("click", () => abrirNaAgenda(b.dataset.agSetor, null)));
+        alvo.querySelectorAll("[data-ag-cidade]").forEach(b => b.addEventListener("click", () => abrirNaAgenda(null, b.dataset.agCidade)));
+        alvo.querySelectorAll("[data-ag-cel-s]").forEach(b => b.addEventListener("click", () => abrirNaAgenda(b.dataset.agCelS, b.dataset.agCelC)));
         alvo.querySelector("[data-ag-sel-setor]")?.addEventListener("change", e => { filtro.setor = e.target.value || null; render(); });
         alvo.querySelector("[data-ag-sel-cidade]")?.addEventListener("change", e => { filtro.cidade = e.target.value || null; render(); });
         alvo.querySelector("[data-ag-limpar]")?.addEventListener("click", () => { filtro = { setor: null, cidade: null }; render(); });
@@ -184,13 +196,10 @@
         const campo = alvo.querySelector("[data-ag-busca]");
         if (campo) campo.addEventListener("input", () => {
             busca = campo.value; const pos = campo.selectionStart; render();
-            const novo = document.querySelector("#agendaAgendadasConteudo [data-ag-busca]"); if (novo) { novo.focus(); novo.setSelectionRange(pos, pos); }
+            const novo = document.querySelector(`#${ID_LST} [data-ag-busca]`); if (novo) { novo.focus(); novo.setSelectionRange(pos, pos); }
         });
-        alvo.querySelectorAll("[data-ag-os]").forEach(a => a.addEventListener("click", ev => {
-            ev.preventDefault();
-            abrirHistorico(a.dataset.agOs);
-        }));
-        alvo.querySelector("[data-ag-csv]")?.addEventListener("click", () => baixarCsv(lista.length ? lista : todas));
+        alvo.querySelectorAll("[data-ag-os]").forEach(a => a.addEventListener("click", ev => { ev.preventDefault(); abrirHistorico(a.dataset.agOs); }));
+        alvo.querySelector("[data-ag-csv]")?.addEventListener("click", () => { const l = listaFiltrada(ctx.todas); baixarCsv(l.length ? l : ctx.todas); });
     }
 
     /** histórico da OS na mesma janela da Agenda IXC (modalOsIxc) */
@@ -233,19 +242,21 @@
     }
 
     async function carregar(forcar = false) {
-        const alvo = document.getElementById("agendaAgendadasConteudo");
-        if (!alvo) return;
+        const alvos = [ID_REL, ID_LST].map(id => document.getElementById(id)).filter(Boolean);
+        if (!alvos.length) return;
         estilo();
-        if (cache && !forcar) return render();
-        alvo.innerHTML = `<div class="ag-card ag-vazio">Carregando as OS agendadas…</div>`;
+        // reusa os dados por até 2 min (o arquivo do IXC muda de 10 em 10 min)
+        if (cache && !forcar && Date.now() - cache.lidoEm < 120000) return render();
+        if (!cache) alvos.forEach(a => { a.innerHTML = `<div class="ag-card ag-vazio">Carregando as OS agendadas…</div>`; });
         try {
             if (forcar && typeof invalidarCacheOsPendentes === "function") invalidarCacheOsPendentes();
             const linhas = await buscarOsPendentesCacheado();
             cache = montar(linhas || []);
+            cache.lidoEm = Date.now();
             render();
         } catch (e) {
             console.error("Agendadas:", e);
-            alvo.innerHTML = `<div class="ag-card ag-vazio">Não consegui carregar as OS. ${esc(e.message || "")}</div>`;
+            alvos.forEach(a => { a.innerHTML = `<div class="ag-card ag-vazio">Não consegui carregar as OS. ${esc(e.message || "")}</div>`; });
         }
     }
 

@@ -30,7 +30,7 @@
 
         const ENTRADA = {
             inicio: "inicio", ordens: "dashboard", cop: "cop-abertas", terceiras: "terceiras",
-            auditoria: "auditoria", agendador: "agenda-hoje", escala: "escala-hoje",
+            auditoria: "auditoria", agendador: "agenda-agendadas", escala: "escala-hoje",
             clientes: "clientes-cto", admin: "usuarios"
         };
 

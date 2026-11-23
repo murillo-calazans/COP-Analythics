@@ -18,8 +18,8 @@ const MODULO_DA_SECAO = {
     "terceiras-qualidade": "terceiras",
     "auditoria": "auditoria",
     "auditoria-ia": "auditoria",
-    "agenda-hoje": "agendador",
-    "agenda-agendadas": "agendador",
+    "agenda-agendadas": "agendador",   // 1ª aba "Ordens" (relatórios)
+    "agenda-hoje": "agendador",        // 2ª aba "Agenda"
     "escala-hoje": "escala",
     "escala-contatos": "escala",
     "escala-capacidade": "escala",
@@ -140,7 +140,7 @@ function mostrarSecao(nome) {
     if (nome === "agenda-agendadas" && typeof carregarAgendaAgendadas === "function") carregarAgendaAgendadas();
     if (nome === "agenda-hoje") {
         renderizarAgendaHoje();
-        if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("aberto");
+        if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("agendadas");
     }
 
     if (typeof renderizarInfografico === "function") renderizarInfografico(nome);

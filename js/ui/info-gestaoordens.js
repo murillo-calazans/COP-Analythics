@@ -152,7 +152,8 @@ function igoRotuloRecorte(valores, nome, plural) {
     return valores.length <= 2 ? valores.map(nome).join(" + ") : `${valores.length} ${plural}`;
 }
 
-registrarInfografico("agenda-hoje", async () => {
+// 23/11: relatório saiu da Agenda (operação) e foi para a aba "Ordens" (agenda-agendadas)
+registrarInfografico("agenda-agendadas", async () => {
     const modelo = await igoBacklog();
     if (!modelo || !modelo.total) return [];
     const hoje = typeof ixcMeiaNoite === "function" ? ixcMeiaNoite() : new Date(new Date().setHours(0, 0, 0, 0));
@@ -174,7 +175,7 @@ registrarInfografico("agenda-hoje", async () => {
     const recorte = [igoRotuloRecorte(igoFiltro.cidades, c => c, "cidades"), recorteAssunto].filter(Boolean).join(" · ");
     const pop = (titulo, oss) => () => abrirPopupBacklog(recorte ? `${titulo} · ${recorte}` : titulo, oss);
     const cartoes = [];
-    const refazer = () => renderizarInfografico("agenda-hoje");
+    const refazer = () => renderizarInfografico("agenda-agendadas");
     cartoes.filtros = [
         { rotulo: "Cidade", plural: "cidades", feminino: true, todos: `Todas as cidades (${IG.fmt(doAssunto.length)})`, valores: igoFiltro.cidades,
             opcoes: opCidades.map(([c, n]) => ({ valor: c, nome: c, n })),

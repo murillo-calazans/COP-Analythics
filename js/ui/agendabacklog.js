@@ -402,7 +402,8 @@ function abrirPopupBacklog(titulo, oss, subtitulo = "OS de campo em aberto", fon
         </div>
         <div class="ixc-popup-corpo">${lista.length ? `<ul class="ixc-lista">${linhas}</ul>` : '<p class="alerta-vazio">Nenhuma OS aqui.</p>'}</div>
       </div>`;
-    (document.getElementById("secao-agenda-hoje") || document.body).appendChild(fundo);
+    // na tela aberta (o relatório "OS de campo em aberto" fica na aba Ordens desde 23/11)
+    (document.querySelector("#secao-agenda-agendadas.ativa") || document.getElementById("secao-agenda-hoje") || document.body).appendChild(fundo);
     document.body.classList.add("ixc-popup-aberto");
     fundo.addEventListener("click", e => { if (e.target === fundo) fecharPopupBacklog(); });
     fundo.querySelector(".ixc-popup-fechar").addEventListener("click", fecharPopupBacklog);
