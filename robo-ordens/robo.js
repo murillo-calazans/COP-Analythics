@@ -1691,6 +1691,16 @@ async function umaPassada(pagina, moldes, simular) {
         if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
         log("Logins offline falhou: " + e.message);
     }
+    // 1x por dia (23/11): backlog diário → arquivo no R2 (banco fica 7 dias) e poda das OS finalizadas
+    // (banco fica só hoje + ontem; cada dia apagado vira cópia bruta em "Dados diários").
+    const diaManut = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    if (!simular && estado.manutencaoDia !== diaManut) {
+        try {
+            await require("./backlog-r2").rodar({ log });
+            await require("./poda-finalizadas").rodar({ log });
+            estado.manutencaoDia = diaManut;
+        } catch (e) { log("Manutenção do banco falhou (tenta na próxima rodada): " + e.message); }
+    }
     // só grava o estado com a rodada inteira OK: se o pré-agendamento falhar, a
     // próxima repete a janela das ordens (o repetido é ignorado) e não perde finalizadas
     if (!simular) {

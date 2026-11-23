@@ -82,6 +82,17 @@ async function buscarOsPendentesR2() {
     return _osR2Linhas;
 }
 
+// Qualquer arquivo do R2 pelo Worker (com o login do site). Devolve o JSON, ou null se não existir.
+async function lerArquivoCop(caminho) {
+    const { data } = await supabaseClient.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if (!token) throw new Error("sem sessão");
+    const r = await fetch(COP_DADOS_URL + caminho, { headers: { Authorization: "Bearer " + token } });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error("R2 " + r.status);
+    return r.json();
+}
+
 async function buscarOsPendentes() {
     if (typeof supabaseClient === "undefined") return [];
     try { return await buscarOsPendentesR2(); }

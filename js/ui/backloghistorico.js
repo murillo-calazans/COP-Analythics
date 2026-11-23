@@ -34,8 +34,14 @@ async function backlogHistAtual() {
 }
 
 async function backlogHistRetratoSalvo(dia) {
-    let linhas;
+    let linhas = null;
+    // 23/11: cada dia fechado vira arquivo na nuvem (backlog/AAAA-MM-DD.json); o banco guarda só 7 dias
     try {
+        const arq = typeof lerArquivoCop === "function" ? await lerArquivoCop(`backlog/${backlogHistIso(dia)}.json`) : null;
+        if (arq && Array.isArray(arq.linhas) && arq.linhas.length)
+            linhas = arq.linhas.map(v => Object.fromEntries(arq.colunas.map((c, k) => [c, v[k]])));
+    } catch (e) { console.warn("Backlog do dia: arquivo da nuvem indisponível, lendo do banco —", e.message); }
+    if (!linhas) try {
         linhas = await backlogHistTodas(() => supabaseClient.from("backlog_retratos")
             .select("os_id, cliente, cidade, bairro, assunto, status, abertura, agendamento, salvo_em")
             .eq("dia", backlogHistIso(dia)).order("os_id"));

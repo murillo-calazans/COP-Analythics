@@ -90,7 +90,8 @@ const COLUNAS = [
     "ID_OS", "CLIENTE", "LOGIN", "CIDADE", "BAIRRO", "ASSUNTO", "SETOR", "TECNICO_RESPONSAVEL",
     "DATA_ABERTURA", "DATA_FECHAMENTO", "STATUS_ATUAL",
     "EVENTO", "DATA_MOV", "OPERADOR", "COLABORADOR_RESPONSAVEL", "EQUIPE",
-    "DIAGNOSTICO", "PROXIMA_TAREFA", "STATUS_MOV", "MENSAGEM", "HISTORICO"
+    "DIAGNOSTICO", "PROXIMA_TAREFA", "STATUS_MOV", "MENSAGEM", "HISTORICO",
+    "RESPOSTA_PADRAO", "LAT", "LNG"   // 23/11: arquivo vira a cópia de segurança antes da poda do banco
 ];
 
 const csvCampo = v => {
@@ -136,8 +137,10 @@ const csvCampo = v => {
             ...daOs,
             m ? (evento.get(String(m.evento)) || "") : "", m ? m.data : "", m ? nome(m.operador) : "",
             m ? (colaborador.get(String(m.colaborador_responsavel)) || "") : "", m ? m.equipe : "",
-            m ? (diagnostico.get(String(m.diagnostico)) || "") : "", m ? m.proxima_tarefa : "", m ? m.status : "",
-            m ? m.mensagem : "", m ? m.historico : ""
+            // diagnóstico vem gravado como TEXTO (não código): só traduz se for código
+            m ? (diagnostico.get(String(m.diagnostico)) || m.diagnostico || "") : "", m ? m.proxima_tarefa : "", m ? m.status : "",
+            m ? m.mensagem : "", m ? m.historico : "",
+            m ? m.resposta_padrao : "", o.lat ?? "", o.lng ?? ""
         ].map(csvCampo).join(","));
         if (ms.length) ms.forEach(emitir); else emitir(null);
     }
@@ -146,6 +149,14 @@ const csvCampo = v => {
     fs.mkdirSync(pasta, { recursive: true });
     const arquivo = path.join(pasta, `Relatório ${rotulo}.csv`);
     fs.writeFileSync(arquivo, "\uFEFF" + linhas.join("\r\n"), "utf8");   // BOM: Excel abre acentos certo
+
+    // cópia BRUTA (sem perda: todas as colunas das tabelas) — é dela que dá pra devolver ao banco
+    const zlib = require("zlib");
+    const bruto = path.join(pasta, `Dados brutos ${ano}-${p2(mes)}.json.gz`);
+    fs.writeFileSync(bruto, zlib.gzipSync(JSON.stringify({ geradoEm: new Date().toISOString(), mes: `${ano}-${p2(mes)}`, ordens, movimentacoes: movs })));
+    const conf = JSON.parse(zlib.gunzipSync(fs.readFileSync(bruto)).toString("utf8"));
+    if (conf.ordens.length !== ordens.length || conf.movimentacoes.length !== movs.length) throw new Error("cópia bruta não confere");
+    console.log(`✓ Cópia bruta: ${bruto} (${(fs.statSync(bruto).size / 1048576).toFixed(2)} MB, conferida)`);
 
     const mb = (fs.statSync(arquivo).size / 1048576).toFixed(2);
     console.log(`\n✓ CSV salvo: ${arquivo}`);
