@@ -404,6 +404,17 @@ async function puxarRecentes(pagina, molde, janela) {
             throw new Error("grids 529: " + e.message);
         }
     }
+    // 343 (OS finalizadas) pelas telas comuns (23/11): conferida 2 dias inteiros contra o que o QB
+    // gravou — mesmas movimentações (mesma chave de dedup). GRID_343=0 no .env volta ao QB.
+    if (process.env.GRID_343 !== "0" && String(molde.viewId) === "343" && janela && janela.fim - janela.ini <= 7 * 86400000) {   // mês inteiro (botão do site) segue no QB
+        try {
+            return await require("./ixc-grid").puxar343Grid(pagina, janela, { log });
+        } catch (e) {
+            if (e.message === "SESSAO_CAIU" || /has been closed|Target closed/i.test(e.message)) throw e;
+            if (/aborted|AbortError/i.test(e.message)) throw new Error("PULL_TIMEOUT");
+            throw new Error("grids 343: " + e.message);
+        }
+    }
     const linhas = [];
     let total = null;
 
@@ -1634,6 +1645,11 @@ async function umaPassada(pagina, moldes, simular) {
     const fatias = todasFatias.slice(0, 6);
     if (todasFatias.length > 1) log(`Atraso de ${todasFatias.length} dia(s) na puxada: até ${fatias.length} dia(s) nesta rodada (para se o IXC ficar lento).`);
     let fatiasFeitas = 0;
+    // 23/11: a 343 usa o Query Builder; se ele estiver lento (pausa ixcLento ou estoura 180 s),
+    // PULA a 343 e segue — as OS em aberto (529) vêm pelas grids e não podem ficar paradas por isso.
+    let pulou343 = false;
+    if (ixcLento()) { pulou343 = true; log("Query Builder do IXC em pausa (lento) — pulo a 343 nesta rodada e sigo para as OS em aberto (grids)."); }
+    else try {
     for (const id of VISOES_PARA_SINCRONIZAR) {
         const molde = moldes.find(m => m.viewId === id);
         if (!molde) { log(`molde da visão ${id} não encontrado em templates.json`); continue; }
@@ -1649,21 +1665,28 @@ async function umaPassada(pagina, moldes, simular) {
             if (fatiasFeitas < fatias.length && Date.now() - fatT0 > 90000) { log(`  IXC lento nesse dia (${Math.round((Date.now() - fatT0) / 1000)} s) — o resto fica para a próxima rodada.`); break; }
         }
     }
+    } catch (e) {
+        if (e.message !== "PULL_TIMEOUT") throw e;
+        pulou343 = true;
+        log("  343 estourou o tempo no Query Builder — sigo para as OS em aberto (grids); a 343 retoma na próxima rodada.");
+    }
     await sincronizarPendentes(pagina, moldes, simular, { finalizadas: [...finalizadas], estado, inicio });
+    // extras abaixo usam o Query Builder: com ele em pausa, não espera 180 s em cada um
+    if (ixcLento()) log("Query Builder em pausa — coordenadas antigas, clientes x CTO e logins offline ficam para a próxima rodada.");
     // à parte: coordenadas das OS antigas, um mês por rodada (patch-30)
-    try { await preencherCoordenadasAntigas(pagina, moldes, simular, estado); }
+    if (!ixcLento()) try { await preencherCoordenadasAntigas(pagina, moldes, simular, estado); }
     catch (e) {
         if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
         log("Coordenadas das OS antigas falhou: " + e.message);
     }
     // à parte: se a base de clientes falhar, não derruba a rodada das ordens (tenta de novo na próxima)
-    try { await sincronizarClientesCto(pagina, moldes, simular, { estado, inicio }); }
+    if (!ixcLento()) try { await sincronizarClientesCto(pagina, moldes, simular, { estado, inicio }); }
     catch (e) {
         if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
         log("Clientes x CTO falhou: " + e.message);
     }
     // à parte: logins offline (detecção de rompimento) — falha não derruba a rodada
-    try { await sincronizarClientesOffline(pagina, moldes, simular, { estado, inicio }); }
+    if (!ixcLento()) try { await sincronizarClientesOffline(pagina, moldes, simular, { estado, inicio }); }
     catch (e) {
         if (e.message === "SESSAO_CAIU" || /has been closed|Target closed|browser has disconnected|Failed to fetch/i.test(e.message)) throw e;
         log("Logins offline falhou: " + e.message);
@@ -1671,7 +1694,9 @@ async function umaPassada(pagina, moldes, simular) {
     // só grava o estado com a rodada inteira OK: se o pré-agendamento falhar, a
     // próxima repete a janela das ordens (o repetido é ignorado) e não perde finalizadas
     if (!simular) {
-        estado.ordensDesde = (todasFatias.length <= 1 || fatiasFeitas >= todasFatias.length ? inicio : fatias[Math.max(0, fatiasFeitas - 1)].fim).toISOString();
+        // 343 pulada: só avança até o último dia puxado inteiro (nenhum = mantém o ponto antigo)
+        if (!pulou343) estado.ordensDesde = (todasFatias.length <= 1 || fatiasFeitas >= todasFatias.length ? inicio : fatias[Math.max(0, fatiasFeitas - 1)].fim).toISOString();
+        else if (fatiasFeitas > 0) estado.ordensDesde = new Date(Math.min(fatias[fatiasFeitas - 1].fim.getTime(), inicio.getTime())).toISOString();
         salvarEstado(estado);
     }
     log(`Rodada concluída em ${Math.round((Date.now() - inicio.getTime()) / 1000)} s.`);
@@ -1890,7 +1915,8 @@ async function principal() {
     // a rodada da abertura já vale pelo horário, se o robô abriu dentro de um (ex.: 7h20)
     const rodadasFeitas = new Set([chaveRodada(abertoEm)]);
     const agenda = async () => {
-        if (SO_TIMELINE || supabaseBloqueado() || ixcLento()) return;
+        // 23/11: NÃO espera a pausa do Query Builder — a rodada pula a 343 sozinha e a 529 vem pelas grids
+        if (SO_TIMELINE || supabaseBloqueado()) return;
         const agora = new Date();
         if (!HORARIOS_RODADA.includes(agora.getHours())) return;
         if (agora.getMinutes() < MINUTO_RODADA) return;   // só a partir dos :30 da hora

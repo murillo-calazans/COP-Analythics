@@ -231,7 +231,7 @@ const mapOS = o => ({
     id: limpo(o["su_oss_chamado.id"]), status: limpo(o["su_oss_chamado.status"]), assunto: limpo(o["su_oss_assunto.assunto"]),
     setor: limpo(o["empresa_setor.setor"]), cidade: limpo(o["cidade.nome"]), bairro: limpo(o["su_oss_chamado.bairro"]),
     cliente: limpo(o["cliente.razao"]), login: limpo(o["radusuarios.login"]), abertura: limpo(o["su_oss_chamado.data_abertura"]),
-    agenda: limpo(o["su_oss_chamado.data_agenda"]), diag: limpo(o["su_diagnostico.descricao"]),
+    agenda: limpo(o["su_oss_chamado.data_agenda"]), final: limpo(o["su_oss_chamado.data_final"]), diag: (v => limpo(v) ? String(v).replace(/^\s+/, "") : "")(o["su_diagnostico.descricao"]),   // sem aparar o fim: o QB guarda "X " e a dedup compara exato
     prioridade: limpo(o["su_oss_chamado.prioridade"]), contrato: limpo(o["cliente_contrato.contrato"])
 });
 
@@ -309,4 +309,48 @@ function retrato529() {
     return { em: RETRATO.em, versao: RETRATO.versao, nOs: RETRATO.os.size, linhas };
 }
 
-module.exports = { puxar529Grid, retrato529, eventosDaOs, linhasQB, mapOS, referencias, dadosLogins, mensagensDe, detalhesMsgs, garantirIxc, rodar, GRID_JS };
+/** Substitui a visão 343 do QB (OS FINALIZADAS na janela, com TODAS as mensagens de cada OS).
+ *  Mesmo filtro da 343: data_final da OS dentro da janela + setores da 529 (sem corte de abertura).
+ *  Evento/técnico/resposta padrão SEMPRE do registro da mensagem (recupera) — sem dedução, porque
+ *  a resposta padrão entra na chave de deduplicação das movimentações. */
+async function puxar343Grid(pagina, janela, { log = () => {} } = {}) {
+    const t0 = Date.now();
+    await garantirIxc(pagina);
+    const ref = await referencias(pagina);
+    const setoresOk = new Set(SETORES_529.map(id => semAc(ref.setorNome[id] || "").trim()).filter(Boolean));
+    if (setoresOk.size < SETORES_529.length) throw new Error("grids 343: não achei o nome de todos os setores");
+    const dias = [];
+    for (let d = new Date(janela.ini.getFullYear(), janela.ini.getMonth(), janela.ini.getDate()); d <= janela.fim; d.setDate(d.getDate() + 1)) dias.push(isoDia(d));
+    const brutas = await rodar(pagina, `const out = []; for (const dia of arg) out.push(...await todas("su_oss_chamado", "su_oss_chamado.data_final", dia, "L"));
+        return out;`, dias);
+    const vistos = new Set();
+    const os = brutas.map(mapOS).filter(o => {
+        if (!o.id || vistos.has(o.id)) return false;
+        vistos.add(o.id);
+        const fim = paraDataBR(o.final);
+        return fim && fim >= janela.ini && fim <= janela.fim && setoresOk.has(semAc(o.setor).trim());
+    });
+    const tOS = Date.now() - t0;
+    if (!os.length) { log(`  grids 343: 0 OS finalizadas na janela — ${Math.round(tOS / 1000)}s`); return []; }
+    const logins = await dadosLogins(pagina, os.map(o => o.login), log);
+    const msgs = await mensagensDe(pagina, os.map(o => o.id));
+    const falhas = os.filter(o => !msgs.get(o.id)).length;
+    if (falhas) throw new Error(`grids 343: ${falhas} de ${os.length} OS sem mensagens (IXC instável)`);
+    const idsMsg = [];
+    for (const o of os) for (const m of msgs.get(o.id)) idsMsg.push(limpo(m[8]));
+    // todos os registros abertos (sem teto por rodada): sem eles a resposta padrão sairia vazia
+    let det = detCache();
+    for (let volta = 0; volta < 6; volta++) {
+        const falta = idsMsg.filter(id => id && !det[id]);
+        if (!falta.length) break;
+        det = await detalhesMsgs(pagina, falta, log);
+    }
+    const semDet = idsMsg.filter(id => id && !det[id]).length;
+    if (semDet) throw new Error(`grids 343: ${semDet} mensagem(ns) sem registro aberto (IXC instável)`);
+    const linhas = [];
+    for (const o of os) linhas.push(...linhasQB(o, msgs.get(o.id), ref, logins, null, det));
+    log(`  grids 343: ${os.length} OS finalizadas, ${linhas.length} movimentação(ões) — OS ${Math.round(tOS / 1000)}s, total ${Math.round((Date.now() - t0) / 1000)}s`);
+    return linhas;
+}
+
+module.exports = { puxar529Grid, puxar343Grid, retrato529, eventosDaOs, linhasQB, mapOS, referencias, dadosLogins, mensagensDe, detalhesMsgs, garantirIxc, rodar, GRID_JS };
