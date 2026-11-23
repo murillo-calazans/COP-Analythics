@@ -681,6 +681,22 @@ async function tentarLoginAutomatico(pagina) {
     }
 }
 
+// 23/11: navegador discreto — abre minimizado e nunca pula na frente da tela do usuário
+// (ROBO_DISCRETO=0 no .env volta ao jeito antigo). Só aparece se precisar de login manual.
+const DISCRETO = process.env.ROBO_DISCRETO !== "0";
+async function estadoJanela(p, windowState) {
+    try {
+        const s = await p.context().newCDPSession(p);
+        const { windowId } = await s.send("Browser.getWindowForTarget");
+        await s.send("Browser.setWindowBounds", { windowId, bounds: { windowState } });
+        await s.detach().catch(() => {});
+    } catch (e) { /* janela já fechada etc. */ }
+}
+async function paraFrente(p) {
+    if (DISCRETO) return estadoJanela(p, "minimized");
+    await p.bringToFront().catch(() => {});
+}
+
 async function garantirLogin(pagina) {
     // entra pela rota do Query Builder: deslogado, o IXC manda pra tela de login
     // do ADMIN (/app/login). Ir direto em /app/login cai no portal do assinante.
@@ -695,6 +711,7 @@ async function garantirLogin(pagina) {
     }
 
     // fallback: pede login manual (caso típico: renovação do 2FA do mês)
+    if (DISCRETO) await estadoJanela(pagina, "maximized");   // precisa de você: mostra a janela
     await pagina.bringToFront().catch(() => {});
     console.log("\n>> Login automático não concluiu (talvez o 2FA do mês). Entre no IXC na janela.");
     console.log(">> NÃO use a 'Central do Assinante' se aparecer — o robô te leva pra tela certa.");
@@ -1681,12 +1698,12 @@ async function principal() {
         // registra no console quando a aba usada pelo robô morre (pra saber a causa)
         p.on("close", () => log("A aba usada pelo robô foi fechada."));
         p.on("crash", () => log("A aba usada pelo robô travou (crash)."));
-        await p.bringToFront().catch(() => {});
+        await paraFrente(p);
         await garantirLogin(p);
         // deixa a janela no sistema principal do IXC pra você trabalhar; o robô
         // puxa os dados por trás (fetch), sem mexer nesta tela.
         await p.goto(IXC_HOME, { waitUntil: "domcontentloaded" }).catch(() => {});
-        await p.bringToFront().catch(() => {});
+        await paraFrente(p);
         return p;
     };
 
@@ -1710,7 +1727,7 @@ async function principal() {
             ctx = await chromium.launchPersistentContext(PERFIL, {
                 headless: false, viewport: null,   // usa o tamanho real da janela (maximizada)
                 acceptDownloads: true,
-                args: ["--start-maximized", "--no-first-run", "--no-default-browser-check", "--hide-crash-restore-bubble"]
+                args: [DISCRETO ? "--start-minimized" : "--start-maximized", "--no-first-run", "--no-default-browser-check", "--hide-crash-restore-bubble"]
             });
             ctxFechado = false;
             ctx.on("close", () => { ctxFechado = true; });
@@ -1915,6 +1932,7 @@ async function principal() {
             delete require.cache[require.resolve(arq)];
             const fn = require(arq);
             aba = await ctx.newPage();
+            if (DISCRETO) await estadoJanela(aba, "minimized");
             const pasta = base + "-arquivos";
             fs.mkdirSync(pasta, { recursive: true });
             const resultado = await Promise.race([
