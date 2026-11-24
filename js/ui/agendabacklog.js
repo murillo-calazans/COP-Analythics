@@ -3,7 +3,7 @@ let agendaBacklogCarregando = false;
 let backlogCidade = "";
 
 const BACKLOG_DIAS_ANTIGA = 3;
-const BACKLOG_TETO = 300;
+const BACKLOG_TETO = 600;
 
 function montarBacklog(linhas, hoje = ixcMeiaNoite()) {
     const rows = linhas.map(l => l.dados);
@@ -51,6 +51,116 @@ function montarBacklog(linhas, hoje = ixcMeiaNoite()) {
         antigas: itens.filter(i => i.antiga).length,
         itens, cidades, capturadoEm, eventosPorOs, osInfo
     };
+}
+
+// 24/11: TODAS as OS em aberto (qualquer status, qualquer assunto), uma por OS, status = última movimentação.
+// O montarBacklog acima continua só com as de campo (roteiro) — painel, histórico e aba Ordens dependem dele.
+let agendaTodasCache = null;
+const TODAS_SETORES_FORA = new Set(["TECNICO INFRAESTRUTURA AMO"]);
+const TODAS_STATUS = [
+    { id: "agendada", rotulo: "Agendadas", st: ["agendada"], cor: "#16a34a" },
+    { id: "aguardando", rotulo: "Aguardando agendamento", st: ["aguardando agendamento"], cor: "#d97706" },
+    { id: "aberta", rotulo: "Abertas (sem andamento)", st: ["aberta"], cor: "#0891b2" },
+    { id: "encaminhada", rotulo: "Encaminhadas", st: ["encaminhada"], cor: "#db2777" },
+    { id: "campo", rotulo: "Em campo agora", st: ["deslocamento", "execucao"], cor: "#2563eb" },
+    { id: "assumida", rotulo: "Assumidas", st: ["assumida"], cor: "#7c3aed" }
+];
+
+function montarTodasAbertas(linhas) {
+    const limiteAntiga = Date.now() - BACKLOG_DIAS_ANTIGA * 86400000;
+    const porOs = new Map(), eventosPorOs = {}, osInfo = {};
+    for (const l of linhas) {
+        const r = l.dados || l;
+        const id = String(r["ID OS"] || "").trim();
+        if (!id) continue;
+        const quando = ixcDataBR(r.DATA);
+        (eventosPorOs[id] = eventosPorOs[id] || []).push({ data: quando, evento: r.EVENTO, status: r.STATUS, msg: r.MENSAGEM });
+        if (!osInfo[id]) osInfo[id] = { cliente: r.CLIENTE, assunto: r.ASSUNTO, bairro: r.BAIRRO, cidade: r.CIDADE };
+        let o = porOs.get(id);
+        if (!o) porOs.set(id, o = { id, cliente: r.CLIENTE, cidade: String(r.CIDADE || "").trim(), bairro: r.BAIRRO, assunto: r.ASSUNTO,
+            setor: String(r.SETOR || "").trim(), status: "", ultima: null, agendamento: null, abertura: null });
+        if (!o.setor && r.SETOR) o.setor = String(r.SETOR).trim();
+        const ag = ixcDataBR(r.AGENDAMENTO); if (ag) o.agendamento = ag;
+        const ab = ixcDataBR(r["DATA/HORA ABERTURA"]); if (ab && (!o.abertura || ab < o.abertura)) o.abertura = ab;
+        if (!o.ultima || (quando && quando >= o.ultima)) { o.ultima = quando || o.ultima; o.status = String(r.STATUS || "").trim(); }
+    }
+    const itens = [...porOs.values()]
+        .filter(o => ixcNorm(o.status) !== "finalizada" && !TODAS_SETORES_FORA.has(ixcNorm(o.setor).toUpperCase()))
+        .map(o => {
+            const st = ixcNorm(o.status);
+            const grupo = TODAS_STATUS.find(g => g.st.includes(st));
+            return { ...o, grupo: grupo ? grupo.id : "outros", agendada: st === "agendada" && !!o.agendamento,
+                antiga: o.abertura ? o.abertura.getTime() < limiteAntiga : false };
+        });
+    const contaCidade = new Map();
+    for (const i of itens) { const c = i.cidade || "—"; contaCidade.set(c, (contaCidade.get(c) || 0) + 1); }
+    const cidades = [...contaCidade.entries()].map(([cidade, n]) => ({ cidade, n }))
+        .sort((a, b) => b.n - a.n || a.cidade.localeCompare(b.cidade, "pt-BR"));
+    return { itens, cidades, eventosPorOs, osInfo };
+}
+
+function htmlTodasAbertas(itens, sufixo) {
+    const porGrupo = id => itens.filter(i => i.grupo === id);
+    const outros = porGrupo("outros");
+    const cartoesStatus = [...TODAS_STATUS, ...(outros.length ? [{ id: "outros", rotulo: "Outros status", cor: "#64748b" }] : [])];
+    const setores = new Map();
+    for (const i of itens) { const s = i.setor || "Sem setor"; setores.set(s, (setores.get(s) || 0) + 1); }
+    const listaSetores = [...setores.entries()].sort((a, b) => b[1] - a[1]);
+    const antigas = itens.filter(i => i.antiga).length;
+    return `
+        <div class="todas-abertas">
+          <div class="kpi-row">
+            <button type="button" class="stat-tile stat-tile-link backlog-tile todas-total" data-todas="total" style="border-left:3px solid #2563eb">
+              <div class="stat-label">Total de OS em aberto${sufixo}</div>
+              <div class="stat-valor">${itens.length.toLocaleString("pt-BR")}</div>
+            </button>
+            <button type="button" class="stat-tile stat-tile-link backlog-tile" data-todas="antigas" style="border-left:3px solid #dc2626">
+              <div class="stat-label">Abertas há +${BACKLOG_DIAS_ANTIGA} dias</div>
+              <div class="stat-valor">${antigas.toLocaleString("pt-BR")}</div>
+            </button>
+          </div>
+          <div class="indicadores-secao-titulo">Por status${sufixo}</div>
+          <div class="cop-assuntos">${cartoesStatus.map(g => `
+            <button type="button" class="cop-assunto-card" data-todas="st:${g.id}" style="border-left:3px solid ${g.cor}">
+              <span class="cop-assunto-nome">${escaparHtml(g.rotulo)}</span>
+              <span class="cop-assunto-num">${porGrupo(g.id).length.toLocaleString("pt-BR")}</span>
+              <span class="cop-assunto-sub">${itens.length ? Math.round(porGrupo(g.id).length * 100 / itens.length) : 0}% do total</span>
+            </button>`).join("")}</div>
+          <div class="indicadores-secao-titulo">Por setor${sufixo}</div>
+          <div class="cop-assuntos">${listaSetores.map(([s, n], k) => `
+            <button type="button" class="cop-assunto-card" data-todas="setor:${k}">
+              <span class="cop-assunto-nome">${escaparHtml(backlogAssuntoCurto(s))}</span>
+              <span class="cop-assunto-num">${n.toLocaleString("pt-BR")}</span>
+              <span class="cop-assunto-sub">${porGrupoSetor(itens, s)}</span>
+            </button>`).join("")}</div>
+        </div>`;
+}
+
+function porGrupoSetor(itens, setor) {
+    const d = itens.filter(i => (i.setor || "Sem setor") === setor);
+    const ag = d.filter(i => i.grupo === "agendada").length, sem = d.filter(i => i.grupo === "aguardando" || i.grupo === "aberta").length;
+    return `${ag} agendadas · ${sem} sem agenda`;
+}
+
+function ligarTodasAbertas(alvo, itens, sufixo) {
+    const setores = new Map();
+    for (const i of itens) { const s = i.setor || "Sem setor"; setores.set(s, (setores.get(s) || 0) + 1); }
+    const listaSetores = [...setores.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s);
+    const sub = "Todas as OS em aberto (qualquer status)";
+    alvo.querySelectorAll("[data-todas]").forEach(b => b.addEventListener("click", () => {
+        const v = b.dataset.todas;
+        const ordenar = l => l.slice().sort((x, y) => (x.abertura || 0) - (y.abertura || 0));
+        if (v === "total") return abrirPopupBacklog("OS em aberto" + sufixo, ordenar(itens), sub, agendaTodasCache);
+        if (v === "antigas") return abrirPopupBacklog(`Abertas há +${BACKLOG_DIAS_ANTIGA} dias` + sufixo, ordenar(itens.filter(i => i.antiga)), sub, agendaTodasCache);
+        if (v.startsWith("st:")) {
+            const id = v.slice(3), g = TODAS_STATUS.find(x => x.id === id);
+            return abrirPopupBacklog((g ? g.rotulo : "Outros status") + sufixo, ordenar(itens.filter(i => i.grupo === id)), sub, agendaTodasCache);
+        }
+        if (v.startsWith("setor:")) {
+            const s = listaSetores[+v.slice(6)];
+            return abrirPopupBacklog(backlogAssuntoCurto(s) + sufixo, ordenar(itens.filter(i => (i.setor || "Sem setor") === s)), sub, agendaTodasCache);
+        }
+    }));
 }
 
 function recorteBacklog(model) {
@@ -163,13 +273,15 @@ function desenharBacklog(model) {
         return;
     }
 
-    if (backlogCidade && !model.cidades.some(c => c.cidade === backlogCidade)) backlogCidade = "";
+    const todas = agendaTodasCache;
+    const cidadesSel = todas ? todas.cidades : model.cidades;
+    if (backlogCidade && !cidadesSel.some(c => c.cidade === backlogCidade)) backlogCidade = "";
 
     const rec = recorteBacklog(model);
     const sufixo = backlogCidade ? ` · ${escaparHtml(backlogCidade)}` : "";
 
-    const opcoes = `<option value="">Todas as cidades (${model.total.toLocaleString("pt-BR")})</option>` +
-        model.cidades.map(c => `<option value="${escaparHtml(c.cidade)}"${c.cidade === backlogCidade ? " selected" : ""}>${escaparHtml(c.cidade)} (${c.n.toLocaleString("pt-BR")})</option>`).join("");
+    const opcoes = `<option value="">Todas as cidades (${(todas ? todas.itens.length : model.total).toLocaleString("pt-BR")})</option>` +
+        cidadesSel.map(c => `<option value="${escaparHtml(c.cidade)}"${c.cidade === backlogCidade ? " selected" : ""}>${escaparHtml(c.cidade)} (${c.n.toLocaleString("pt-BR")})</option>`).join("");
     const filtroCidade = `
         <div class="backlog-filtro">
             <label for="backlogCidadeSel">Cidade:</label>
@@ -191,8 +303,12 @@ function desenharBacklog(model) {
             <span class="cop-assunto-sub">mais antiga ${escaparHtml(backlogHaDias(g.maisAntiga))}</span>
         </button>`).join("");
 
+    const todasItens = todas ? (backlogCidade ? todas.itens.filter(i => (i.cidade || "—") === backlogCidade) : todas.itens) : null;
     alvo.innerHTML = `
         ${filtroCidade}
+        ${todasItens ? htmlTodasAbertas(todasItens, sufixo) : ""}
+        <h3 class="todas-campo-tit" style="margin:28px 0 4px;padding-top:16px;border-top:1px solid var(--cor-borda)">OS de campo (roteiro dos técnicos)${sufixo}</h3>
+        <p class="resumo-filtro">Só as OS que vão para a rua — sem recolhimento e sem os assuntos que não são de campo.</p>
         <div class="kpi-row">${kpis}</div>
         <div class="indicadores-secao-titulo">Em aberto por assunto${sufixo}</div>
         <div class="cop-assuntos">${cards}</div>
@@ -201,6 +317,7 @@ function desenharBacklog(model) {
         ${graficoCidades(model.cidades)}`;
 
     desenharBairrosBacklog(rec.itens, sufixo);
+    if (todasItens) ligarTodasAbertas(alvo, todasItens, sufixo);
 
     const sel = alvo.querySelector("#backlogCidadeSel");
     if (sel) sel.addEventListener("change", () => { backlogCidade = sel.value; desenharBacklog(model); });
@@ -420,13 +537,14 @@ function fecharPopupBacklog() {
 async function renderizarAgendaBacklog(forcar = false) {
     const alvo = document.getElementById("agendaAbertoConteudo");
     if (!alvo || agendaBacklogCarregando) return;
-    if (agendaBacklogCache && !forcar) { desenharBacklog(agendaBacklogCache); return; }
+    if (agendaBacklogCache && agendaTodasCache && !forcar) { desenharBacklog(agendaBacklogCache); return; }
 
     agendaBacklogCarregando = true;
     alvo.innerHTML = `<div class="ixc-vazio"><p>Carregando o que está em aberto…</p></div>`;
     try {
         const linhas = typeof buscarOsPendentesCacheado === "function" ? await buscarOsPendentesCacheado() : [];
         agendaBacklogCache = montarBacklog(linhas);
+        agendaTodasCache = montarTodasAbertas(linhas);
         desenharBacklog(agendaBacklogCache);
     } catch (erro) {
         console.error("Backlog em aberto:", erro);
