@@ -9,6 +9,8 @@
     let cache = null;                  // { porOs: Map, geradoEm, temSetor }
 
     const norm = t => String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
+    // setores que não entram nas Agendadas (24/11: infraestrutura não é da operação do COP)
+    const SETORES_FORA = new Set(["tecnico infraestrutura amo"]);
     const esc = t => (typeof escaparHtml === "function" ? escaparHtml(t) : String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])));
     const dataBR = s => {
         const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?/);
@@ -63,6 +65,7 @@
         for (const o of cache.porOs.values()) {
             if (!o.agenda || isoDia(o.agenda) !== alvo) continue;
             if (norm(o.status) === "finalizada") continue;
+            if (SETORES_FORA.has(norm(o.setor))) continue;
             out.push({ ...o, setorRot: o.setor || SEM_SETOR, cidadeRot: o.cidade || "Sem cidade" });
         }
         return out;
