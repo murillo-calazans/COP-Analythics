@@ -27,7 +27,7 @@ body.menu-roda-ativa .header-utilitarios{ margin-left:auto; }
 /* O conteúdo abre espaço só pra engrenagem RECOLHIDA — a expansão é por cima (overlay). */
 body.menu-roda-ativa:not(.nao-autenticado) main{
     margin-left:var(--gear-rw-min);
-    padding-bottom:124px;
+    padding-bottom:40px;
 }
 
 body.nao-autenticado .gear-rail,
@@ -118,4 +118,248 @@ body.nao-autenticado .menu-subroda{ display:none !important; }
 
 @media (prefers-reduced-motion:reduce){
     .gear-rail .gb,.gear-rail .ring,.gear-rail .it2,.gear-rail .gw,.gear-rail,.ro-sitem{ transition:none !important; }
+}
+
+/* ---------- Engrenagem lateral: miolo / botão "Voltar ao centro" ---------- */
+.gear-rail .casa{
+    position:absolute; left:0; top:50%; width:calc(var(--S)*.13); height:calc(var(--S)*.26); margin-top:calc(var(--S)*-.13);
+    border:0; padding:0; background:transparent; cursor:pointer; border-radius:0 999px 999px 0;
+}
+.gear-rail .casa::after{ content:""; position:absolute; inset:0; border-radius:inherit; background:#f5b33500; transition:background .2s; }
+.gear-rail .casa:hover::after,.gear-rail .casa:focus-visible::after{ background:#f5b33555; }
+.gear-rail .voltar-centro{
+    margin-top:10px; border:1px solid var(--cor-borda); background:var(--cor-fundo-card); color:var(--cor-texto);
+    border-radius:999px; padding:6px 12px; font-weight:600; font-size:12px; cursor:pointer;
+}
+.gear-rail .voltar-centro:hover{ border-color:var(--ro-ouro); }
+/* chegando da tela inicial: a engrenagem "pousa" na lateral */
+.gear-rail.chegando .gw{ animation:gear-chegar .7s cubic-bezier(.3,.8,.2,1) both; }
+@keyframes gear-chegar{ from{ transform:translateX(40vw) scale(2.4); opacity:0; } }
+
+/* ---------- Tela inicial: engrenagem PRINCIPAL no meio (js/ui/menuroda.js) ---------- */
+/* Na tela inicial a engrenagem lateral e a roda do rodapé somem; o conteúdo ocupa tudo. */
+body.cop-home .gear-rail,
+body.cop-home .menu-subroda{ display:none !important; }
+body.menu-roda-ativa.cop-home:not(.nao-autenticado) main{ margin-left:0; padding-bottom:40px; }
+
+.hub-home{
+    --mola:cubic-bezier(.25,1.2,.4,1); --suave:cubic-bezier(.3,.8,.2,1);
+    display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:28px;
+    min-height:calc(100vh - 150px); padding:12px 0 28px;
+}
+.hub-kpis{ display:grid; gap:14px; }
+.hub-kpis.esq{ justify-items:end; }
+.hub-kpis.dir{ justify-items:start; }
+.hub-kpi{
+    width:min(260px,100%); padding:16px 18px; text-align:left; cursor:pointer; font:inherit; color:var(--cor-texto);
+    background:var(--cor-fundo-card); border:1px solid var(--cor-borda); border-radius:14px;
+    display:flex; flex-direction:column; gap:2px;
+    transition:opacity .4s,transform .4s,border-color .2s;
+}
+.hub-kpi:hover,.hub-kpi:focus-visible{ border-color:var(--ro-ouro); outline:none; }
+.hub-kpi small{ color:var(--cor-texto-suave); font-size:12px; }
+.hub-kpi strong{ font-size:2rem; line-height:1.15; font-weight:800; font-variant-numeric:tabular-nums; }
+.hub-kpi strong.alerta{ color:var(--cor-erro,#DC2626); }
+.hub-kpi em{ font-style:normal; font-size:12px; color:var(--cor-texto-suave); }
+
+.hub-meio{ display:flex; flex-direction:column; align-items:center; }
+.hub-gear{
+    --tam:min(560px,calc(100vw - 40px),calc((100vh - 110px)/1.45));
+    position:relative; width:var(--tam); height:var(--tam); min-width:300px; min-height:300px;
+    transition:transform .65s var(--suave),opacity .5s;
+}
+.hub-gbw{ position:absolute; inset:0; transform:rotate(var(--rot,0deg)); transition:transform 1s var(--mola); }
+.hub-gb{ display:block; width:100%; height:100%; filter:drop-shadow(0 18px 34px #0c163066); animation:hub-giro 70s linear infinite; }
+@keyframes hub-giro{ to{ transform:rotate(360deg); } }
+
+.hub-ring{ position:absolute; inset:0; transform:rotate(var(--th,0deg)); transition:transform 1s var(--mola); }
+.hub-arm{ position:absolute; inset:0; transform:rotate(var(--a)); pointer-events:none; }
+.hub-no{
+    pointer-events:auto; position:absolute; left:calc(50% + var(--tam)*.355); top:50%;
+    width:calc(var(--tam)*.15); height:calc(var(--tam)*.15); margin:calc(var(--tam)*-.075) 0 0 calc(var(--tam)*-.075);
+    border-radius:50%; border:1.5px solid #ffffff38; background:#ffffff1a; color:#dbe5fb; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:4px;
+    font:600 clamp(9px,calc(var(--tam)*.019),11px)/1.05 inherit; text-align:center;
+    transform:rotate(calc(-1*var(--th,0deg) - var(--a)));
+    transition:transform 1s var(--mola),background .25s,color .25s,box-shadow .25s,scale .2s;
+}
+.hub-no svg{ width:38%; height:38%; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.hub-no:hover,.hub-no:focus-visible{ background:#ffffff36; scale:1.08; outline:none; }
+.hub-no[aria-current=true]{ background:var(--ro-ouro); color:#0c1630; border-color:var(--ro-ouro); box-shadow:0 0 0 7px #f5b33540; }
+
+.hub-pt{
+    position:absolute; left:100%; top:50%; margin:-11px 0 0 4px;
+    border:11px solid transparent; border-left:0; border-right:15px solid var(--ro-ouro);
+}
+.hub-centro{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:calc(var(--tam)*.4); height:calc(var(--tam)*.4); border-radius:50%; overflow:hidden;
+    background:radial-gradient(circle at 35% 30%,#1b3577,#0c1630 70%); border:3px solid var(--ro-ouro);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:14px; color:#fff;
+    box-shadow:inset 0 0 0 8px #ffffff10,0 10px 30px #0c163088;
+}
+.hub-centro small{ color:#9fb2dc; font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+.hub-centro b{ font-size:clamp(13px,calc(var(--tam)*.034),19px); margin-top:4px; line-height:1.15; }
+.hub-centro span{ color:#b6c4e3; font-size:12px; margin-top:4px; line-height:1.25; }
+.hub-abrir{
+    margin-top:10px; border:0; border-radius:999px; background:var(--ro-ouro); color:#0c1630;
+    font-weight:800; padding:7px 16px; cursor:pointer;
+}
+.hub-abrir:hover{ filter:brightness(1.08); }
+.hub-abrir:focus-visible,.hub-no:focus-visible{ outline:2px solid var(--ro-ouro); outline-offset:3px; }
+.hub-dica{ margin-top:14px; text-align:center; color:var(--cor-texto-suave); font-size:12px; }
+
+/* abertura: a engrenagem entra girando e os módulos saem do miolo */
+.hub-home.entrando .hub-gbw{ animation:hub-entrar 1.1s var(--suave) both; }
+@keyframes hub-entrar{ from{ transform:rotate(-200deg) scale(.55); opacity:0; } }
+.hub-home.entrando .hub-no{ animation:hub-sair-centro .8s var(--suave) both; animation-delay:calc(var(--i)*70ms + .25s); }
+@keyframes hub-sair-centro{ from{ left:50%; opacity:0; scale:.3; } }
+.hub-home.entrando .hub-kpi{ animation:hub-kpi-in .6s ease both .3s; }
+@keyframes hub-kpi-in{ from{ opacity:0; transform:translateY(10px); } }
+
+/* ao abrir um módulo: a engrenagem encolhe e vai pra lateral */
+.hub-home.saindo .hub-gear{ transform:translateX(calc(-50vw + 60px)) scale(.38); opacity:0; }
+.hub-home.saindo .hub-kpi,.hub-home.saindo .hub-dica{ opacity:0; transform:translateY(10px); }
+
+@media (max-width:1050px){
+    .hub-home{ grid-template-columns:repeat(2,minmax(0,1fr)); justify-items:center; min-height:0; }
+    .hub-meio{ grid-column:1/-1; grid-row:1; }
+    .hub-kpis{ justify-items:stretch !important; width:100%; }
+    .hub-kpi{ width:100%; }
+    .hub-gear{ --tam:min(560px,calc(100vw - 40px)); }
+}
+@media (max-width:520px){
+    .hub-home{ gap:12px; }
+    .hub-gear{ min-width:0; min-height:0; --tam:calc(100vw - 64px); }
+    .hub-pt{ display:none; }
+    .hub-kpi{ padding:12px 14px; }
+    .hub-kpi strong{ font-size:1.5rem; }
+    .hub-dica{ display:none; }
+}
+@media (prefers-reduced-motion:reduce){
+    .hub-gb,.hub-home.entrando .hub-gbw,.hub-home.entrando .hub-no,.hub-home.entrando .hub-kpi,.gear-rail.chegando .gw{ animation:none !important; }
+    .hub-gbw,.hub-ring,.hub-no,.hub-gear{ transition:none !important; }
+}
+
+/* ---------- Engrenagem dourada engrenada (24/11) ---------- */
+/* Tela inicial: canto de cima à esquerda; 5 dentes x 12 da grande = gira 2,4x, ao contrário. */
+.hub-gb2w{
+    position:absolute; left:calc(var(--tam)*-.1631); top:calc(var(--tam)*-.1631);
+    width:calc(var(--tam)*.4167); height:calc(var(--tam)*.4167);
+    transform:rotate(var(--rot2,0deg)); transition:transform 1s var(--mola);
+}
+.hub-gb2{ display:block; width:100%; height:100%; filter:drop-shadow(0 10px 20px #0c163055); animation:hub-giro 29.1667s linear infinite reverse; }
+.hub-home.entrando .hub-gb2w{ animation:hub-entrar2 1.1s var(--suave) both; }
+@keyframes hub-entrar2{ from{ transform:rotate(480deg) scale(.55); opacity:0; } }
+
+/* Lateral: a grande também gira sozinha (giro com mola fica no wrapper .gbr) e a dourada
+   pequena encaixa em cima à direita; 4 dentes x 10 = 2,5x, ao contrário. */
+.gear-rail .gbr{ position:absolute; inset:0; transform:rotate(var(--rot,0deg)); transition:transform 1s cubic-bezier(.25,1.2,.4,1); }
+.gear-rail .gbr .gb{ transform:none; transition:none; animation:hub-giro 70s linear infinite; }
+.gear-rail .gb2r{
+    position:absolute; left:calc(var(--S)*.6737); top:calc(var(--S)*-.2144);
+    width:calc(var(--S)*.4); height:calc(var(--S)*.4);
+    transform:rotate(var(--rot2,0deg)); transition:transform 1s cubic-bezier(.25,1.2,.4,1);
+}
+.gear-rail .gb2{ display:block; width:100%; height:100%; filter:drop-shadow(0 6px 14px #0c163055); animation:hub-giro 28s linear infinite reverse; }
+
+/* ---------- Engrenagem de ABAS (canto de baixo à esquerda) ---------- */
+/* 6 dentes x 12 da grande = gira 2x, ao contrário. As abas ficam paradas por cima (sempre em pé). */
+.hub-gb3w{
+    position:absolute; left:calc(var(--tam)*-.2317); top:calc(var(--tam)*.7317);
+    width:calc(var(--tam)*.5); height:calc(var(--tam)*.5);
+}
+.hub-gb3r{ position:absolute; inset:0; transform:rotate(var(--rot3,0deg)); transition:transform 1s var(--mola); }
+.hub-gb3{ display:block; width:100%; height:100%; filter:drop-shadow(0 12px 24px #0c163055); animation:hub-giro 35s linear infinite reverse; }
+.hub-home.entrando .hub-gb3r{ animation:hub-entrar3 1.1s var(--suave) both; }
+@keyframes hub-entrar3{ from{ transform:rotate(400deg) scale(.55); opacity:0; } }
+.hub-abas{ position:absolute; inset:0; }
+.hub-aba{
+    position:absolute; left:50%; top:50%;
+    width:calc(var(--tam)*.13); height:calc(var(--tam)*.13); margin:calc(var(--tam)*-.065) 0 0 calc(var(--tam)*-.065);
+    transform:rotate(var(--ang)) translateX(calc(var(--tam)*.1575)) rotate(calc(-1*var(--ang)));
+    border-radius:50%; border:1.5px solid #ffffff55; background:#0c1630e6; color:#dbe5fb; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; text-align:center; padding:5px; overflow-wrap:anywhere;
+    font-family:inherit; font-weight:700; font-size:clamp(9px,calc(var(--tam)*.0185),10.5px); line-height:1.1;
+    box-shadow:0 6px 14px #0c163055;
+    transition:background .25s,color .25s,box-shadow .25s,scale .2s;
+}
+.hub-aba:hover,.hub-aba:focus-visible{ background:#1b3577; color:#fff; scale:1.08; outline:none; }
+.hub-aba:focus-visible{ outline:2px solid #fff; outline-offset:3px; }
+.hub-aba.ent{ background:#fff; color:#0c1630; border-color:#fff; box-shadow:0 0 0 5px #ffffff55; }
+.hub-abas.troca .hub-aba{ animation:hub-aba-in .45s var(--suave) both; animation-delay:calc(var(--j)*60ms); }
+@keyframes hub-aba-in{ from{ opacity:0; scale:.3; } }
+
+/* espaço em cima (dourada) e embaixo (abas) pra nada sair da área */
+.hub-gear{ margin:calc(var(--tam)*.17) 0 calc(var(--tam)*.25); }
+
+@media (prefers-reduced-motion:reduce){
+    .hub-gb2,.hub-gb3,.gear-rail .gbr .gb,.gear-rail .gb2,.hub-home.entrando .hub-gb2w,.hub-home.entrando .hub-gb3r,.hub-abas.troca .hub-aba{ animation:none !important; }
+    .hub-gb2w,.hub-gb3r,.gear-rail .gbr,.gear-rail .gb2r{ transition:none !important; }
+}
+
+/* ---------- Cabeçalho: "Módulo › Aba" e some ao rolar (js/ui/menuroda.js) ---------- */
+.cab-local{
+    display:flex; align-items:center; gap:8px; min-width:0;
+    padding-left:20px; border-left:1px solid #ffffff22;
+    color:#9fb2dc; font-size:14px; white-space:nowrap;
+}
+.cab-local .cab-mod{ overflow:hidden; text-overflow:ellipsis; }
+.cab-local .cab-sep{ color:var(--ro-ouro); font-weight:800; }
+.cab-local .cab-aba{ color:#fff; font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis; }
+.cab-local.so-aba .cab-mod,.cab-local.so-aba .cab-sep{ display:none; }
+
+body.cab-auto:not(.nao-autenticado) header{
+    position:sticky; top:0; z-index:60;
+    transition:transform .3s cubic-bezier(.3,.8,.2,1),box-shadow .3s;
+}
+body.cab-auto.cab-oculto:not(.nao-autenticado) header{ transform:translateY(-100%); box-shadow:none; }
+/* a engrenagem lateral sobe junto quando o cabeçalho some */
+body.cab-oculto .gear-rail{ top:0; }
+.gear-rail{ transition:width .45s cubic-bezier(.3,.8,.2,1),top .3s cubic-bezier(.3,.8,.2,1); }
+
+@media (max-width:760px){
+    .cab-local{ display:none; }
+}
+
+/* ---------- Abas do módulo: engrenagem no canto de baixo à esquerda (js/ui/menuroda.js) ---------- */
+/* No lugar da meia-lua. Recolhida = um quarto da engrenagem com a aba atual; expande no mouse. */
+body.menu-roda-ativa .menu-subroda{ display:none !important; }
+.abas-canto{
+    --D:210px;
+    position:fixed; left:0; bottom:0; z-index:41;
+    width:calc(var(--D)/2 + 12px); height:calc(var(--D)/2 + 12px); overflow:hidden;
+    transition:width .45s cubic-bezier(.3,.8,.2,1),height .45s cubic-bezier(.3,.8,.2,1);
+}
+.abas-canto[hidden],body.cop-home .abas-canto,body.nao-autenticado .abas-canto{ display:none !important; }
+.abas-canto:hover,.abas-canto.aberta,.abas-canto:focus-within{ --D:540px; }
+.ac-gw{
+    position:absolute; left:calc(var(--D)/-2); bottom:calc(var(--D)/-2); width:var(--D); height:var(--D);
+    transition:all .45s cubic-bezier(.3,.8,.2,1);
+}
+.ac-gbr{ position:absolute; inset:0; transform:rotate(var(--rot3,0deg)); transition:transform 1s cubic-bezier(.25,1.2,.4,1); }
+.ac-gb{ display:block; width:100%; height:100%; filter:drop-shadow(0 10px 22px #0c163066); animation:hub-giro 35s linear infinite reverse; }
+.ac-abas{ position:absolute; inset:0; }
+.ac-aba{
+    --b:66px;
+    position:absolute; width:var(--b); height:var(--b);
+    /* recolhida: todas no mesmo ponto (45°), só a atual aparece */
+    left:calc(var(--D)*.212 - var(--b)/2); bottom:calc(var(--D)*.212 - var(--b)/2);
+    border-radius:50%; border:1.5px solid #ffffff55; background:#0c1630e6; color:#dbe5fb; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; text-align:center; padding:4px;
+    font-family:inherit; font-weight:700; font-size:9.5px; line-height:1.1; letter-spacing:-.01em;
+    box-shadow:0 6px 14px #0c163055; opacity:0; pointer-events:none; scale:.4;
+    transition:left .45s cubic-bezier(.3,.8,.2,1),bottom .45s cubic-bezier(.3,.8,.2,1),opacity .3s,scale .3s,background .2s,color .2s;
+}
+.ac-aba.atual{ opacity:1; scale:1; pointer-events:auto; background:#fff; color:#0c1630; border-color:#fff; box-shadow:0 0 0 5px #ffffff55; }
+.abas-canto:hover .ac-aba,.abas-canto.aberta .ac-aba,.abas-canto:focus-within .ac-aba{
+    left:calc(var(--D)*var(--cx) - var(--b)/2); bottom:calc(var(--D)*var(--cy) - var(--b)/2);
+    opacity:1; scale:1; pointer-events:auto; transition-delay:calc(var(--j)*35ms);
+}
+.ac-aba:not(.atual):hover,.ac-aba:not(.atual):focus-visible{ background:#1b3577; color:#fff; scale:1.08; outline:none; }
+.ac-aba:focus-visible{ outline:2px solid #fff; outline-offset:3px; }
+@media (max-width:760px){ .abas-canto{ display:none !important; } }
+@media (prefers-reduced-motion:reduce){
+    .ac-gb{ animation:none !important; }
+    .abas-canto,.ac-gw,.ac-gbr,.ac-aba{ transition:none !important; }
 }

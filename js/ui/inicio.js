@@ -83,7 +83,40 @@ function renderizarInicio() {
     preencherHojeNoCop();
     preencherAtrasadas();
     preencherResumoHero();
+    preencherKpisHub();
     if (typeof renderizarPainelOperacao === "function") renderizarPainelOperacao();
+}
+
+// Indicadores dos lados da engrenagem principal (js/ui/menuroda.js). Só reaproveita
+// o que o site já busca (cache das OS em aberto, agenda publicada, rompimentos do chip).
+let _kpisHubRetry = null;
+async function preencherKpisHub() {
+    const el = id => document.getElementById(id);
+    if (!el("hubKpi-abertas")) return;
+    const txt = (id, v) => { const e = el(id); if (e) e.textContent = v; };
+    const n = v => Number(v).toLocaleString("pt-BR");
+
+    txt("hubKpi-fech", n(fechamentosDeHoje()));
+
+    const romp = typeof rompCache !== "undefined" ? rompCache : null;
+    if (romp) {
+        txt("hubKpi-romp", n(romp.total || 0));
+        el("hubKpi-romp")?.classList.toggle("alerta", (romp.total || 0) > 0);
+        txt("hubKpiDet-romp", romp.temRompimento ? "com rompimento provável" : "grupos caídos juntos");
+    } else {
+        txt("hubKpi-romp", "—");
+        // o chip de rompimentos calcula em segundo plano: tenta de novo daqui a pouco
+        clearTimeout(_kpisHubRetry);
+        _kpisHubRetry = setTimeout(() => { if (document.body.classList.contains("cop-home")) preencherKpisHub(); }, 20000);
+    }
+
+    totalAgendaDeHoje().then(v => txt("hubKpi-agenda", v === null ? "—" : n(v))).catch(() => txt("hubKpi-agenda", "—"));
+
+    if (typeof buscarOsPendentesCacheado === "function") {
+        buscarOsPendentesCacheado()
+            .then(linhas => txt("hubKpi-abertas", n((linhas || []).length)))
+            .catch(() => txt("hubKpi-abertas", "—"));
+    } else txt("hubKpi-abertas", "—");
 }
 
 async function preencherResumoHero() {
