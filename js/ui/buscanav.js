@@ -19,7 +19,7 @@
             "clientes-cto": "Cadastro na CTO", alertas: "Alertas de recorrência", "ctos-lacres": "CTOs e Lacres", enderecos: "Endereços a corrigir",
             terceiras: "Terceiras — Painel", "terceiras-fechamento": "Terceiras — Fechamento mensal", "terceiras-lpu": "Terceiras — LPU", "terceiras-qualidade": "Terceiras — Qualidade",
             auditoria: "Auditoria operacional", "auditoria-ia": "Auditor IA",
-            "agenda-hoje": "Agenda (OS agendadas, em aberto, timeline)", "agenda-agendadas": "Ordens — relatório por setor e cidade","escala-hoje": "Escala técnica", "escala-contatos": "Contatos dos técnicos", "escala-capacidade": "Capacidade operacional",
+            "agenda-hoje": "Agenda (OS agendadas, em aberto, timeline)", "agenda-agendadas": "Ordens — relatório por setor e cidade","escala-hoje": "Escala técnica", "escala-contatos": "Contatos dos técnicos", "escala-capacidade": "Capacidade operacional", "escala-terceiras": "Programação das terceiras (capacidade e rotas)",
             usuarios: "Usuários", configuracoes: "Configurações"
         };
 

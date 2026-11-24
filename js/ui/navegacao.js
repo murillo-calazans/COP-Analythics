@@ -23,6 +23,7 @@ const MODULO_DA_SECAO = {
     "escala-hoje": "escala",
     "escala-contatos": "escala",
     "escala-capacidade": "escala",
+    "escala-terceiras": "escala",
     "usuarios": "admin",
     "configuracoes": "admin"
 };
@@ -35,6 +36,7 @@ function podeVerSecao(nome) {
     if (!abas || (typeof ehAdmin === "function" && ehAdmin())) return true;
     // OS agendadas saiu de dentro da Agenda do dia (23/11): quem vê a agenda vê as agendadas
     if (nome === "agenda-agendadas") return abas.includes("agenda-hoje");
+    if (nome === "escala-terceiras") return abas.includes("escala-capacidade");
     return abas.includes(nome);
 }
 
@@ -137,6 +139,7 @@ function mostrarSecao(nome) {
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "escala-contatos" && typeof renderizarEscalaContatos === "function") renderizarEscalaContatos();
     if (nome === "escala-capacidade" && typeof renderizarEscalaCapacidade === "function") renderizarEscalaCapacidade();
+    if (nome === "escala-terceiras" && typeof renderizarEscalaTerceiras === "function") renderizarEscalaTerceiras();
     if (nome === "agenda-agendadas" && typeof carregarAgendaAgendadas === "function") carregarAgendaAgendadas();
     if (nome === "agenda-hoje") {
         renderizarAgendaHoje();
