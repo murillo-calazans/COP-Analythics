@@ -36,7 +36,7 @@
 
         const LABELS = {
             dashboard: "Dashboard", tempos: "TMA · TMS · TME · TMR", indicadores: "Indicadores",
-            "cop-abertas": "COP em aberto", "gestao-cop": "Produção · TMR",
+            "cop-abertas": "COP em aberto", "gestao-cop": "Produção · TMR", "acompanhamento-cop": "Acompanhamento COP",
             ordens: "Ordens", tecnicos: "Técnicos", "mapa-calor": "Mapa de calor",
             "clientes-cto": "Cadastro na CTO", alertas: "Alertas", "ctos-lacres": "CTOs e Lacres",
             enderecos: "Endereços a corrigir",

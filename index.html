@@ -98,6 +98,11 @@
                 COP em aberto
             </button>
 
+            <button data-secao="acompanhamento-cop">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                Acompanhamento COP
+            </button>
+
             <button data-secao="gestao-cop">
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 Produção · TMR
@@ -595,6 +600,17 @@
             </div>
         </div>
         <div id="copAbertasConteudo"></div>
+    </section>
+
+    <!-- COP > Acompanhamento COP (js/ui/acompanhamentocop.js): grupo de técnicos de cada atendente (configuracoes_app, chave acompanhamento_cop). -->
+    <section id="secao-acompanhamento-cop" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>Acompanhamento COP</h2>
+                <p>Seus técnicos, as OS agendadas com as observações do cliente e os reagendamentos do dia</p>
+            </div>
+        </div>
+        <div id="acompCopConteudo"></div>
     </section>
 
     <section id="secao-gestao-cop" class="secao">
@@ -1521,6 +1537,7 @@
 <script src="js/ui/escalacontatos.js"></script>
 <script src="js/ui/escalacapacidade.js"></script>
 <script src="js/ui/escalaterceiras.js"></script>
+<script src="js/ui/acompanhamentocop.js"></script>
 <script src="js/ui/agendahoje.js"></script>
 <script src="js/agendador/motor.js?v=36"></script>
 <script src="js/ui/agendaixc.js"></script>

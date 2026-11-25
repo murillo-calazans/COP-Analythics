@@ -14,7 +14,7 @@
         const ROTULO_SECAO = {
             inicio: "Início",
             dashboard: "Dashboard", tempos: "TMA · TMS · TME · TMR", indicadores: "Indicadores",
-            "cop-abertas": "COP em aberto", "gestao-cop": "Produção · TMR",
+            "cop-abertas": "COP em aberto", "gestao-cop": "Produção · TMR", "acompanhamento-cop": "Acompanhamento COP (meus técnicos)",
             ordens: "Ordens", tecnicos: "Técnicos", "mapa-calor": "Mapa de calor",
             "clientes-cto": "Cadastro na CTO", alertas: "Alertas de recorrência", "ctos-lacres": "CTOs e Lacres", enderecos: "Endereços a corrigir",
             terceiras: "Terceiras — Painel", "terceiras-fechamento": "Terceiras — Fechamento mensal", "terceiras-lpu": "Terceiras — LPU", "terceiras-qualidade": "Terceiras — Qualidade",
