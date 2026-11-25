@@ -14,7 +14,8 @@
     const SETORES_FORA = new Set(["tecnico infraestrutura amo", "recolhimento terceirizado"]);   // não são dos técnicos do COP
     const EM_CAMPO = new Set(["deslocamento", "execucao"]);
 
-    const est = { cfg: null, grupo: null, diaOffset: 0, tec: null, cache: null, editando: false, aviso: null, timer: null, aba: "agendadas" };
+    const est = { cfg: null, grupo: null, diaOffset: 0, tec: null, cache: null, editando: false, aviso: null, timer: null, aba: "agendadas", tl: null, tlTick: null };
+    const ATUALIZA_MS = 10 * 60000;    // 25/11 (usuário): OS e timeline de 10 em 10 min — o robô publica nesse ritmo
     const $ = id => document.getElementById(id);
     const norm = t => String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
     const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -184,8 +185,15 @@
         const tecSel = est.tec;
         const filtraTec = arr => tecSel ? arr.filter(x => x.tec && String(x.tec.id || x.tec.nome) === tecSel) : arr;
         const diag = `${est.cache.porOs.size} OS em aberto lidas · ${est.cache.reag.length} reagendamentos · login ${APP?.usuario?.email || "?"} (${APP?.usuario?.papel || "?"}) · grupo ${grupoDoUsuario() >= 0 ? grupos()[grupoDoUsuario()].nome : "nenhum pelo login"}`;
-        alvo.innerHTML = htmlTopo(D) + htmlKpis(D) + `<div class="acp-colunas">${htmlTecnicos(D)}<div class="acp-principal">${htmlAbas(D, filtraTec)}</div></div>` + `<p class="acp-diag">${esc(diag)}</p>`;
+        const corpo = est.aba === "timeline"
+            ? `<div class="acp-principal">${htmlAbas(D, filtraTec)}</div>`
+            : `<div class="acp-colunas">${htmlTecnicos(D)}<div class="acp-principal">${htmlAbas(D, filtraTec)}</div></div>`;
+        alvo.innerHTML = htmlTopo(D) + htmlKpis(D) + corpo + `<p class="acp-diag">${esc(diag)}</p>`;
         ligar(alvo, D);
+        if (est.aba === "timeline" && est.diaOffset === 0) {
+            if (est.tl && est.tl.dados) desenharTimeline();
+            else if (!est.tl || (!est.tl.carregando && !est.tl.erro)) carregarTimeline().then(render);
+        }
     }
 
     function htmlTopo({ g }) {
@@ -258,8 +266,125 @@
         return `<div class="acp-abas">
               <button type="button" class="${est.aba === "agendadas" ? "on" : ""}" data-ac-aba="agendadas">Ordens agendadas <b>${ag.length}</b></button>
               <button type="button" class="${est.aba === "reagendadas" ? "on" : ""}" data-ac-aba="reagendadas">Reagendadas <b>${re.length}</b></button>
+              <button type="button" class="${est.aba === "timeline" ? "on" : ""}" data-ac-aba="timeline">Timeline</button>
             </div>
-            ${est.aba === "agendadas" ? htmlAgendadas(ag) : htmlReagendadas(re)}`;
+            ${est.aba === "agendadas" ? htmlAgendadas(ag) : est.aba === "reagendadas" ? htmlReagendadas(re) : htmlTimeline(D.g)}`;
+    }
+
+    // ---------- timeline: arquivo timeline-dados.json que o robô publica no R2 a cada 10 min ----------
+    // Usa o mesmo motor/desenho da Agenda > Timeline (js/ui/timelineagenda.js), só com os técnicos do grupo.
+    const semSufixo = n => norm(n).replace(/\s*-\s*(veloz|technomais|azul|motoexpress)\s*$/, "").trim();
+    const mesmoNome = (a, b) => {
+        const x = semSufixo(a).split(/\s+/).filter(Boolean), y = semSufixo(b).split(/\s+/).filter(Boolean);
+        return x.length > 0 && y.length > 0 && (x.join(" ") === y.join(" ") || (x[0] === y[0] && x[x.length - 1] === y[y.length - 1]));
+    };
+    async function carregarTimeline() {
+        est.tl = { ...(est.tl || {}), carregando: true, erro: null };
+        try {
+            if (typeof lerArquivoCop !== "function" || typeof tlMontar !== "function") throw new Error("a timeline não está disponível nesta página");
+            const j = await lerArquivoCop("timeline-dados.json");
+            if (!j || !Array.isArray(j.movs)) throw new Error("o robô ainda não publicou a timeline de hoje");
+            const movs = [...j.movs].sort((a, b) => String(a.data).localeCompare(String(b.data)));
+            const porOs = tlPorOs(movs);
+            const ordensMap = new Map((j.ordens || []).map(o => [String(o.id), o]));
+            const previstas = tlAgendadasPrevistas(j.osHoje || [], new Set(porOs.keys()));
+            est.tl = { dados: tlMontar(movs, ordensMap, previstas, []), geradoEm: j.geradoEm, lidoEm: Date.now() };
+        } catch (e) {
+            console.error("Acompanhamento COP / timeline:", e);
+            est.tl = { ...(est.tl || {}), carregando: false, erro: e.message || String(e) };
+        }
+    }
+    function linhasTimeline(g) {
+        const linhas = (est.tl && est.tl.dados && est.tl.dados.linhasTec) || [];
+        return (g.tecnicos || []).filter(t => !est.tec || String(t.id || t.nome) === est.tec).map(t => {
+            const blocos = [];
+            for (const lt of linhas) if (mesmoNome(lt.nome, t.nome)) blocos.push(...lt.blocos);
+            blocos.sort((a, b) => a.ini - b.ini);
+            return { t, blocos };
+        });
+    }
+    function htmlTimeline(g) {
+        if (est.diaOffset !== 0) return `<div class="acp-card acp-vazio">A timeline mostra só o dia de hoje. <button type="button" class="acp-btn" data-ac-ir="0">Ir para hoje</button></div>`;
+        if (!est.tl || (!est.tl.dados && !est.tl.erro)) return `<div class="acp-card acp-vazio">Montando a timeline do dia…</div>`;
+        if (!est.tl.dados) return `<div class="acp-card acp-vazio">Não consegui montar a timeline: ${esc(est.tl.erro)} <button type="button" class="acp-btn" data-ac-recarregar>Tentar de novo</button></div>`;
+        const rows = linhasTimeline(g);
+        const c = { fin: 0, over: 0, exec: 0, desloc: 0, interr: 0, prev: 0 };
+        rows.forEach(r => r.blocos.forEach(b => {
+            if (b.tipo === "prev") c.prev++;
+            else if (b.estado === "fin") c.fin++; else if (b.estado === "fin-over") c.over++;
+            else if (b.estado === "exec") c.exec++; else if (b.estado === "desloc") c.desloc++; else if (b.estado === "interr") c.interr++;
+        }));
+        const ger = est.tl.geradoEm ? new Date(est.tl.geradoEm) : null;
+        const velho = ger && (Date.now() - ger) > 30 * 60000;
+        return `<div id="acpTimeline" class="acp-card">
+            <div class="acp-tl-topo">
+              <div class="acp-tl-res">
+                <span class="r fin"><b>${c.fin}</b> feitas no tempo</span><span class="r over"><b>${c.over}</b> passaram do tempo</span>
+                <span class="r exec"><b>${c.exec}</b> em execução</span><span class="r desloc"><b>${c.desloc}</b> em deslocamento</span>
+                <span class="r interr"><b>${c.interr}</b> não concluídas</span><span class="r prev"><b>${c.prev}</b> previstas</span>
+              </div>
+              <span class="acp-suave ${velho ? "acp-velho" : ""}">${ger ? `timeline do IXC às ${hora(ger)}${velho ? " — o robô não atualiza há mais de 30 min" : ""} · ` : ""}atualiza de 10 em 10 min</span>
+            </div>
+            <div class="tl-legend">
+              <span class="it"><span class="tl-sw fin"></span> Feita no tempo</span><span class="it"><span class="tl-sw over"></span> Passou do tempo</span>
+              <span class="it"><span class="tl-sw exec"></span> Em execução</span><span class="it"><span class="tl-sw desloc"></span> Deslocamento</span>
+              <span class="it"><span class="tl-sw interr"></span> Não concluída</span><span class="it"><span class="tl-sw prev"></span> Prevista</span>
+              <span class="it"><span class="tl-sw agora"></span> Agora</span><span class="acp-suave">clique numa OS para ver o histórico</span>
+            </div>
+            <div class="tl-board" id="acpTlBoard"><div class="tl-grid" id="acpTlGrid"></div></div>
+          </div>`;
+    }
+    function desenharTimeline() {
+        const board = $("acpTlBoard"), grid = $("acpTlGrid");
+        if (!board || !grid || !est.tl || !est.tl.dados) return;
+        const rows = linhasTimeline(grupos()[est.grupo]);
+        const NAMEW = 220, hw = Math.max(70, Math.floor((board.clientWidth - NAMEW) / (TL_JANELA_FIM - TL_JANELA_INI)));
+        const laneW = (TL_DIA_FIM - TL_DIA_INI) * hw;
+        const antes = _tlHourW;
+        _tlHourW = hw;                       // tlBlocoHtml usa a largura global da hora; devolvo no fim
+        try {
+            let html = `<div class="tl-cell tl-corner tl-head">Técnico</div><div class="tl-cell tl-head tl-hours" style="height:38px">`;
+            for (let h = TL_DIA_INI; h < TL_DIA_FIM; h++) html += `<span class="tl-htick" style="left:${(h - TL_DIA_INI) * hw}px">${h}h</span>`;
+            html += `</div>`;
+            rows.forEach(({ t, blocos }, i) => {
+                const fx = tlFaixas(blocos), alt = Math.max(1, fx.n) * TL_ROW + 8, zebra = i % 2 ? " zebra" : "";
+                html += `<div class="tl-cell tl-name${zebra}${blocos.length ? "" : " semos"}" style="min-height:${alt}px"><span class="nm">${esc(curto(t.nome))}</span><span class="mt"><span>${esc([t.cidade, t.equipe].filter(Boolean).join(" · "))}</span></span></div>`;
+                const semOs = t.dupla ? `sem OS no nome dele — anda com ${curto(t.dupla)}` : "sem OS hoje";
+                html += `<div class="tl-cell tl-lane${zebra}" style="min-height:${alt}px">${blocos.length ? "" : `<span class="tl-semos-chip">${esc(semOs)}</span>`}${blocos.map((b, k) => tlBlocoHtml(b, fx.de[k])).join("")}</div>`;
+            });
+            html += `<div class="tl-nowline" id="acpTlNow"><span class="tl-nowflag" id="acpTlNowFlag">--:--</span></div>`;
+            grid.style.width = (NAMEW + laneW) + "px";
+            grid.style.gridTemplateColumns = NAMEW + "px " + laneW + "px";
+            grid.style.setProperty("--tl-hourw", hw + "px");
+            grid.innerHTML = html;
+            grid.dataset.hw = hw; grid.dataset.namew = NAMEW;
+        } finally { _tlHourW = antes; }
+        // começa na janela de trabalho, com o "agora" à vista
+        const agoraH = tlHoras(new Date());
+        board.scrollLeft = Math.max(0, (Math.min(Math.max(TL_JANELA_INI, agoraH - 6), 24 - (TL_JANELA_FIM - TL_JANELA_INI)) - TL_DIA_INI) * hw);
+        grid.querySelectorAll(".tl-os, .tl-blk").forEach(el => {
+            el.style.cursor = "pointer";
+            el.addEventListener("click", () => { const m = String(el.title || "").match(/#(\d+)/); if (m) abrirHistorico(m[1]); });
+        });
+        tickTimeline();
+        if (!est.tlTick) est.tlTick = setInterval(tickTimeline, 30000);
+    }
+    function tickTimeline() {
+        const grid = $("acpTlGrid");
+        if (!grid || !grid.dataset.hw) return;
+        const hw = +grid.dataset.hw, nw = +grid.dataset.namew, d = new Date(), h = tlHoras(d);
+        const nl = $("acpTlNow"), nf = $("acpTlNowFlag");
+        if (nl) { nl.style.left = (nw + (Math.min(TL_DIA_FIM, Math.max(TL_DIA_INI, h)) - TL_DIA_INI) * hw) + "px"; nf.textContent = hora(d); }
+        grid.querySelectorAll('.tl-os[data-live="1"]').forEach(el => {
+            const ini = +el.dataset.ini, exec = +el.dataset.exec, exp = +el.dataset.exp;
+            el.style.width = Math.max(16, (h - ini) * hw) + "px";
+            const p = el.querySelector(".tl-perf-live");
+            if (!p) return;
+            if (el.classList.contains("desloc")) { p.textContent = `${Math.round((h - ini) * 60)}min em deslocamento`; return; }
+            const min = (h - exec) * 60, over = min > exp;
+            el.classList.toggle("over", over);
+            p.textContent = over ? `▲ passou +${Math.round(min - exp)}min` : `▶ ${Math.round(min)}min · no tempo`;
+        });
     }
 
     const chipObs = o => `<span class="acp-obs ${o.cls}" title="${esc((o.data ? o.data.toLocaleString("pt-BR").slice(0, 17) + " — " : "") + o.fonte)}">${esc(o.rot)}</span>`;
@@ -355,7 +480,7 @@
         on("[data-ac-tec]", "click", e => { const k = e.currentTarget.dataset.acTec; est.tec = !k || est.tec === k ? null : k; render(); });
         on("[data-ac-aba]", "click", e => { est.aba = e.currentTarget.dataset.acAba; render(); });
         on("[data-ac-os]", "click", e => { e.preventDefault(); abrirHistorico(e.currentTarget.dataset.acOs); });
-        on("[data-ac-recarregar]", "click", () => carregarOs(true));
+        on("[data-ac-recarregar]", "click", async () => { if (est.tl) await carregarTimeline(); carregarOs(true); });
         on("[data-ac-editar]", "click", () => { est.editando = true; est.aviso = null; render(); });
         on("[data-ac-copiar]", "click", async e => {
             const b = e.currentTarget, txt = b.dataset.acCopiar, antes = b.textContent;
@@ -458,12 +583,14 @@
         catch (e) { alvo.innerHTML = `<div class="acp-card acp-vazio">Não consegui ler os grupos: ${esc(e.message || e)}</div>`; return; }
         render();
         if (!est.cache || Date.now() - est.cache.lidoEm > 120000) await carregarOs(false);
-        // atualiza sozinho a cada 5 min enquanto a aba estiver aberta
+        // atualiza sozinho de 10 em 10 min enquanto a aba estiver aberta (OS + timeline)
         clearInterval(est.timer);
-        est.timer = setInterval(() => {
-            if (!$("secao-acompanhamento-cop")?.classList.contains("ativa")) return clearInterval(est.timer);
-            if (!est.editando) carregarOs(true);
-        }, 300000);
+        est.timer = setInterval(async () => {
+            if (!$("secao-acompanhamento-cop")?.classList.contains("ativa")) { clearInterval(est.timer); clearInterval(est.tlTick); est.tlTick = null; return; }
+            if (est.editando) return;
+            if (est.tl && est.tl.dados) await carregarTimeline();
+            await carregarOs(true);
+        }, ATUALIZA_MS);
     }
 
     function estilo() {
@@ -554,8 +681,27 @@ html[data-tema="dark"] .acp-pill.re{background:#7f1d1d;color:#fecaca}
 @media (max-width:980px){.acp-colunas{grid-template-columns:1fr}.acp-tecs{position:static;max-height:none;order:2}.acp-principal{order:1}}
 .acp-diag{margin:4px 0 0;font-size:.72rem;color:var(--cor-texto-suave);opacity:.75}
 @media (max-width:700px){.acp-grid{grid-template-columns:1fr}}`;
+        // cores/variáveis da timeline da Agenda valem também aqui
+        if (typeof TL_CSS === "string") s.textContent += "\n" + TL_CSS.replace(/#agendaTimelineConteudo/g, "#acpTimeline");
+        s.textContent += `
+#acpTimeline{padding:14px}
+.acp-tl-topo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;margin-bottom:10px}
+.acp-tl-res{display:flex;flex-wrap:wrap;gap:6px}
+.acp-tl-res .r{font-size:.8rem;padding:3px 10px;border-radius:999px;border:1px solid var(--cor-borda)}
+.acp-tl-res .r b{font-size:.95rem;margin-right:3px}
+.acp-tl-res .fin{color:var(--tl-verde);background:var(--tl-verde-bg)} .acp-tl-res .over{color:var(--tl-amarelo);background:var(--tl-amarelo-bg)}
+.acp-tl-res .exec{color:var(--tl-azul);background:var(--tl-azul-bg)} .acp-tl-res .desloc{color:var(--tl-roxo);background:var(--tl-roxo-bg)}
+.acp-tl-res .interr{color:var(--tl-rosa);background:var(--tl-rosa-bg)} .acp-tl-res .prev{color:var(--cor-texto-suave)}
+.acp-velho{color:#b91c1c;font-weight:600}
+#acpTimeline .tl-board{max-height:72vh}`;
         document.head.appendChild(s);
     }
+
+    let _rz;
+    window.addEventListener("resize", () => {
+        if (est.aba !== "timeline" || !$("acpTlGrid")) return;
+        clearTimeout(_rz); _rz = setTimeout(desenharTimeline, 150);
+    });
 
     window.renderizarAcompanhamentoCop = renderizar;
 })();
