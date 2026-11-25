@@ -14,10 +14,7 @@
 
     const MODULOS = [
         { id: "inicio",    titulo: "Início",                  href: "index.html",               secao: "inicio" },
-        { id: "ordens",    titulo: "Gestão de Relatórios",    href: "index.html#dashboard",     secao: "dashboard" },
-        { id: "cop",       titulo: "Gestão do COP",           href: "index.html#cop-abertas",   secao: "cop-abertas" },
-        { id: "terceiras", titulo: "Gestão de Terceiras",     href: "index.html#terceiras",     secao: "terceiras" },
-        { id: "auditoria", titulo: "Auditoria",               href: "index.html#auditoria",     secao: "auditoria" },
+        { id: "cop",       titulo: "Gestão do COP",           href: "index.html#acompanhamento-cop", secao: "acompanhamento-cop" },
         { id: "agendador", titulo: "Gestão de Ordens",        href: "index.html#agenda-agendadas", secao: "agenda-agendadas" },
         { id: "escala",    titulo: "Escala",                  href: "index.html#escala-hoje",   secao: "escala-hoje" },
         { id: "clientes",  titulo: "Gestão de Clientes",      href: "index.html#clientes-cto",  secao: "clientes-cto" },
@@ -159,7 +156,7 @@ body.menu-lateral-aberto .menu-lateral-fundo{ opacity:1; pointer-events:auto; }
         host.prepend(botao);
 
         const itens = MODULOS.map(m =>
-            (m.id === "admin" || m.id === "ordens" ? '<div class="separador" role="presentation"></div>' : "") +
+            (m.id === "admin" || m.id === "agendador" ? '<div class="separador" role="presentation"></div>' : "") +
             `<a href="${m.href}" data-modulo="${m.id}"${m.secao ? ` data-secao-modulo="${m.secao}"` : ""}>${svg(ICONES[m.id])}<span>${m.titulo}</span><span class="menu-lateral-badge" hidden></span></a>`
         ).join("");
 

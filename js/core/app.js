@@ -16,47 +16,17 @@ async function iniciarSistema() {
     registrarEventos();
     registrarNavegacao();
     registrarEscalaHoje();
-    registrarAgendaHoje();
     registrarAbasAgenda();
     registrarRoboComando();
     registrarAdminUsuarios();
-    registrarTerceiras();
     registrarTema();
-    registrarFormularioConfig();
-    registrarFiltroAssuntos();
-    registrarFiltroGlobal();
-    registrarFiltroInterativo();
-    registrarFunilAssuntos();
-    registrarDiagnosticosExcluidos();
-    registrarDiagnosticosExcluidosRecorrencia();
-    registrarDiagnosticosImprodutivos();
-    registrarDiagnosticosNaoResolvidos();
-    registrarAssuntosIncluidosCancelamento();
-    registrarSetoresCop();
-    registrarBuscaAuditoria();
-    registrarBuscaTecnicos();
     registrarLogin();
-    registrarAbasLogs();
     registrarAbasAlertas();
     registrarModal("modalAtrasadas");
-    registrarModal("modalImportar");
     registrarModal("modalOS");
-    registrarModal("modalOsIxc");
-    registrarModal("modalFiltro");
-    registrarModal("modalAssuntosIncluidosCancelamento");
-    registrarModal("modalDiagnosticosExcluidos");
-    registrarModal("modalDiagnosticosExcluidosRecorrencia");
-    registrarModal("modalDiagnosticosImprodutivos");
-    registrarModal("modalTecnico");
-    registrarModal("modalTecnicoDetalhe");
-    registrarModal("modalGraficoCompleto");
     registrarModal("modalCliente");
-    registrarModal("modalFiltroGlobal");
-    registrarModal("modalSeletorFiltro");
-    registrarModal("modalFunilAssuntos");
-    registrarModal("modalLogs");
-    registrarModal("modalSetoresCop");
-    registrarModal("modalTmrCopDetalhe");
+    registrarModal("modalOsIxc");
+    registrarModal("modalGraficoCompleto");
 
     const sessao = await obterSessaoAtual();
 
@@ -98,11 +68,7 @@ async function inicializarDadosAutenticado() {
 
     const tinhaCache = await restaurarDoCacheLocal();
 
-    if (tinhaCache) {
-        renderizarDashboard();
-    } else {
-        mostrarCarregandoDados();
-    }
+    if (!tinhaCache) mostrarCarregandoDados();
 
     buscarCorrecoesAuditoria().then(mapa => { APP.correcoesAuditoria = mapa; });
 
@@ -110,67 +76,34 @@ async function inicializarDadosAutenticado() {
         mensagem => atualizarTextoCarregando(`Carregando ${mensagem}...`),
         tinhaCache
     );
+    if (carregado && typeof atualizarAlertas === "function") {
+        APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
+        atualizarAlertas();
+    }
 
     if (!tinhaCache) esconderCarregandoDados();
 
     const status = document.getElementById("status");
 
     if (carregado) {
-        fecharModal("modalImportar");
-
-        APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
-        atualizarAlertas();
-
         if (status) {
             status.textContent =
                 `Dados carregados: ${APP.dados.ordens.size} ordens, ` +
                 `${APP.referencias.operadores.size} operadores, ${APP.referencias.eventos.size} eventos, ` +
                 `${APP.referencias.diagnosticos.size} diagnósticos.`;
         }
-    } else if (podeImportar()) {
-
-        abrirModalImportar();
     }
-
-    renderizarDashboard();
 
     const secaoAntes = secaoAtiva();
     abrirSecaoDoEndereco();
-    if (secaoAtiva() === secaoAntes && secaoAntes !== "dashboard") renderizarSecaoAtiva();
+    if (secaoAtiva() === secaoAntes) renderizarSecaoAtiva();
 
     iniciarAoVivo();
 }
 
 function registrarEventos() {
-
-    const botaoAbrirImportar = document.getElementById("btnAbrirImportar");
-    const botaoGerarRelatorio = document.getElementById("btnGerarRelatorio");
-    const botaoLimparDados = document.getElementById("btnLimparDados");
-    const botaoAbrirLogs = document.getElementById("btnAbrirLogs");
-    const botaoLimparCache = document.getElementById("btnLimparCache");
-    const botaoRelatorioGeral = document.getElementById("btnRelatorioGeral");
-    const botaoRelatorioTecnicos = document.getElementById("btnRelatorioTecnicos");
-    const botaoBaixarPlanilhaOS = document.getElementById("btnBaixarPlanilhaOS");
-    const botaoRelatorioRecorrencia = document.getElementById("btnRelatorioRecorrencia");
-    const botaoBaixarPlanilhaRecorrencia = document.getElementById("btnBaixarPlanilhaRecorrencia");
-    const botaoRelatorioAuditoria = document.getElementById("btnRelatorioAuditoria");
-    const botaoRelatorioOrdens = document.getElementById("btnRelatorioOrdens");
-    const botaoRelatorioIndicadores = document.getElementById("btnRelatorioIndicadores");
-
-    if (botaoAbrirImportar) botaoAbrirImportar.addEventListener("click", abrirModalImportar);
-    if (botaoGerarRelatorio) botaoGerarRelatorio.addEventListener("click", gerarRelatorio);
-    if (botaoLimparDados) botaoLimparDados.addEventListener("click", limparDadosImportados);
-    if (botaoAbrirLogs) botaoAbrirLogs.addEventListener("click", abrirModalLogs);
-    if (botaoLimparCache) botaoLimparCache.addEventListener("click", limparCacheEAtualizar);
-    if (botaoRelatorioGeral) botaoRelatorioGeral.addEventListener("click", gerarRelatorioGeral);
-    if (botaoRelatorioTecnicos) botaoRelatorioTecnicos.addEventListener("click", gerarRelatorioTecnicos);
-    if (botaoBaixarPlanilhaOS) botaoBaixarPlanilhaOS.addEventListener("click", gerarPlanilhaDetalheOS);
-    if (botaoRelatorioRecorrencia) botaoRelatorioRecorrencia.addEventListener("click", gerarRelatorioRecorrencia);
-    if (botaoBaixarPlanilhaRecorrencia) botaoBaixarPlanilhaRecorrencia.addEventListener("click", gerarPlanilhaRecorrencia);
-    if (botaoRelatorioAuditoria) botaoRelatorioAuditoria.addEventListener("click", gerarRelatorioAuditoria);
-    if (botaoRelatorioOrdens) botaoRelatorioOrdens.addEventListener("click", gerarRelatorioOrdens);
-    if (botaoRelatorioIndicadores) botaoRelatorioIndicadores.addEventListener("click", gerarRelatorioIndicadores);
-
+    // 25/11: relatórios, importação de planilha e logs foram para o site Gestão COP
+    document.getElementById("btnLimparCache")?.addEventListener("click", limparCacheEAtualizar);
 }
 
 function mostrarCarregandoDados() {

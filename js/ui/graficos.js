@@ -1,3 +1,11 @@
+// 25/11: o filtro global/interativo foi para o Gestão COP; aqui o gráfico só mostra (clique não filtra).
+if (typeof campoInterativoAtivo !== "function") {
+    window.CAMPOS_FILTRO_INTERATIVO = window.CAMPOS_FILTRO_INTERATIVO || {};
+    window.campoInterativoAtivo = () => false;
+    window.rotuloEstaNoFiltro = () => false;
+    window.cliqueFiltroInterativo = () => {};
+}
+
 function dadosComRealce(campo, dadosJaCalculados, calcular) {
     if (!campoInterativoAtivo(campo)) return dadosJaCalculados;
     return calcular(FiltroEngine.ordensFiltradasExceto(CAMPOS_FILTRO_INTERATIVO[campo].chaveEstado));

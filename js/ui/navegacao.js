@@ -1,24 +1,10 @@
 const MODULO_DA_SECAO = {
     "inicio": "inicio",
-    "dashboard": "ordens",
-    "tempos": "ordens",
-    "indicadores": "ordens",
-    "cop-abertas": "cop",
-    "gestao-cop": "cop",
     "acompanhamento-cop": "cop",
-    "ordens": "ordens",
-    "tecnicos": "ordens",
-    "mapa-calor": "ordens",
     "clientes-cto": "clientes",
     "alertas": "clientes",
     "ctos-lacres": "clientes",
     "enderecos": "clientes",
-    "terceiras": "terceiras",
-    "terceiras-fechamento": "terceiras",
-    "terceiras-lpu": "terceiras",
-    "terceiras-qualidade": "terceiras",
-    "auditoria": "auditoria",
-    "auditoria-ia": "auditoria",
     "agenda-agendadas": "agendador",   // 1ª aba "Ordens" (relatórios)
     "agenda-hoje": "agendador",        // 2ª aba "Agenda"
     "escala-hoje": "escala",
@@ -46,8 +32,6 @@ function podeVerSecao(nome) {
 function primeiraSecaoLiberada(modulo) {
     return Object.keys(MODULO_DA_SECAO).find(s => MODULO_DA_SECAO[s] === modulo && podeVerSecao(s)) ?? null;
 }
-
-const SECOES_INDICADORES = ["tempos", "indicadores", "gestao-cop"];
 
 function registrarNavegacao() {
     const botoes = document.querySelectorAll("[data-secao]");
@@ -82,7 +66,7 @@ function abrirSecaoDoEndereco() {
 }
 
 function atualizarMenuDoModulo(nome) {
-    const modulo = MODULO_DA_SECAO[nome] || "ordens";
+    const modulo = MODULO_DA_SECAO[nome] || "inicio";
 
     const abas = document.querySelectorAll("nav.menu [data-secao]");
     const doModulo = [...abas].filter(b => MODULO_DA_SECAO[b.dataset.secao] === modulo && podeVerSecao(b.dataset.secao));
@@ -92,10 +76,6 @@ function atualizarMenuDoModulo(nome) {
 }
 
 function mostrarSecao(nome) {
-
-    if (MODULO_DA_SECAO[nome] === "terceiras" && typeof podeEditarOperacao === "function" && !podeEditarOperacao()) {
-        return mostrarSecao("inicio");
-    }
 
     if (nome === "configuracoes" && typeof ehAdmin === "function" && !ehAdmin()) {
         return mostrarSecao("inicio");
@@ -128,17 +108,10 @@ function mostrarSecao(nome) {
     if (location.hash.slice(1) !== nome) history.replaceState(null, "", nome === "inicio" ? location.pathname : `#${nome}`);
 
     if (nome === "inicio") renderizarInicio();
-    if (nome === "dashboard") renderizarDashboard();
-    if (nome === "cop-abertas") renderizarCopAbertas();
-    if (nome === "auditoria") renderizarPainelAuditoriaOperacional();
-    if (nome === "ordens") renderizarOrdens();
-    if (nome === "tecnicos") renderizarSecaoTecnicos();
-    if (SECOES_INDICADORES.includes(nome)) renderizarSecaoIndicadores();
     if (nome === "alertas") renderizarAlertas();
     if (nome === "ctos-lacres") renderizarCtosLacres();
     if (nome === "clientes-cto") renderizarClientesCto();
     if (nome === "enderecos") renderizarEnderecos();
-    if (nome === "mapa-calor") renderizarMapaCalor();
     if (nome === "escala-hoje") renderizarEscalaHoje();
     if (nome === "escala-contatos" && typeof renderizarEscalaContatos === "function") renderizarEscalaContatos();
     if (nome === "escala-capacidade" && typeof renderizarEscalaCapacidade === "function") renderizarEscalaCapacidade();
@@ -146,19 +119,14 @@ function mostrarSecao(nome) {
     if (nome === "acompanhamento-cop" && typeof renderizarAcompanhamentoCop === "function") renderizarAcompanhamentoCop();
     if (nome === "agenda-agendadas" && typeof carregarAgendaAgendadas === "function") carregarAgendaAgendadas();
     if (nome === "agenda-hoje") {
-        renderizarAgendaHoje();
+        const sub = document.getElementById("agendaHojeData");
+        if (sub) sub.textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
         if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("agendadas");
     }
 
     if (typeof renderizarInfografico === "function") renderizarInfografico(nome);
     if (nome === "usuarios") renderizarAdminUsuarios();
-    if (nome === "terceiras") renderizarTerceirasPainel();
-    if (nome === "terceiras-fechamento") renderizarTerceirasFechamento();
-    if (nome === "terceiras-lpu") renderizarTerceirasLpu();
-    if (nome === "terceiras-qualidade") renderizarTerceirasQualidade();
     if (nome === "configuracoes") {
-        preencherFormularioConfig();
-        renderizarResumoFiltroAssuntos();
         if (typeof renderizarAcessoUsuarios === "function") renderizarAcessoUsuarios();
     }
 }

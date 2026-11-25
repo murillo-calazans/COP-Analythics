@@ -93,7 +93,25 @@ async function lerArquivoCop(caminho) {
     return r.json();
 }
 
+// tira os tipos de OS que saem do sistema todo (js/config/assuntosequivalentes.js)
+// (assunto de recolhimento terceirizado ou técnico do recolhimento terceirizado: a OS sai inteira)
+function semOsForaDoSistema(linhas) {
+    if (typeof osForaDoSistema !== "function") return linhas;
+    const tecFora = typeof tecnicoForaDoSistema === "function" ? tecnicoForaDoSistema : () => false;
+    const fora = new Set();
+    for (const l of linhas) {
+        const r = l.dados || l;
+        if (osForaDoSistema(r.ASSUNTO) || tecFora(r["COLABORADOR RESPONSAVEL"], r.EQUIPE)) fora.add(String(r["ID OS"] ?? "").trim());
+    }
+    fora.delete("");
+    return fora.size ? linhas.filter(l => !fora.has(String((l.dados || l)["ID OS"] ?? "").trim())) : linhas;
+}
+
 async function buscarOsPendentes() {
+    return semOsForaDoSistema(await buscarOsPendentesBruto());
+}
+
+async function buscarOsPendentesBruto() {
     if (typeof supabaseClient === "undefined") return [];
     try { return await buscarOsPendentesR2(); }
     catch (e) { console.warn("OS em aberto: arquivo do R2 indisponível, lendo do banco —", e.message); }

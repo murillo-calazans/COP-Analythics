@@ -64,14 +64,10 @@ function renderizarInicio() {
 
         <div id="inicioPainelOperacao"></div>
 
-        ${secTitulo(`Seu mês de ${mes}`, "users")}
-        <div id="inicioMeuMes">${conteudoMeuMes()}</div>
-
         ${secTitulo("Hoje no COP", "list")}
         <div class="kpi-row" id="inicioHoje">
             ${cardInicio("Técnicos na escala", '<span id="inicioTecnicosHoje">…</span>', "#7c3aed", "users", "escala-hoje")}
-            ${cardInicio("OS na agenda do dia", '<span id="inicioAgendaHoje">…</span>', "#2563eb", "list", "agenda-hoje")}
-            ${cardInicio("Alertas de recorrência", (APP.indicadores.recorrenciaAlertas?.size ?? 0).toLocaleString("pt-BR"), "#dc2626", "repeat", "alertas")}
+            ${cardInicio("OS de campo agendadas hoje", '<span id="inicioAgendaHoje">…</span>', "#2563eb", "list", "agenda-hoje")}
         </div>
 
         <div id="inicioAtrasadas"></div>
@@ -114,7 +110,20 @@ async function preencherKpisHub() {
 
     if (typeof buscarOsPendentesCacheado === "function") {
         buscarOsPendentesCacheado()
-            .then(linhas => txt("hubKpi-abertas", n((linhas || []).length)))
+            // só OS de CAMPO (reparo, instalação, troca, transferência…): as do COP (auditoria etc.)
+            // ficam no módulo do COP; recolhimento/retirada também não entram. Cada OS vem em
+            // várias linhas (uma por movimentação), então conta OS distintas.
+            .then(linhas => {
+                const deCampo = a => typeof Motor === "undefined" ||
+                    (Motor.assuntoEhDeCampo(a) && !/recolhimento|retirada de equipamento/.test(Motor.norm(a)) &&
+              !(typeof assuntoForaDoRelatorioCampo === "function" && assuntoForaDoRelatorioCampo(a)));
+                const ids = new Set();
+                for (const l of linhas || []) {
+                    const r = l.dados || l, id = String(r["ID OS"] ?? "").trim();
+                    if (id && deCampo(r.ASSUNTO)) ids.add(id);
+                }
+                txt("hubKpi-abertas", n(ids.size));
+            })
             .catch(() => txt("hubKpi-abertas", "—"));
     } else txt("hubKpi-abertas", "—");
 }
@@ -231,4 +240,22 @@ async function preencherHojeNoCop() {
     const v = total === null ? "—" : total;
     if (agenda) agenda.textContent = v;
     if (heroAg) heroAg.textContent = v;
+}
+
+// 25/11: a Agenda IA (pré-agendamento) saiu; "agendadas hoje" = OS de campo em aberto com agendamento para hoje
+async function totalAgendaDeHoje() {
+    if (typeof buscarOsPendentesCacheado !== "function") return null;
+    try {
+        const linhas = await buscarOsPendentesCacheado();
+        const h = new Date(), hoje = `${String(h.getDate()).padStart(2, "0")}/${String(h.getMonth() + 1).padStart(2, "0")}/${h.getFullYear()}`;
+        const fora = a => typeof assuntoForaDoRelatorioCampo === "function" && assuntoForaDoRelatorioCampo(a);
+        const deCampo = a => typeof Motor === "undefined" ||
+            (Motor.assuntoEhDeCampo(a) && !/recolhimento|retirada de equipamento/.test(Motor.norm(a)) && !fora(a));
+        const ids = new Set();
+        for (const l of linhas || []) {
+            const r = l.dados || l, id = String(r["ID OS"] ?? "").trim();
+            if (id && String(r.AGENDAMENTO || "").startsWith(hoje) && deCampo(r.ASSUNTO)) ids.add(id);
+        }
+        return ids.size;
+    } catch { return null; }
 }

@@ -31,8 +31,8 @@ async function aovivoVerificar() {
         aovivoUltimo = atual;
 
         APP.indicadores.recorrencia = IndicatorEngine.calcularRecorrencia(FiltroEngine.ordensFiltradas());
-        atualizarAlertas();
-        renderizarDashboard();
+        if (typeof atualizarAlertas === "function") atualizarAlertas();
+        if (typeof renderizarDashboard === "function") renderizarDashboard();
         renderizarSecaoAtiva();
         if (typeof atualizarBadgeAlertas === "function") atualizarBadgeAlertas();
         console.log(`Ao vivo: dados atualizados automaticamente (${new Date().toLocaleTimeString("pt-BR")}).`);

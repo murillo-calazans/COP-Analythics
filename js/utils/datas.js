@@ -34,3 +34,11 @@ function paraData(valor) {
 
     return null;
 }
+
+/** Date -> "AAAA-MM-DD" (era do filtro global; usado nos Alertas de Gestão de Clientes) */
+function formatarDataParaInput(data) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+}

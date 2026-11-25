@@ -4,7 +4,9 @@
 (function () {
     const SEM_SETOR = "Sem setor";
     let diaOffset = 1;                 // 0 = hoje, 1 = amanhã...
-    let filtro = { setor: null, cidade: null };
+    let filtro = { setor: null, cidade: null, grupo: null };
+    // 25/11: filtro de assunto pelo grupo (js/config/assuntosequivalentes.js)
+    const grupoDe = a => typeof grupoDoAssunto === "function" ? grupoDoAssunto(a) : (String(a || "").trim() || "Sem assunto");
     let busca = "";
     let cache = null;                  // { porOs: Map, geradoEm, temSetor }
 
@@ -66,7 +68,7 @@
             if (!o.agenda || isoDia(o.agenda) !== alvo) continue;
             if (norm(o.status) === "finalizada") continue;
             if (SETORES_FORA.has(norm(o.setor))) continue;
-            out.push({ ...o, setorRot: o.setor || SEM_SETOR, cidadeRot: o.cidade || "Sem cidade" });
+            out.push({ ...o, setorRot: o.setor || SEM_SETOR, cidadeRot: o.cidade || "Sem cidade", grupoRot: grupoDe(o.assunto) });
         }
         return out;
     }
@@ -85,7 +87,7 @@
     function render() {
         if (!cache) return;
         const todas = osDoDia();
-        const ctx = { todas, setores: contarPor(todas, "setorRot"), cidades: contarPor(todas, "cidadeRot") };
+        const ctx = { todas, setores: contarPor(todas, "setorRot"), cidades: contarPor(todas, "cidadeRot"), grupos: contarPor(todas, "grupoRot") };
         const rel = document.getElementById(ID_REL), lst = document.getElementById(ID_LST);
         if (rel) { rel.innerHTML = htmlTopo(ctx, "rel") + htmlRelatorio(ctx); ligar(rel, ctx); }
         if (lst) { lst.innerHTML = htmlTopo(ctx, "lst") + htmlLista(ctx); ligar(lst, ctx); }
@@ -144,11 +146,12 @@
     function listaFiltrada(todas) {
         const q = norm(busca);
         return todas.filter(o => (!filtro.setor || o.setorRot === filtro.setor) && (!filtro.cidade || o.cidadeRot === filtro.cidade)
+            && (!filtro.grupo || o.grupoRot === filtro.grupo)
             && (!q || norm(`${o.id} ${o.cliente} ${o.bairro} ${o.assunto} ${o.equipe}`).includes(q)))
             .sort((a, b) => a.cidadeRot.localeCompare(b.cidadeRot, "pt-BR") || (a.agenda - b.agenda) || a.setorRot.localeCompare(b.setorRot, "pt-BR"));
     }
 
-    function htmlLista({ todas, setores, cidades }) {
+    function htmlLista({ todas, setores, cidades, grupos }) {
         if (!todas.length) return vazio();
         const lista = listaFiltrada(todas);
         return `
@@ -156,7 +159,8 @@
             <div class="ag-card-tit">
               <select class="ag-sel" data-ag-sel-setor aria-label="Setor"><option value="">Todos os setores</option>${setores.map(([s, n]) => `<option value="${esc(s)}" ${filtro.setor === s ? "selected" : ""}>${esc(s)} (${n})</option>`).join("")}</select>
               <select class="ag-sel" data-ag-sel-cidade aria-label="Cidade"><option value="">Todas as cidades</option>${cidades.map(([c, n]) => `<option value="${esc(c)}" ${filtro.cidade === c ? "selected" : ""}>${esc(c)} (${n})</option>`).join("")}</select>
-              ${filtro.setor || filtro.cidade ? `<button type="button" class="ag-limpar" data-ag-limpar>× limpar</button>` : ""}
+              <select class="ag-sel" data-ag-sel-grupo aria-label="Assunto"><option value="">Todos os assuntos</option>${grupos.map(([g, n]) => `<option value="${esc(g)}" ${filtro.grupo === g ? "selected" : ""}>${esc(g)} (${n})</option>`).join("")}</select>
+              ${filtro.setor || filtro.cidade || filtro.grupo ? `<button type="button" class="ag-limpar" data-ag-limpar>× limpar</button>` : ""}
               <span class="ag-suave">${lista.length} OS</span>
               <input type="search" class="ag-busca" placeholder="Buscar OS, cliente, bairro, assunto…" value="${esc(busca)}" data-ag-busca>
             </div>
@@ -179,7 +183,7 @@
 
     /** relatório → lista: vai para a aba Agenda, sub-aba Agendadas, já filtrada */
     function abrirNaAgenda(s, c) {
-        filtro = { setor: s, cidade: c }; busca = "";
+        filtro = { setor: s, cidade: c, grupo: null }; busca = "";
         if (typeof mostrarSecao === "function") mostrarSecao("agenda-hoje");
         if (typeof ativarAbaAgenda === "function") ativarAbaAgenda("agendadas");
         else render();
@@ -187,14 +191,15 @@
     }
 
     function ligar(alvo, ctx) {
-        alvo.querySelectorAll("[data-ag-dia]").forEach(b => b.addEventListener("click", () => { diaOffset += Number(b.dataset.agDia); filtro = { setor: null, cidade: null }; render(); }));
-        alvo.querySelectorAll("[data-ag-ir]").forEach(b => b.addEventListener("click", () => { diaOffset = Number(b.dataset.agIr); filtro = { setor: null, cidade: null }; render(); }));
+        alvo.querySelectorAll("[data-ag-dia]").forEach(b => b.addEventListener("click", () => { diaOffset += Number(b.dataset.agDia); filtro = { setor: null, cidade: null, grupo: null }; render(); }));
+        alvo.querySelectorAll("[data-ag-ir]").forEach(b => b.addEventListener("click", () => { diaOffset = Number(b.dataset.agIr); filtro = { setor: null, cidade: null, grupo: null }; render(); }));
         alvo.querySelectorAll("[data-ag-setor]").forEach(b => b.addEventListener("click", () => abrirNaAgenda(b.dataset.agSetor, null)));
         alvo.querySelectorAll("[data-ag-cidade]").forEach(b => b.addEventListener("click", () => abrirNaAgenda(null, b.dataset.agCidade)));
         alvo.querySelectorAll("[data-ag-cel-s]").forEach(b => b.addEventListener("click", () => abrirNaAgenda(b.dataset.agCelS, b.dataset.agCelC)));
         alvo.querySelector("[data-ag-sel-setor]")?.addEventListener("change", e => { filtro.setor = e.target.value || null; render(); });
         alvo.querySelector("[data-ag-sel-cidade]")?.addEventListener("change", e => { filtro.cidade = e.target.value || null; render(); });
-        alvo.querySelector("[data-ag-limpar]")?.addEventListener("click", () => { filtro = { setor: null, cidade: null }; render(); });
+        alvo.querySelector("[data-ag-sel-grupo]")?.addEventListener("change", e => { filtro.grupo = e.target.value || null; render(); });
+        alvo.querySelector("[data-ag-limpar]")?.addEventListener("click", () => { filtro = { setor: null, cidade: null, grupo: null }; render(); });
         alvo.querySelector("[data-ag-recarregar]")?.addEventListener("click", () => carregar(true));
         const campo = alvo.querySelector("[data-ag-busca]");
         if (campo) campo.addEventListener("input", () => {

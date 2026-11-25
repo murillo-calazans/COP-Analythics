@@ -1,6 +1,7 @@
 let agendaBacklogCache = null;
 let agendaBacklogCarregando = false;
 let backlogCidade = "";
+let backlogGrupo = "";   // 25/11: filtro de assunto pelo grupo (js/config/assuntosequivalentes.js)
 
 const BACKLOG_DIAS_ANTIGA = 3;
 const BACKLOG_TETO = 600;
@@ -163,11 +164,24 @@ function ligarTodasAbertas(alvo, itens, sufixo) {
     }));
 }
 
+const backlogTemGrupos = () => typeof grupoDoAssunto === "function";
+const backlogGrupoDe = a => backlogTemGrupos() ? grupoDoAssunto(a) : assuntoUnificado(a);
+
 function recorteBacklog(model) {
-    const itens = backlogCidade ? model.itens.filter(i => (i.cidade || "—") === backlogCidade) : model.itens;
+    // rompimento, VoIP e portabilidade não contam nas OS de campo (25/11)
+    const foraRel = typeof assuntoForaDoRelatorioCampo === "function" ? assuntoForaDoRelatorioCampo : () => false;
+    const daCidade = model.itens.filter(i => !foraRel(i.assunto) && (!backlogCidade || (i.cidade || "—") === backlogCidade));
+    const opGrupos = new Map();
+    for (const i of daCidade) { const g = backlogGrupoDe(i.assunto); opGrupos.set(g, (opGrupos.get(g) || 0) + 1); }
+    if (backlogGrupo && !opGrupos.has(backlogGrupo)) backlogGrupo = "";
+    const itens = backlogGrupo ? daCidade.filter(i => backlogGrupoDe(i.assunto) === backlogGrupo) : daCidade;
+    // sem filtro: um cartão por grupo; com grupo escolhido: um cartão por assunto do grupo
+    // (com grupo escolhido o assunto vem como no IXC, sem juntar terceirizado com o comum)
+    const assuntoIxc = a => String(a || "—").normalize("NFC").replace(/\s*\(\d+\)/g, "").replace(/\s+/g, " ").trim().toUpperCase() || "—";
+    const chave = !backlogTemGrupos() ? assuntoUnificado : backlogGrupo ? assuntoIxc : backlogGrupoDe;
     const porAssunto = new Map();
     for (const i of itens) {
-        const k = assuntoUnificado(i.assunto);
+        const k = chave(i.assunto);
         if (!porAssunto.has(k)) porAssunto.set(k, { assunto: k, oss: [] });
         porAssunto.get(k).oss.push(i);
     }
@@ -178,7 +192,8 @@ function recorteBacklog(model) {
         oss: g.oss.sort((a, b) => (a.abertura || 0) - (b.abertura || 0))
     })).sort((a, b) => b.total - a.total);
     return {
-        itens, grupos,
+        itens, grupos, totalCidade: daCidade.length,
+        opGrupos: [...opGrupos].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR")),
         total: itens.length,
         agendadas: itens.filter(i => i.agendada).length,
         antigas: itens.filter(i => i.antiga).length,
@@ -296,9 +311,22 @@ function desenharBacklog(model) {
             <div class="stat-valor">${valor[c.id].toLocaleString("pt-BR")}</div>
         </button>`).join("");
 
+    const ehGrupo = backlogTemGrupos() && !backlogGrupo;
+    const nomeCard = a => ehGrupo ? a : backlogAssuntoCurto(a);
+    const dicaCard = g => ehGrupo ? [...new Set(g.oss.map(o => backlogAssuntoCurto(o.assunto)))].join(" · ") : g.assunto;
+    const sufCampo = sufixo + (backlogGrupo ? ` · ${escaparHtml(backlogGrupo)}` : "");
+    const filtroAssunto = rec.opGrupos.length ? `
+        <div class="backlog-filtro">
+            <label for="backlogGrupoSel">Assunto:</label>
+            <select id="backlogGrupoSel" class="backlog-cidade-sel">
+                <option value="">Todos os assuntos (${rec.totalCidade.toLocaleString("pt-BR")})</option>
+                ${rec.opGrupos.map(([g, n]) => `<option value="${escaparHtml(g)}"${g === backlogGrupo ? " selected" : ""}>${escaparHtml(g)} (${n.toLocaleString("pt-BR")})</option>`).join("")}
+            </select>
+            ${backlogGrupo ? `<button type="button" class="backlog-limpar" id="backlogGrupoLimpar" title="Limpar filtro">✕</button>` : ""}
+        </div>` : "";
     const cards = rec.grupos.map((g, i) => `
-        <button type="button" class="cop-assunto-card" data-backlog-assunto="${i}">
-            <span class="cop-assunto-nome">${escaparHtml(backlogAssuntoCurto(g.assunto))}</span>
+        <button type="button" class="cop-assunto-card" data-backlog-assunto="${i}" title="${escaparHtml(dicaCard(g))}">
+            <span class="cop-assunto-nome">${escaparHtml(nomeCard(g.assunto))}</span>
             <span class="cop-assunto-num">${g.total.toLocaleString("pt-BR")}</span>
             <span class="cop-assunto-sub">mais antiga ${escaparHtml(backlogHaDias(g.maisAntiga))}</span>
         </button>`).join("");
@@ -307,31 +335,35 @@ function desenharBacklog(model) {
     alvo.innerHTML = `
         ${filtroCidade}
         ${todasItens ? htmlTodasAbertas(todasItens, sufixo) : ""}
-        <h3 class="todas-campo-tit" style="margin:28px 0 4px;padding-top:16px;border-top:1px solid var(--cor-borda)">OS de campo (roteiro dos técnicos)${sufixo}</h3>
-        <p class="resumo-filtro">Só as OS que vão para a rua — sem recolhimento e sem os assuntos que não são de campo.</p>
+        <h3 class="todas-campo-tit" style="margin:28px 0 4px;padding-top:16px;border-top:1px solid var(--cor-borda)">OS de campo (roteiro dos técnicos)${sufCampo}</h3>
+        <p class="resumo-filtro">Só as OS que vão para a rua — sem recolhimento, rompimento, VoIP, portabilidade e os assuntos que não são de campo.</p>
+        ${filtroAssunto}
         <div class="kpi-row">${kpis}</div>
-        <div class="indicadores-secao-titulo">Em aberto por assunto${sufixo}</div>
+        <div class="indicadores-secao-titulo">Em aberto por ${ehGrupo ? "grupo de assunto" : "assunto"}${sufCampo}</div>
         <div class="cop-assuntos">${cards}</div>
-        <div class="indicadores-secao-titulo">Bairros em aberto${sufixo}</div>
+        <div class="indicadores-secao-titulo">Bairros em aberto${sufCampo}</div>
         <div id="backlogBairros"><p class="resumo-filtro">Conferindo os bairros com o mapa de regiões…</p></div>
         ${graficoCidades(model.cidades)}`;
 
-    desenharBairrosBacklog(rec.itens, sufixo);
+    desenharBairrosBacklog(rec.itens, sufCampo);
     if (todasItens) ligarTodasAbertas(alvo, todasItens, sufixo);
 
     const sel = alvo.querySelector("#backlogCidadeSel");
     if (sel) sel.addEventListener("change", () => { backlogCidade = sel.value; desenharBacklog(model); });
     alvo.querySelector("#backlogLimpar")?.addEventListener("click", () => { backlogCidade = ""; desenharBacklog(model); });
+    const selG = alvo.querySelector("#backlogGrupoSel");
+    if (selG) selG.addEventListener("change", () => { backlogGrupo = selG.value; desenharBacklog(model); });
+    alvo.querySelector("#backlogGrupoLimpar")?.addEventListener("click", () => { backlogGrupo = ""; desenharBacklog(model); });
 
     alvo.querySelectorAll("[data-backlog-cartao]").forEach(botao =>
         botao.addEventListener("click", () => {
             const c = BACKLOG_CARTOES.find(x => x.id === botao.dataset.backlogCartao);
-            abrirPopupBacklog(c.rotulo + sufixo, rec.itens.filter(c.filtro));
+            abrirPopupBacklog(c.rotulo + sufCampo, rec.itens.filter(c.filtro));
         }));
     alvo.querySelectorAll("[data-backlog-assunto]").forEach(botao =>
         botao.addEventListener("click", () => {
             const g = rec.grupos[+botao.dataset.backlogAssunto];
-            abrirPopupBacklog(backlogAssuntoCurto(g.assunto) + sufixo, g.oss);
+            abrirPopupBacklog(nomeCard(g.assunto) + sufCampo, g.oss);
         }));
 }
 

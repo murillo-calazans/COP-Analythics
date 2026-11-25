@@ -170,6 +170,8 @@ function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
     const ordens = new Map();
 
     for (const linha of linhasOrdens) {
+        // tipos de OS que saem do sistema todo (js/config/assuntosequivalentes.js)
+        if (typeof osForaDoSistema === "function" && osForaDoSistema(linha.assunto)) continue;
         const ordem = new OrdemServico({
             id: linha.id,
             cliente: linha.cliente,
@@ -187,7 +189,11 @@ function reconstruirOrdens({ linhasOrdens, linhasMovimentacoes }) {
         ordem.tecnicoResponsavel = linha.tecnico_responsavel;
         ordem.auditoriaIA = linha.auditoria_ia ?? null;
 
-        const movimentacoesBrutas = movimentacoesPorOrdem.get(linha.id) ?? [];
+        let movimentacoesBrutas = movimentacoesPorOrdem.get(linha.id) ?? [];
+        // técnico do recolhimento terceirizado: a OS sai inteira; operador de terceiro: só as movimentações dele
+        if (typeof tecnicoForaDoSistema === "function" &&
+            movimentacoesBrutas.some(m => tecnicoForaDoSistema(m.colaborador_responsavel, m.equipe))) continue;
+        if (typeof operadorTerceiro === "function") movimentacoesBrutas = movimentacoesBrutas.filter(m => !operadorTerceiro(m.operador));
         ordem.movimentacoes = movimentacoesBrutas
             .map(m => new Movimentacao({
                 operador: m.operador,
@@ -589,12 +595,9 @@ async function limparDadosImportados() {
 
     await limparCacheLocal();
 
-    atualizarBadgeAlertas();
-    renderizarDashboard();
-    renderizarAlertas();
-    renderizarSecaoTecnicos();
-    renderizarSecaoIndicadores();
-    renderizarPainelAuditoriaOperacional();
+    // telas de relatório saíram para o Gestão COP (25/11)
+    for (const fn of ["atualizarBadgeAlertas", "renderizarDashboard", "renderizarAlertas", "renderizarSecaoTecnicos",
+        "renderizarSecaoIndicadores", "renderizarPainelAuditoriaOperacional"]) if (typeof window[fn] === "function") window[fn]();
 
     const inputBase = document.getElementById("arquivoBase");
     const inputOrdens = document.getElementById("arquivoOrdens");
@@ -604,5 +607,5 @@ async function limparDadosImportados() {
     const status = document.getElementById("status");
     if (status) status.textContent = 'Dados limpos pra todo mundo. Selecione os arquivos e clique em "Gerar Relatório".';
 
-    abrirModalImportar();
+    if (typeof abrirModalImportar === "function") abrirModalImportar();
 }

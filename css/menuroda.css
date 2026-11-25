@@ -30,8 +30,7 @@ body.menu-roda-ativa:not(.nao-autenticado) main{
     padding-bottom:40px;
 }
 
-body.nao-autenticado .gear-rail,
-body.nao-autenticado .menu-subroda{ display:none !important; }
+body.nao-autenticado .gear-rail{ display:none !important; }
 
 /* ---------- Engrenagem (módulos) ---------- */
 .gear-rail{
@@ -90,34 +89,8 @@ body.nao-autenticado .menu-subroda{ display:none !important; }
 .gear-rail .pn button:hover{ border-color:var(--ro-ouro); }
 .gear-rail .it2:focus-visible,.gear-rail .pn button:focus-visible{ outline:2px solid var(--ro-ouro); outline-offset:3px; }
 
-/* ---------- Roda do rodapé (sub-abas): roda deitada, arqueando pra baixo ---------- */
-.menu-subroda{
-    position:fixed; left:var(--gear-rw-min); right:0; bottom:calc(10px + env(safe-area-inset-bottom,0px)); height:96px; z-index:40;
-    -webkit-mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
-            mask:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);
-}
-.menu-subroda[hidden]{ display:none; }
-/* meia-lua azul escuro opaca atrás das sub-abas (lado reto embaixo, curva por cima) */
-.menu-subroda::before{
-    content:""; position:absolute; left:50%; bottom:0; transform:translateX(-50%); z-index:-1;
-    width:min(660px,95%); height:92px;
-    background:linear-gradient(180deg,#15284f 0%,#0c1630 100%);
-    border-radius:50% 50% 0 0 / 100% 100% 0 0;
-    box-shadow:0 10px 30px rgba(8,16,40,.30);
-}
-.ro-sitem{
-    position:absolute; left:50%; top:27px; display:inline-flex; align-items:center; justify-content:center; height:44px; padding:0 24px;
-    border:0; background:transparent; cursor:pointer; white-space:nowrap; border-radius:999px;
-    color:#b6c4e3; font:600 15px/1 inherit;
-    transform-origin:center center; will-change:transform,opacity;
-    transition:transform .44s cubic-bezier(.3,.9,.25,1),opacity .44s,background .25s,color .2s;
-}
-.ro-sitem:hover{ color:#fff; }
-.ro-sitem.centro{ background:var(--ro-ouro); color:#0C1630; font-weight:800; box-shadow:0 14px 32px rgba(245,179,53,.30); cursor:default; }
-.ro-sitem.centro:hover{ color:#0C1630; }
-
 @media (prefers-reduced-motion:reduce){
-    .gear-rail .gb,.gear-rail .ring,.gear-rail .it2,.gear-rail .gw,.gear-rail,.ro-sitem{ transition:none !important; }
+    .gear-rail .gb,.gear-rail .ring,.gear-rail .it2,.gear-rail .gw,.gear-rail{ transition:none !important; }
 }
 
 /* ---------- Engrenagem lateral: miolo / botão "Voltar ao centro" ---------- */
@@ -137,9 +110,8 @@ body.nao-autenticado .menu-subroda{ display:none !important; }
 @keyframes gear-chegar{ from{ transform:translateX(40vw) scale(2.4); opacity:0; } }
 
 /* ---------- Tela inicial: engrenagem PRINCIPAL no meio (js/ui/menuroda.js) ---------- */
-/* Na tela inicial a engrenagem lateral e a roda do rodapé somem; o conteúdo ocupa tudo. */
-body.cop-home .gear-rail,
-body.cop-home .menu-subroda{ display:none !important; }
+/* Na tela inicial a engrenagem lateral some; o conteúdo ocupa tudo. */
+body.cop-home .gear-rail{ display:none !important; }
 body.menu-roda-ativa.cop-home:not(.nao-autenticado) main{ margin-left:0; padding-bottom:40px; }
 
 .hub-home{
@@ -324,7 +296,6 @@ body.cab-oculto .gear-rail{ top:0; }
 
 /* ---------- Abas do módulo: engrenagem no canto de baixo à esquerda (js/ui/menuroda.js) ---------- */
 /* No lugar da meia-lua. Recolhida = um quarto da engrenagem com a aba atual; expande no mouse. */
-body.menu-roda-ativa .menu-subroda{ display:none !important; }
 .abas-canto{
     --D:210px;
     position:fixed; left:0; bottom:0; z-index:41;

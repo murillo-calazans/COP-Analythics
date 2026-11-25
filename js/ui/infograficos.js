@@ -204,11 +204,28 @@ async function renderizarInfografico(nome) {
     if (token !== _igToken) return;
     if (!cartoes || !cartoes.length) { alvo.innerHTML = ""; return; }
     _igAcoes = [];
-    alvo.innerHTML = `${igBarraFiltros(cartoes.filtros)}<div class="ig-grade">${cartoes.map(igCartao).join("")}</div>`;
+    // cartoes.filtrosNoTopo: a barra de filtros vai pro topo da aba (logo abaixo do título), não em cima dos cartões
+    const topo = cartoes.filtrosNoTopo ? igSlotFiltrosTopo(nome) : null;
+    if (topo) topo.innerHTML = igBarraFiltros(cartoes.filtros);
+    alvo.innerHTML = `${topo ? "" : igBarraFiltros(cartoes.filtros)}<div class="ig-grade">${cartoes.map(igCartao).join("")}</div>`;
     const acoes = _igAcoes;
     alvo.querySelectorAll("[data-ig-acao]").forEach(el => el.addEventListener("click", () => acoes[+el.dataset.igAcao]?.()));
-    alvo.querySelectorAll("[data-ig-filtro]").forEach(el => igLigarMulti(el, cartoes.filtros[+el.dataset.igFiltro]));
-    alvo.querySelector("[data-ig-limpar]")?.addEventListener("click", () => cartoes.limparFiltros?.());
+    const barra = topo || alvo;
+    barra.querySelectorAll("[data-ig-filtro]").forEach(el => igLigarMulti(el, cartoes.filtros[+el.dataset.igFiltro]));
+    barra.querySelector("[data-ig-limpar]")?.addEventListener("click", () => cartoes.limparFiltros?.());
+}
+
+function igSlotFiltrosTopo(nome) {
+    let slot = document.getElementById(`igf-${nome}`);
+    if (slot) return slot;
+    const secao = document.getElementById(`secao-${nome}`);
+    const cab = secao && secao.querySelector(":scope > .escala-topo, :scope > .dashboard-cabecalho");
+    if (!cab) return null;
+    slot = document.createElement("div");
+    slot.id = `igf-${nome}`;
+    slot.className = "ig-filtros-topo";
+    cab.insertAdjacentElement("afterend", slot);
+    return slot;
 }
 
 function igResumoMulti(f) {

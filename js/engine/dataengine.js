@@ -19,6 +19,12 @@ const DataEngine = {
                 continue;
             }
 
+            // tipos de OS que saem do sistema todo (js/config/assuntosequivalentes.js)
+            if (typeof osForaDoSistema === "function" && osForaDoSistema(this.valor(linha, colunas.assunto))) {
+                linhasIgnoradas++;
+                continue;
+            }
+
             let ordem = ordens.get(id);
             if (!ordem) {
                 ordem = new OrdemServico({
@@ -32,9 +38,14 @@ const DataEngine = {
                 ordens.set(id, ordem);
             }
 
-            ordem.adicionarMovimentacao(this.criarMovimentacao(linha, colunas));
+            const mov = this.criarMovimentacao(linha, colunas);
+            if (typeof tecnicoForaDoSistema === "function" && tecnicoForaDoSistema(mov.colaboradorResponsavel, mov.equipe)) ordem._foraDoSistema = true;
+            if (typeof operadorTerceiro === "function" && operadorTerceiro(mov.operador)) { linhasIgnoradas++; continue; }
+            ordem.adicionarMovimentacao(mov);
             totalMovimentacoes++;
         }
+        // técnico do recolhimento terceirizado: a OS sai inteira (js/config/assuntosequivalentes.js)
+        for (const [id, ordem] of ordens) if (ordem._foraDoSistema) ordens.delete(id);
 
         for (const ordem of ordens.values()) {
             ordem.movimentacoes.sort((a, b) => (a.data ?? 0) - (b.data ?? 0));

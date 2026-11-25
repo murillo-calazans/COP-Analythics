@@ -18,38 +18,29 @@
 
         const MODULOS = [
             { id: "inicio", titulo: "Início", dica: "Resumo do dia" },
-            { id: "ordens", titulo: "Gestão de Relatórios", dica: "Dashboard, indicadores e tempos" },
             { id: "agendador", titulo: "Gestão de Ordens", dica: "Agenda e acompanhamento" },
-            { id: "cop", titulo: "Gestão do COP", dica: "Produção e OS em aberto" },
+            { id: "cop", titulo: "Gestão do COP", dica: "Acompanhamento dos técnicos" },
             { id: "clientes", titulo: "Gestão de Clientes", dica: "Cadastro, CTOs e recorrência" },
-            { id: "terceiras", titulo: "Gestão de Terceiras", dica: "LPU e fechamento mensal" },
             { id: "escala", titulo: "Escala", dica: "Escala técnica do dia" },
-            { id: "auditoria", titulo: "Auditoria", dica: "Qualidade dos fechamentos" },
             { id: "admin", titulo: "Painel de Administrador", dica: "Usuários e configurações" }
         ];
 
         const ENTRADA = {
-            inicio: "inicio", ordens: "dashboard", cop: "cop-abertas", terceiras: "terceiras",
-            auditoria: "auditoria", agendador: "agenda-agendadas", escala: "escala-hoje",
+            inicio: "inicio", cop: "acompanhamento-cop", agendador: "agenda-agendadas", escala: "escala-hoje",
             clientes: "clientes-cto", admin: "usuarios"
         };
 
         const LABELS = {
-            dashboard: "Dashboard", tempos: "TMA · TMS · TME · TMR", indicadores: "Indicadores",
-            "cop-abertas": "COP em aberto", "gestao-cop": "Produção · TMR", "acompanhamento-cop": "Acompanhamento COP",
-            ordens: "Ordens", tecnicos: "Técnicos", "mapa-calor": "Mapa de calor",
-            "clientes-cto": "Cadastro na CTO", alertas: "Alertas", "ctos-lacres": "CTOs e Lacres",
-            enderecos: "Endereços a corrigir",
-            terceiras: "Painel", "terceiras-fechamento": "Fechamento", "terceiras-lpu": "LPU",
-            "terceiras-qualidade": "Qualidade",
-            auditoria: "Auditoria", "auditoria-ia": "Auditor IA",
+            "acompanhamento-cop": "Acompanhamento COP",
+            "clientes-cto": "Cadastro na CTO", alertas: "Alertas", "ctos-lacres": "CTOs e Lacres", enderecos: "Endereços a corrigir",
+            "agenda-agendadas": "Ordens", "agenda-hoje": "Agenda",
+            "escala-hoje": "Escala do dia", "escala-contatos": "Contatos", "escala-capacidade": "Capacidade", "escala-terceiras": "Programação terceiras",
             usuarios: "Usuários", configuracoes: "Configurações"
         };
 
         // nome curto que cabe no botão da engrenagem principal
         const CURTO = {
-            ordens: "Relatórios", agendador: "Ordens", cop: "COP", clientes: "Clientes",
-            terceiras: "Terceiras", escala: "Escala", auditoria: "Auditoria", admin: "Admin"
+            agendador: "Ordens", cop: "COP", clientes: "Clientes", escala: "Escala", admin: "Admin"
         };
 
         const svg = p =>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -72,14 +63,11 @@
 
         const railEl = document.createElement("nav");
         railEl.className = "gear-rail"; railEl.setAttribute("aria-label", "Módulos");
-        let subroda = document.createElement("div");
-        subroda.className = "menu-subroda"; subroda.hidden = true;
         document.body.appendChild(railEl);
-        document.body.appendChild(subroda);
         document.body.classList.add("menu-roda-ativa");
 
         let gearItens = [], gearGo = null;
-        let visAnterior = "", rodaSub = null, rodapeModulo = null, navTimer = null;
+        let visAnterior = "", navTimer = null;
 
         // Onde estou: "Módulo › Aba" no cabeçalho.
         const cabLocal = document.createElement("div");
@@ -168,7 +156,7 @@
                 arms += `<div class="hub-arm" style="--a:${(k * step).toFixed(3)}deg"><button type="button" class="hub-no" style="--i:${k}" data-k="${k}" aria-label="Abrir ${m.titulo}">${svg(ICONES[m.id] || "")}<span>${CURTO[m.id] || m.titulo}</span></button></div>`;
             });
             sec.innerHTML =
-                `<div class="hub-kpis esq">${kpi("abertas", "OS em aberto", "backlog")}${kpi("agenda", "Agendadas hoje", "na agenda do dia")}</div>` +
+                `<div class="hub-kpis esq">${kpi("abertas", "OS de campo em aberto", "reparo, instalação e troca")}${kpi("agenda", "Agendadas hoje", "na agenda do dia")}</div>` +
                 `<div class="hub-meio"><div class="hub-gear">` +
                     `<div class="hub-gb2w">${engrenagemDourada("hubGrad2", 5, 45, "hub-gb2")}</div>` +
                     `<div class="hub-gb3w"><div class="hub-gb3r">${engrenagemDourada("hubGrad3", 6, 15, "hub-gb3")}</div><div class="hub-abas" role="group" aria-label="Abas do módulo"></div></div>` +
@@ -188,7 +176,7 @@
                 b.addEventListener("click", () => hubSelecionar(k));
             });
             sec.querySelector(".hub-abrir")?.addEventListener("click", () => hubSelecionar(hubCur));
-            const IR = { abertas: "agenda-hoje", agenda: "agenda-hoje", fech: "dashboard" };
+            const IR = { abertas: "agenda-hoje", agenda: "agenda-hoje", fech: "agenda-hoje" };
             sec.querySelectorAll(".hub-kpi").forEach(b => b.addEventListener("click", () => {
                 const q = b.dataset.kpi;
                 if (q === "romp") { if (typeof abrirPopupRompimentos === "function") abrirPopupRompimentos(); return; }
@@ -336,42 +324,6 @@
             go(0, false);
         }
 
-        function criarRoda(cont, itens, o, onCentro) {
-            const N = itens.length, HALF = Math.floor(N / 2), els = [];
-            let centro = 0;
-            itens.forEach((it, i) => {
-                const el = document.createElement("button");
-                el.type = "button"; el.className = o.cls;
-                el.innerHTML = o.render(it);
-                el.addEventListener("click", () => setC(i, true, false));
-                el._i = i; cont.appendChild(el); els.push(el);
-            });
-            const wrapOff = i => ((i - centro + HALF) % N + N) % N - HALF;
-            function layout(anim) {
-                els.forEach(el => {
-                    const off = wrapOff(el._i), prev = el._off, jump = (prev != null) && Math.abs(off - prev) > 1, d = Math.abs(off);
-                    if (jump || !anim) el.style.transition = "none";
-                    const px = off * o.STEP, bow = Math.sqrt(Math.max(0, o.RC * o.RC - px * px)) - o.RC, sc = (1 - Math.min(d, o.VIS) * o.shrink).toFixed(3);
-                    el.style.transform = `translateX(-50%) translate(${px.toFixed(1)}px,${(bow * o.bow).toFixed(1)}px) scale(${sc})`;
-                    el.style.opacity = d > o.VIS ? 0 : (1 - d * o.fade).toFixed(2);
-                    el.style.pointerEvents = d > o.VIS ? "none" : "auto";
-                    el.style.zIndex = 10 - d;
-                    el.classList.toggle("centro", off === 0);
-                    el._off = off;
-                    if (jump || !anim) { void el.offsetWidth; el.style.transition = ""; }
-                });
-            }
-            function setC(i, anim, silent) { centro = ((i % N) + N) % N; layout(anim); if (!silent && onCentro) onCentro(itens[centro]); }
-            let acc = 0, trava = false;
-            cont.addEventListener("wheel", e => {
-                e.preventDefault(); acc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-                if (trava) return;
-                if (Math.abs(acc) >= o.thr) { setC(centro + (acc > 0 ? 1 : -1), true, false); acc = 0; trava = true; setTimeout(() => { trava = false; }, 150); }
-            }, { passive: false });
-            layout(false);
-            return { irSilencioso(id) { const i = itens.findIndex(x => x.secao === id); if (i >= 0) setC(i, true, true); } };
-        }
-
         // ---------- Abas dentro do módulo: engrenagem dourada no canto de baixo à esquerda (24/11) ----------
         // Substitui a meia-lua do rodapé. Recolhida: um quarto da engrenagem com a aba atual.
         // Mouse em cima (ou toque): cresce e as abas abrem em leque, redondas. Gira junto com a lateral.
@@ -383,7 +335,6 @@
         document.addEventListener("click", e => { if (!canto.contains(e.target)) canto.classList.remove("aberta"); });
         let cantoMod = null;
         function construirRodape(mod, secao) {
-            subroda.hidden = true;   // a meia-lua antiga não aparece mais
             const secoes = mod === "inicio" ? [] : secoesDoModulo(mod);
             if (secoes.length < 2) { canto.hidden = true; cantoMod = null; return; }
             canto.hidden = false;

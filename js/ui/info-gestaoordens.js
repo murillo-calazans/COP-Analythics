@@ -157,21 +157,26 @@ registrarInfografico("agenda-agendadas", async () => {
     const modelo = await igoBacklog();
     if (!modelo || !modelo.total) return [];
     const hoje = typeof ixcMeiaNoite === "function" ? ixcMeiaNoite() : new Date(new Date().setHours(0, 0, 0, 0));
-    const unificar = typeof assuntoUnificado === "function" ? assuntoUnificado : (a => a);
+    // 25/11: assunto vai pelo GRUPO (js/config/assuntosequivalentes.js); rompimento, VoIP e portabilidade não contam
+    const unificar = typeof grupoDoAssunto === "function" ? grupoDoAssunto
+        : typeof assuntoUnificado === "function" ? assuntoUnificado : (a => a);
+    const foraRel = typeof assuntoForaDoRelatorioCampo === "function" ? assuntoForaDoRelatorioCampo : () => false;
+    const nomeAssunto = a => typeof grupoDoAssunto === "function" ? a : IG.assuntoCurto(a);
     const cidadeDe = o => o.cidade || "—";
     const passaCidade = o => !igoFiltro.cidades.length || igoFiltro.cidades.includes(cidadeDe(o));
     const passaAssunto = o => !igoFiltro.assuntos.length || igoFiltro.assuntos.includes(unificar(o.assunto));
     const passa = o => passaCidade(o) && passaAssunto(o);
 
-    const daCidade = modelo.itens.filter(passaCidade), doAssunto = modelo.itens.filter(passaAssunto);
+    const base = modelo.itens.filter(o => !foraRel(o.assunto));
+    const daCidade = base.filter(passaCidade), doAssunto = base.filter(passaAssunto);
     const opCidades = igoOpcoesFiltro(doAssunto, cidadeDe);
     const opAssuntos = igoOpcoesFiltro(daCidade, o => unificar(o.assunto));
     igoFiltro.cidades = igoFiltro.cidades.filter(c => opCidades.some(([x]) => x === c));
     igoFiltro.assuntos = igoFiltro.assuntos.filter(a => opAssuntos.some(([x]) => x === a));
 
-    const itens = modelo.itens.filter(passa);
+    const itens = base.filter(passa);
     const total = itens.length;
-    const recorteAssunto = igoRotuloRecorte(igoFiltro.assuntos, IG.assuntoCurto, "assuntos");
+    const recorteAssunto = igoRotuloRecorte(igoFiltro.assuntos, nomeAssunto, "grupos");
     const recorte = [igoRotuloRecorte(igoFiltro.cidades, c => c, "cidades"), recorteAssunto].filter(Boolean).join(" · ");
     const pop = (titulo, oss) => () => abrirPopupBacklog(recorte ? `${titulo} · ${recorte}` : titulo, oss);
     const cartoes = [];
@@ -181,10 +186,11 @@ registrarInfografico("agenda-agendadas", async () => {
             opcoes: opCidades.map(([c, n]) => ({ valor: c, nome: c, n })),
             aoMudar: v => { igoFiltro.cidades = v; refazer(); } },
         { rotulo: "Assunto", plural: "assuntos", todos: `Todos os assuntos (${IG.fmt(daCidade.length)})`, valores: igoFiltro.assuntos,
-            opcoes: opAssuntos.map(([a, n]) => ({ valor: a, nome: IG.assuntoCurto(a), n })),
+            opcoes: opAssuntos.map(([a, n]) => ({ valor: a, nome: nomeAssunto(a), n })),
             aoMudar: v => { igoFiltro.assuntos = v; refazer(); } }
     ];
     cartoes.limparFiltros = () => { igoFiltro.cidades = []; igoFiltro.assuntos = []; refazer(); };
+    cartoes.filtrosNoTopo = true;   // 24/11: filtro de cidade/assunto no topo da aba
 
     const agendadas = itens.filter(i => i.agendada);
     const semAgenda = itens.filter(i => !i.agendada);
@@ -249,9 +255,11 @@ registrarInfografico("agenda-agendadas", async () => {
         porAssunto.get(k).push(o);
     }
     const assuntos = [...porAssunto].sort((a, b) => b[1].length - a[1].length).slice(0, 10);
+    const tituloAssunto = (a, oss) => typeof grupoDoAssunto === "function"
+        ? [...new Set(oss.map(o => IG.assuntoCurto(o.assunto)))].join(" · ") : a;
     cartoes.push({
-        titulo: "Por assunto", sub: `Top ${assuntos.length} em aberto`, cor: "verde", icone: "lista",
-        blocos: [{ t: "linhas", itens: assuntos.map(([a, oss]) => ({ rotulo: IG.assuntoCurto(a), titulo: a, n: oss.length, cor: "verde", extra: IG.pctDe(oss.length, total), acao: pop(IG.assuntoCurto(a), oss) })) }]
+        titulo: "Por assunto", sub: "Em aberto por grupo de assunto", cor: "verde", icone: "lista",
+        blocos: [{ t: "linhas", itens: assuntos.map(([a, oss]) => ({ rotulo: nomeAssunto(a), titulo: tituloAssunto(a, oss), n: oss.length, cor: "verde", extra: IG.pctDe(oss.length, total), acao: pop(nomeAssunto(a), oss) })) }]
     });
 
     const porCidade = new Map();

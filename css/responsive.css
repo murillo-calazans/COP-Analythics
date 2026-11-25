@@ -19,8 +19,7 @@
     html, body { max-width: 100%; overflow-x: hidden; }
 
     /* ---------- menu: engrenagem some, volta o ☰ e a faixa de abas ---------- */
-    body.menu-roda-ativa .gear-rail,
-    body.menu-roda-ativa .menu-subroda { display: none !important; }
+    body.menu-roda-ativa .gear-rail { display: none !important; }
     body.menu-roda-ativa .menu-hamburguer { display: inline-flex !important; }
 
     header {

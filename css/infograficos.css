@@ -88,3 +88,8 @@ g.ig-clicavel:hover rect{opacity:.8}
 .ig-multi-op[hidden]{display:none}
 .ig-multi-op:hover{background:var(--cor-fundo-elevado)}
 .ig-multi-op em{font-style:normal;color:var(--cor-texto-suave);font-variant-numeric:tabular-nums;font-size:12px}
+
+/* filtros do relatório no topo da aba (cartoes.filtrosNoTopo — js/ui/infograficos.js) */
+.ig-filtros-topo{ margin:4px 0 8px; }
+.ig-filtros-topo:empty{ display:none; }
+.ig-filtros-topo .backlog-filtro{ margin:0; }
