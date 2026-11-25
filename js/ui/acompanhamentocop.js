@@ -183,7 +183,8 @@
         const D = dadosDoGrupo(est.grupo);
         const tecSel = est.tec;
         const filtraTec = arr => tecSel ? arr.filter(x => x.tec && String(x.tec.id || x.tec.nome) === tecSel) : arr;
-        alvo.innerHTML = htmlTopo(D) + htmlKpis(D) + `<div class="acp-colunas">${htmlTecnicos(D)}<div class="acp-principal">${htmlAbas(D, filtraTec)}</div></div>`;
+        const diag = `${est.cache.porOs.size} OS em aberto lidas · ${est.cache.reag.length} reagendamentos · login ${APP?.usuario?.email || "?"} (${APP?.usuario?.papel || "?"}) · grupo ${grupoDoUsuario() >= 0 ? grupos()[grupoDoUsuario()].nome : "nenhum pelo login"}`;
+        alvo.innerHTML = htmlTopo(D) + htmlKpis(D) + `<div class="acp-colunas">${htmlTecnicos(D)}<div class="acp-principal">${htmlAbas(D, filtraTec)}</div></div>` + `<p class="acp-diag">${esc(diag)}</p>`;
         ligar(alvo, D);
     }
 
@@ -428,13 +429,20 @@
     async function carregarCfg() {
         const { data, error } = await supabaseClient.from("configuracoes_app").select("valor").eq("chave", CHAVE).maybeSingle();
         if (error) throw error;
-        est.cfg = data && data.valor && Array.isArray(data.valor.grupos) ? data.valor : { grupos: [] };
+        const ok = data && data.valor && Array.isArray(data.valor.grupos) && data.valor.grupos.length;
+        est.cfg = ok ? data.valor : { grupos: [] };
+        est.cfgVazia = !ok;              // não guarda "sem grupo": a próxima abertura lê de novo
     }
     async function carregarOs(forcar) {
         try {
             if (forcar && typeof invalidarCacheOsPendentes === "function") invalidarCacheOsPendentes();
-            const linhas = await buscarOsPendentesCacheado();
-            est.cache = montar(linhas || []);
+            let linhas = await buscarOsPendentesCacheado();
+            if (!linhas || !linhas.length) {           // veio vazio (sessão/arquivo): tenta mais uma vez já
+                if (typeof invalidarCacheOsPendentes === "function") invalidarCacheOsPendentes();
+                linhas = await buscarOsPendentesCacheado();
+            }
+            if (!linhas || !linhas.length) throw new Error("a leitura das OS em aberto voltou vazia — clique em ↻ ou saia e entre de novo");
+            est.cache = montar(linhas);
             est.aviso = null;
         } catch (e) {
             console.error("Acompanhamento COP:", e);
@@ -446,7 +454,7 @@
         const alvo = $("acompCopConteudo");
         if (!alvo) return;
         estilo();
-        try { if (!est.cfg) await carregarCfg(); }
+        try { if (!est.cfg || est.cfgVazia) await carregarCfg(); }
         catch (e) { alvo.innerHTML = `<div class="acp-card acp-vazio">Não consegui ler os grupos: ${esc(e.message || e)}</div>`; return; }
         render();
         if (!est.cache || Date.now() - est.cache.lidoEm > 120000) await carregarOs(false);
@@ -543,7 +551,8 @@ html[data-tema="dark"] .acp-pill.re{background:#7f1d1d;color:#fecaca}
 .acp-form textarea{font-family:ui-monospace,Consolas,monospace;font-size:.8rem;line-height:1.5}
 .acp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .acp-acoes-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-@media (max-width:980px){.acp-colunas{grid-template-columns:1fr}.acp-tecs{position:static;max-height:none}}
+@media (max-width:980px){.acp-colunas{grid-template-columns:1fr}.acp-tecs{position:static;max-height:none;order:2}.acp-principal{order:1}}
+.acp-diag{margin:4px 0 0;font-size:.72rem;color:var(--cor-texto-suave);opacity:.75}
 @media (max-width:700px){.acp-grid{grid-template-columns:1fr}}`;
         document.head.appendChild(s);
     }
