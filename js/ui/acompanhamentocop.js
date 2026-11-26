@@ -165,12 +165,24 @@
         return { g, agendadas, reagendadas, emCampo };
     }
 
+    // grupo de quem está logado: pelo e-mail (se configurado) ou pelo NOME do login × responsável do grupo
+    // (26/11: o usuário não vai cadastrar e-mails — "Letícia Barroso" bate com "LETÍCIA ALVES OLIVEIRA BARROSO":
+    //  mesmo primeiro nome + o último nome do responsável aparece no nome do login)
     function grupoDoUsuario() {
         const email = norm(APP?.usuario?.email);
-        return grupos().findIndex(g => (g.emails || []).some(e => norm(e) === email));
+        const porEmail = grupos().findIndex(g => (g.emails || []).some(e => norm(e) === email));
+        if (porEmail >= 0) return porEmail;
+        const nome = norm(APP?.usuario?.nome).split(/\s+/).filter(Boolean);
+        if (!nome.length) return -1;
+        return grupos().findIndex(g => {
+            const r = norm(g.responsavel).split(/\s+/).filter(Boolean);
+            return r.length > 0 && r[0] === nome[0] && (r.length === 1 || nome.slice(1).includes(r[r.length - 1]));
+        });
     }
     const podeEditar = () => typeof ehAdmin === "function" && ehAdmin();
-    const podeTrocarGrupo = () => podeEditar() || grupoDoUsuario() < 0;
+    // 26/11: todo mundo vê todos os grupos (se alguém faltar, os colegas acham o técnico e o número);
+    // abre no grupo da pessoa
+    const podeTrocarGrupo = () => true;
 
     // ---------- tela ----------
     function render() {
@@ -199,7 +211,7 @@
     function htmlTopo({ g }) {
         const atualizado = est.cache.geradoEm ? new Date(est.cache.geradoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
         const sel = podeTrocarGrupo()
-            ? `<select class="acp-sel" data-ac-grupo aria-label="Grupo">${grupos().map((x, i) => `<option value="${i}" ${i === est.grupo ? "selected" : ""}>${esc(x.nome)} — ${esc(x.responsavel || "")}</option>`).join("")}</select>`
+            ? `<select class="acp-sel" data-ac-grupo aria-label="Grupo">${grupos().map((x, i) => `<option value="${i}" ${i === est.grupo ? "selected" : ""}>${esc(x.nome)} — ${esc(x.responsavel || "")}${i === grupoDoUsuario() ? " (seu grupo)" : ""}</option>`).join("")}</select>`
             : `<strong class="acp-grupo-nome">${esc(g.nome)}</strong>`;
         return `
           ${est.aviso ? `<div class="acp-aviso ${est.aviso.erro ? "erro" : ""}">${esc(est.aviso.texto)}</div>` : ""}
