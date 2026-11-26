@@ -84,12 +84,21 @@
     const ID_REL = "agendaAgendadasConteudo", ID_LST = "agendaListaAgendadasConteudo";
     const hora = d => d ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
 
+    // 26/11: na aba Ordens o setor × cidade respeita o filtro do topo (Cidade / Assunto — igoFiltro em info-gestaoordens.js)
+    function filtroDoTopo(lista) {
+        const f = typeof igoFiltro !== "undefined" ? igoFiltro : null;
+        if (!f) return lista;
+        const cids = (f.cidades || []).map(norm), grs = f.assuntos || [];
+        return lista.filter(o => (!cids.length || cids.includes(norm(o.cidade))) && (!grs.length || grs.includes(o.grupoRot)));
+    }
+    const ctxDe = todas => ({ todas, setores: contarPor(todas, "setorRot"), cidades: contarPor(todas, "cidadeRot"), grupos: contarPor(todas, "grupoRot") });
+
     function render() {
         if (!cache) return;
         const todas = osDoDia();
-        const ctx = { todas, setores: contarPor(todas, "setorRot"), cidades: contarPor(todas, "cidadeRot"), grupos: contarPor(todas, "grupoRot") };
+        const ctx = ctxDe(todas);
         const rel = document.getElementById(ID_REL), lst = document.getElementById(ID_LST);
-        if (rel) { rel.innerHTML = htmlTopo(ctx, "rel") + htmlRelatorio(ctx); ligar(rel, ctx); }
+        if (rel) { const c = ctxDe(filtroDoTopo(todas)); rel.innerHTML = htmlTopo(c, "rel") + htmlRelatorio(c); ligar(rel, c); }
         if (lst) { lst.innerHTML = htmlTopo(ctx, "lst") + htmlLista(ctx); ligar(lst, ctx); }
     }
 
@@ -324,4 +333,5 @@
     }
 
     window.carregarAgendaAgendadas = carregar;
+    window.redesenharAgendaAgendadas = () => { if (cache) render(); };   // filtro do topo da aba Ordens mudou
 })();

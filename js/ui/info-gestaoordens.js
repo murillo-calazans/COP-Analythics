@@ -208,7 +208,7 @@ registrarInfografico("agenda-agendadas", async () => {
     const recorte = [igoRotuloRecorte(igoFiltro.cidades, c => c, "cidades"), recorteAssunto].filter(Boolean).join(" · ");
     const pop = (titulo, oss) => () => abrirPopupBacklog(recorte ? `${titulo} · ${recorte}` : titulo, oss);
     const cartoes = [];
-    const refazer = () => renderizarInfografico("agenda-agendadas");
+    const refazer = () => { renderizarInfografico("agenda-agendadas"); if (typeof redesenharAgendaAgendadas === "function") redesenharAgendaAgendadas(); };
     cartoes.filtros = [
         { rotulo: "Cidade", plural: "cidades", feminino: true, todos: `Todas as cidades (${IG.fmt(doAssunto.length)})`, valores: igoFiltro.cidades,
             opcoes: opCidades.map(([c, n]) => ({ valor: c, nome: c, n })),
