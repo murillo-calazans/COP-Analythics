@@ -131,9 +131,13 @@
         if ((g.cidades || []).some(c => norm(c) === norm(o.cidade))) return { dono: "cidade", tec: null };
         return null;
     }
+    // 26/11: nome completo igual vence em QUALQUER grupo antes do "1º + último nome"
+    // (ex.: "Fabio Bento dos Santos" do Gilberto × "Fabio Santos" da Rayane)
     function tecPorNome(nome, gi, idx) {
         const n = norm(nome); if (!n) return null;
-        for (const [k, v] of idx.nomeTec) if (v.gi === gi && (k === n || (k.split(" ")[0] === n.split(" ")[0] && k.split(" ").pop() === n.split(" ").pop()))) return v.t;
+        const exato = [...idx.nomeTec].find(([k]) => k === n);
+        if (exato) return exato[1].gi === gi ? exato[1].t : null;
+        for (const [k, v] of idx.nomeTec) if (v.gi === gi && k.split(" ")[0] === n.split(" ")[0] && k.split(" ").pop() === n.split(" ").pop()) return v.t;
         return null;
     }
 
@@ -151,7 +155,9 @@
         for (const r of est.cache.reag) {
             if (isoDia(r.data) !== alvo || SETORES_FORA.has(norm(r.os.setor))) continue;
             // quem reagendou é técnico de algum grupo? então vai para o grupo dele (e só dele)
-            const giNome = grupos().findIndex((x, i) => tecPorNome(r.quem, i, idx));
+            // ID IXC da movimentação manda; o nome só decide quando o ID não é de técnico de grupo
+            const giNome = r.col && idx.tecGrupo.has(r.col) && tecPorNome(r.quem, idx.tecGrupo.get(r.col), idx)
+                ? idx.tecGrupo.get(r.col) : grupos().findIndex((x, i) => tecPorNome(r.quem, i, idx));
             if (giNome >= 0 && giNome !== gi) continue;
             const tNome = giNome === gi ? tecPorNome(r.quem, gi, idx) : null;
             const tRow = r.col && idx.tecGrupo.get(r.col) === gi ? g.tecnicos.find(t => String(t.id) === r.col) : null;
@@ -310,7 +316,9 @@
         const linhas = (est.tl && est.tl.dados && est.tl.dados.linhasTec) || [];
         return (g.tecnicos || []).filter(t => !est.tec || String(t.id || t.nome) === est.tec).map(t => {
             const blocos = [];
-            for (const lt of linhas) if (mesmoNome(lt.nome, t.nome)) blocos.push(...lt.blocos);
+            // nome completo de OUTRO técnico cadastrado (ex.: Fabio Bento dos Santos × Fabio Santos) não entra pelo "1º + último nome"
+            const outros = new Set(grupos().flatMap(x => x.tecnicos || []).filter(o => o !== t).map(o => semSufixo(o.nome)));
+            for (const lt of linhas) if (mesmoNome(lt.nome, t.nome) && (semSufixo(lt.nome) === semSufixo(t.nome) || !outros.has(semSufixo(lt.nome)))) blocos.push(...lt.blocos);
             blocos.sort((a, b) => a.ini - b.ini);
             return { t, blocos };
         });
