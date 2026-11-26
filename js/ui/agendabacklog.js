@@ -524,10 +524,62 @@ async function desenharBairrosBacklog(itens, sufixo) {
         }));
 }
 
+// 26/11 (usuário): alertas tirados das mensagens da OS — "cliente pediu dia tal", "só pode sábado", "só à tarde"…
+const _bkTxt = t => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const _bkSistema = m => !m || /^(ordem|o\.s\.?|os) (assumida|aberta|encaminhada|finalizada|executada)|^altera[cç][aã]o de (setor|dados)|^ajuste de setor|^chamado aberto|^agendamento de ordem de servi|^encaixado na agenda|^processo:|^pr[eé] agendamento|iniciou o deslocamento/i.test(String(m).trim());
+const _BK_DIAS = { segunda: "segunda", terca: "terça", quarta: "quarta", quinta: "quinta", sexta: "sexta", sabado: "sábado", domingo: "domingo" };
+const _BK_PEDIU = /(cliente|titular|responsavel)[^.;]{0,40}(pediu|pede|solicitou|solicita|prefere|preferiu|quer|optou|so pode|pode somente|pode apenas|marcou|remarcou|reagendou)|a pedido d[oa] (cliente|titular)|(conforme|por) solicitacao d[oa] cliente|(solicitou|pediu|prefere|preferiu|optou)[^.;]{0,30}(reagend|remarc|para o dia|pra o dia|para dia|pra dia|para (segunda|terca|quarta|quinta|sexta|sabado|domingo))/;
+const _BK_REGRAS = [
+    { rot: "Só fim de semana", cls: "alerta", re: /(so|somente|apenas)\s(\S+\s){0,4}(sabado|domingo|fim de semana|final de semana|finais de semana)/ },
+    { rot: "Só à tarde", cls: "hora", re: /(so|somente|apenas|prefere|pode|consegue|estara)\s(\S+\s){0,4}(a|na|de|pela|parte da)\s+tarde|(turno|periodo) da tarde/ },
+    { rot: "Só de manhã", cls: "hora", re: /(so|somente|apenas|prefere|pode|consegue|estara)\s(\S+\s){0,4}(a|na|de|pela|parte da)\s+manha|(turno|periodo) da manha/ },
+    { rot: "Horário pedido", cls: "hora", re: /(pediu|solicitou|prefere|pode|so pode|disponivel|disponibilidade|consegue|estara|confirmad\w*)[^.;]{0,40}((a partir|apos|depois|antes)\s+d[aeo]s?\s+\d{1,2}\s*(h|:|hs|hrs|horas)|(as|para as)\s+\d{1,2}(:\d\d)?\s*(h|hs|hrs|horas))/ },
+    { rot: "Só ligação", cls: "contato", re: /(so|somente|apenas)\s(\S+\s){0,3}(por\s)?(ligacao|ligar|telefone|chamada)|nao (tem|usa|possui) (whats|zap|wpp)/ },
+    { rot: "Ligar antes", cls: "contato", re: /(ligar|ligacao|contato|avisar)\s(\S+\s){0,3}antes|antes de (ir|sair|chegar|passar)/ },
+    { rot: "Urgência", cls: "alerta", re: /urgen|trabalha em casa|home ?office/ },
+    { rot: "Cliente ausente", cls: "alerta", re: /cliente (nao interagiu|ausente|nao atendeu|nao respondeu|nao estava)|ninguem (atendeu|no local|em casa)|nao (havia|tinha) ninguem|sem retorno do cliente/ },
+    { rot: "Viajando", cls: "alerta", re: /viaj(ando|ou|ara|ar)|em viagem/ },
+    { rot: "Vai avisar", cls: "contato", re: /(vai|ira) (avisar|retornar|entrar em contato)|aguardar (o )?(retorno|contato) do cliente/ }
+];
+function alertasDaOsBacklog(eventos) {
+    const achou = new Map();
+    const msgs = (eventos || []).filter(e => !_bkSistema(e.msg)).sort((a, b) => (b.data || 0) - (a.data || 0));
+    for (const e of msgs) {
+        const t = _bkTxt(e.msg);
+        // pediu um dia: "dia 28", "dia 28/11", "para sábado"…
+        if (!achou.has("pediu") && _BK_PEDIU.test(t)) {
+            const d = t.match(/\bdia (\d{1,2})(?:\/(\d{1,2}))?\b/) || t.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+            const sem = t.match(/\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/);
+            const rot = d ? `Pediu dia ${d[1].padStart(2, "0")}${d[2] ? "/" + d[2].padStart(2, "0") : ""}` : sem ? `Pediu ${_BK_DIAS[sem[1]]}` : null;
+            if (rot) achou.set("pediu", { rot, cls: "alerta", fonte: e.msg, data: e.data });
+        }
+        for (const r of _BK_REGRAS) if (!achou.has(r.rot) && r.re.test(t)) achou.set(r.rot, { ...r, fonte: e.msg, data: e.data });
+    }
+    return [...achou.values()].slice(0, 4);
+}
+function htmlAlertasBacklog(eventos) {
+    return alertasDaOsBacklog(eventos).map(a => {
+        const quando = a.data ? a.data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " : "";
+        return `<span class="bk-alerta bk-alerta-${a.cls}" title="${escaparHtml(quando + String(a.fonte || "").slice(0, 300))}">⚠ ${escaparHtml(a.rot)}</span>`;
+    }).join("");
+}
+(function estiloAlertasBacklog() {
+    if (document.getElementById("estilo-bk-alerta")) return;
+    const s = document.createElement("style"); s.id = "estilo-bk-alerta";
+    s.textContent = `.bk-alertas{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.bk-alerta{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.72rem;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.bk-alerta-hora{background:#e0f2fe;color:#075985;border-color:#7dd3fc}
+.bk-alerta-contato{background:#ede9fe;color:#5b21b6;border-color:#c4b5fd}
+@media (prefers-color-scheme:dark){.bk-alerta{background:#451a03;color:#fde68a;border-color:#92400e}.bk-alerta-hora{background:#082f49;color:#bae6fd;border-color:#075985}.bk-alerta-contato{background:#2e1065;color:#ddd6fe;border-color:#5b21b6}}`;
+    document.head.appendChild(s);
+})();
+
 function abrirPopupBacklog(titulo, oss, subtitulo = "OS de campo em aberto", fonte = agendaBacklogCache) {
     fecharPopupBacklog();
-    const lista = oss.slice(0, BACKLOG_TETO);
+    // 26/11: da mais antiga (abertura) para a mais nova
+    const lista = [...oss].sort((a, b) => ((a.abertura ? a.abertura.getTime() : Infinity) - (b.abertura ? b.abertura.getTime() : Infinity)) || String(a.id).localeCompare(String(b.id))).slice(0, BACKLOG_TETO);
     const linhas = lista.map(o => {
+        const alertas = htmlAlertasBacklog(fonte?.eventosPorOs?.[String(o.id)]);
         const tagAg = o.fechamento
             ? `<span class="escala-tag">✓ finalizada ${o.fechamento.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>`
             : o.agendada && o.agendamento
@@ -537,7 +589,8 @@ function abrirPopupBacklog(titulo, oss, subtitulo = "OS de campo em aberto", fon
         return `
           <li class="ixc-os ixc-os-click" data-bk-os="${escaparHtml(String(o.id))}" title="Ver a ordem completa">
             <div class="ixc-os-linha"><span class="ixc-os-cliente">#${escaparHtml(String(o.id))} · ${escaparHtml(o.cliente || "—")}</span>${tagAg}</div>
-            <div class="ixc-os-sub">${escaparHtml(o.cidade || "—")}${(o.bairroOriginal || o.bairro) ? " · " + escaparHtml(o.bairroOriginal || o.bairro) : ""} · ${escaparHtml(ixcAssuntoCurto ? ixcAssuntoCurto(o.assunto) : (o.assunto || "—"))} ${tagAntiga}</div>
+            <div class="ixc-os-sub">${escaparHtml(o.cidade || "—")}${(o.bairroOriginal || o.bairro) ? " · " + escaparHtml(o.bairroOriginal || o.bairro) : ""} · ${escaparHtml(ixcAssuntoCurto ? ixcAssuntoCurto(o.assunto) : (o.assunto || "—"))}${o.abertura ? ` · aberta ${o.abertura.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : ""} ${tagAntiga}</div>
+            ${alertas ? `<div class="bk-alertas">${alertas}</div>` : ""}
           </li>`;
     }).join("");
 
