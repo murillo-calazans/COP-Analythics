@@ -39,6 +39,34 @@ function igoSituacao(o) {
     return "aberta";
 }
 
+// 26/11: gráfico por cidade pelo PRAZO — mesmas regras da mensagem 8h/18h do PENDENCIAS
+// (C:\cop-robo\relatorios\levantamento-b2c\msg-instal-atrasadas.js, cto-atend.js, classe.js).
+// Instalação 72h, o resto 48h, contado da abertura da OS. Fora do prazo: CTO nas mensagens → "CTO";
+// cliente pediu outra data / ausente → "Pediu outra data"; senão "Atrasada".
+const IGO_PRAZO = [
+    { id: "prazo", rotulo: "No prazo", cor: "verde" },
+    { id: "atr", rotulo: "Atrasada", cor: "vermelho" },
+    { id: "ped", rotulo: "Cliente pediu outra data", cor: "amarelo" },
+    { id: "cto", rotulo: "Problema de CTO", cor: "roxo" }
+];
+const IGO_RX_CTO = /\b(ctos?|caixas?|cx|ceo)\b[^.;]{0,60}(cheia|lotad|sem vaga|sem porta|expan|sem potencia|sem sinal|atenuad|limpeza)|(sem vaga|sem porta|porta vaga|sem potencia|cheia|lotad)[^.;]{0,40}\b(ctos?|caixas?|cx)\b|troca de splitter|cto expandida|portas? liberad|limpe[sz]a da cto|lacre: sem potencia|potencia (alta|baixa|ruim)/;
+const IGO_RX_PEDIU = /(solicit\w*|pediu|pede|prefere|preferiu|optou)( o| a| uma| um| pelo| para)? (reagend\w*|remarc\w*|outr[oa] (dia|data|horario|periodo)|(para|pra) (o )?(dia|segunda|terca|quarta|quinta|sexta|sabado|domingo|amanha|semana|proxim)|(instalacao|visita|atendimento|agendamento) (para|pra) (o )?(dia|segunda|terca|quarta|quinta|sexta|sabado|amanha|proxim))|a pedido d[oa] (cliente|titular)|(conforme|por) solicitacao d[oa] cliente|(nao|ninguem) (havera|tera|vai ter|estara|vai estar|esta|se encontra|pode receber|podera receber)[^.]{0,40}(local|residencia|casa|receber)|so (se encontra|esta|estara|vai estar|fica|pode)[^.]{0,30}(local|residencia|casa|fim de semana|finais de semana|sabado|domingo|apos|depois|a partir)|(cliente|titular|responsavel)[^.]{0,20}(remarc\w*|reagend\w*|marcou|mudou a data|trocou a data|alterou a data)|remarcad[oa] (pra|para|a pedido)|indisponibilidade|(cliente|titular|responsavel)[^.]{0,30}(viajando|viajou|em viagem|internad|hospital)/;
+const IGO_RX_AUSENTE = /cliente (nao interagiu|ausente|nao atendeu|nao respondeu|nao estava)|ninguem (atendeu|no local|em casa)|nao (havia|tinha) ninguem|sem contato com o cliente|sem retorno do cliente|local fechado|portao (fechado|trancado)/;
+const igoTxt = t => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+function igoSlaHoras(o) {
+    const g = typeof grupoDoAssunto === "function" ? grupoDoAssunto(o.assunto) : o.assunto;
+    return /instala/i.test(igoTxt(g)) ? 72 : 48;
+}
+
+function igoPrazo(o, eventos, agora) {
+    if (!o.abertura || (agora - o.abertura.getTime()) / 3600000 <= igoSlaHoras(o)) return "prazo";
+    const txt = (eventos || []).map(e => igoTxt(e.msg)).filter(Boolean);
+    if (!txt.some(t => /passagem obstruida|desobstru/.test(t)) && txt.some(t => IGO_RX_CTO.test(t))) return "cto";
+    if (txt.some(t => (IGO_RX_PEDIU.test(t) && !/bcop solicitou/.test(t)) || IGO_RX_AUSENTE.test(t))) return "ped";
+    return "atr";
+}
+
 const IGO_PRIO_GRUPOS = [
     { id: "semAgenda", rotulo: "Sem agendamento", cor: "vermelho" },
     { id: "agendada", rotulo: "Agendadas", cor: "azul" },
@@ -265,13 +293,16 @@ registrarInfografico("agenda-agendadas", async () => {
     const porCidade = new Map();
     for (const o of itens) { const c = o.cidade || "—"; if (!porCidade.has(c)) porCidade.set(c, []); porCidade.get(c).push(o); }
     const cidades = [...porCidade].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "pt-BR")).slice(0, 12);
-    const naSituacao = (oss, s) => oss.filter(o => igoSituacao(o) === s.id);
+    // 26/11: pilhas pelo prazo (no prazo / atrasada / pediu outra data / CTO) — total da cidade em cima da coluna
+    const agora = Date.now();
+    const prazoDe = new Map(itens.map(o => [o, igoPrazo(o, modelo.eventosPorOs?.[String(o.id)], agora)]));
+    const naSituacao = (oss, s) => oss.filter(o => prazoDe.get(o) === s.id);
     cartoes.push({
-        titulo: "Por cidade", sub: `${recorteAssunto ? `${recorteAssunto} em aberto` : "OS de campo em aberto"} · pela situação atual`, cor: "azul", icone: "mapa", span: 2,
+        titulo: "Por cidade", sub: `${recorteAssunto ? `${recorteAssunto} em aberto` : "OS de campo em aberto"} · total ${IG.fmt(total)} · prazo: instalação 72h, demais 48h (da abertura da OS)`, cor: "azul", icone: "mapa", span: 2,
         blocos: [{ t: "colunas", cor: "azul",
             itens: cidades.map(([c, oss]) => ({ rotulo: c, n: oss.length,
-                pilha: IGO_SITUACOES.map(s => { const lista = naSituacao(oss, s); return { rotulo: s.rotulo, n: lista.length, cor: s.cor, acao: pop(`${c} · ${s.rotulo}`, lista) }; }) })),
-            legenda: IGO_SITUACOES.map(s => ({ rotulo: s.rotulo, cor: s.cor, n: naSituacao(itens, s).length })) }]
+                pilha: IGO_PRAZO.map(s => { const lista = naSituacao(oss, s); return { rotulo: s.rotulo, n: lista.length, cor: s.cor, acao: pop(`${c} · ${s.rotulo}`, lista) }; }) })),
+            legenda: IGO_PRAZO.map(s => ({ rotulo: s.rotulo, cor: s.cor, n: naSituacao(itens, s).length })) }]
     });
 
     const bairros = await igoCartaoBairros(itens);
