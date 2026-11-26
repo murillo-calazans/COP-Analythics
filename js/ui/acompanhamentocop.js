@@ -171,6 +171,44 @@
         return { g, agendadas, reagendadas, emCampo };
     }
 
+    // 26/11: visão "Todos os grupos" (admin/editor) — TODAS as OS agendadas do dia, cada uma com o grupo dela
+    const TODOS = -1;
+    const grupoTodos = () => ({ nome: "Todos os grupos", responsavel: "", todos: true,
+        tecnicos: grupos().flatMap(g => g.tecnicos || []) });
+    const nomeGrupoDoTec = t => (grupos().find(g => (g.tecnicos || []).includes(t)) || {}).nome || "";
+    function grupoDaOs(o, idx) {
+        let achou = null;
+        for (let gi = 0; gi < grupos().length; gi++) {
+            const d = daOsNoGrupo(o, gi, idx);
+            if (d && (d.dono !== "cidade" || !achou)) { achou = { ...d, gi }; if (d.dono !== "cidade") break; }
+        }
+        return achou;
+    }
+    function dadosTodos() {
+        const idx = indices(), g = grupoTodos(), alvo = isoDia(diaAlvo());
+        const nomeG = gi => (gi >= 0 && grupos()[gi] ? grupos()[gi].nome : "Sem grupo");
+        const agendadas = [], reagendadas = [], emCampo = [];
+        for (const o of est.cache.porOs.values()) {
+            if (SETORES_FORA.has(norm(o.setor))) continue;
+            const d = grupoDaOs(o, idx), st = norm(o.status);
+            if (o.agenda && isoDia(o.agenda) === alvo && st !== "finalizada")
+                agendadas.push({ ...o, dono: d ? d.dono : "nenhum", tec: d && d.tec, grupoNome: nomeG(d ? d.gi : -1), obs: observacoes(o.msgs) });
+            if (EM_CAMPO.has(st) && d && d.tec) emCampo.push({ ...o, tec: d.tec });
+        }
+        for (const r of est.cache.reag) {
+            if (isoDia(r.data) !== alvo || SETORES_FORA.has(norm(r.os.setor))) continue;
+            let gi = r.col && idx.tecGrupo.has(r.col) ? idx.tecGrupo.get(r.col) : -1;
+            let tec = gi >= 0 ? grupos()[gi].tecnicos.find(t => String(t.id) === r.col) : null;
+            const giNome = grupos().findIndex((x, i) => tecPorNome(r.quem, i, idx));
+            if (giNome >= 0 && !(gi >= 0 && tecPorNome(r.quem, gi, idx))) { gi = giNome; tec = tecPorNome(r.quem, gi, idx); }
+            if (gi < 0) { const d = grupoDaOs(r.os, idx); if (d) { gi = d.gi; tec = d.tec; } }
+            reagendadas.push({ ...r, tec: tec || null, grupoNome: nomeG(gi) });
+        }
+        agendadas.sort((a, b) => (a.agenda - b.agenda) || a.id.localeCompare(b.id));
+        reagendadas.sort((a, b) => b.data - a.data);
+        return { g, agendadas, reagendadas, emCampo };
+    }
+
     // grupo de quem está logado: pelo e-mail (se configurado) ou pelo NOME do login × responsável do grupo
     // (26/11: o usuário não vai cadastrar e-mails — "Letícia Barroso" bate com "LETÍCIA ALVES OLIVEIRA BARROSO":
     //  mesmo primeiro nome + o último nome do responsável aparece no nome do login)
@@ -189,6 +227,8 @@
     // 26/11: todo mundo vê todos os grupos (se alguém faltar, os colegas acham o técnico e o número);
     // abre no grupo da pessoa
     const podeTrocarGrupo = () => true;
+    const podeVerTodos = () => typeof podeEditarOperacao === "function" && podeEditarOperacao();   // admin ou editor
+    const ehTodos = () => est.grupo === TODOS && podeVerTodos();
 
     // ---------- tela ----------
     function render() {
@@ -197,9 +237,9 @@
         estilo();
         if (est.editando) { alvo.innerHTML = htmlEditor(); ligarEditor(alvo); return; }
         if (!grupos().length) { alvo.innerHTML = `<div class="acp-card acp-vazio">Nenhum grupo configurado ainda.${podeEditar() ? ` <button class="acp-btn" data-ac-editar>⚙ Configurar grupos</button>` : ""}</div>`; ligar(alvo); return; }
-        if (est.grupo === null || !grupos()[est.grupo]) { const m = grupoDoUsuario(); est.grupo = m >= 0 ? m : 0; }
+        if (est.grupo === null || (!grupos()[est.grupo] && !ehTodos())) { const m = grupoDoUsuario(); est.grupo = m >= 0 ? m : podeVerTodos() ? TODOS : 0; }
         if (!est.cache) { alvo.innerHTML = `<div class="acp-card acp-vazio">Carregando as OS…</div>`; return; }
-        const D = dadosDoGrupo(est.grupo);
+        const D = ehTodos() ? dadosTodos() : dadosDoGrupo(est.grupo);
         const tecSel = est.tec;
         const filtraTec = arr => tecSel ? arr.filter(x => x.tec && String(x.tec.id || x.tec.nome) === tecSel) : arr;
         const diag = `${est.cache.porOs.size} OS em aberto lidas · ${est.cache.reag.length} reagendamentos · login ${APP?.usuario?.email || "?"} (${APP?.usuario?.papel || "?"}) · grupo ${grupoDoUsuario() >= 0 ? grupos()[grupoDoUsuario()].nome : "nenhum pelo login"}`;
@@ -217,14 +257,14 @@
     function htmlTopo({ g }) {
         const atualizado = est.cache.geradoEm ? new Date(est.cache.geradoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
         const sel = podeTrocarGrupo()
-            ? `<select class="acp-sel" data-ac-grupo aria-label="Grupo">${grupos().map((x, i) => `<option value="${i}" ${i === est.grupo ? "selected" : ""}>${esc(x.nome)} — ${esc(x.responsavel || "")}${i === grupoDoUsuario() ? " (seu grupo)" : ""}</option>`).join("")}</select>`
+            ? `<select class="acp-sel" data-ac-grupo aria-label="Grupo">${podeVerTodos() ? `<option value="${TODOS}" ${ehTodos() ? "selected" : ""}>Todos os grupos — todas as OS</option>` : ""}${grupos().map((x, i) => `<option value="${i}" ${i === est.grupo ? "selected" : ""}>${esc(x.nome)} — ${esc(x.responsavel || "")}${i === grupoDoUsuario() ? " (seu grupo)" : ""}</option>`).join("")}</select>`
             : `<strong class="acp-grupo-nome">${esc(g.nome)}</strong>`;
         return `
           ${est.aviso ? `<div class="acp-aviso ${est.aviso.erro ? "erro" : ""}">${esc(est.aviso.texto)}</div>` : ""}
           <div class="acp-topo">
             <div class="acp-topo-esq">
               ${sel}
-              <span class="acp-suave">Responsável: <b>${esc(g.responsavel || "—")}</b>${g.turno ? ` · ${esc(g.turno)}` : ""}</span>
+              <span class="acp-suave">${g.todos ? `<b>${grupos().length} grupos</b> · todas as OS agendadas do dia` : `Responsável: <b>${esc(g.responsavel || "—")}</b>${g.turno ? ` · ${esc(g.turno)}` : ""}`}</span>
             </div>
             <div class="acp-dia">
               <button type="button" class="acp-seta" data-ac-dia="-1" aria-label="Dia anterior">‹</button>
@@ -263,7 +303,7 @@
                 <button type="button" class="acp-tec-nome" data-ac-tec="${esc(chave)}" title="Filtrar as OS deste técnico">
                   <span class="acp-ponto ${campo ? "campo" : nAg ? "agenda" : ""}" title="${campo ? `Em ${esc(campo.status.toLowerCase())} na OS ${esc(campo.id)}` : ""}"></span>
                   <b>${esc(curto(t.nome))}</b>
-                  <span class="acp-suave">${esc([t.cidade, t.equipe].filter(Boolean).join(" · "))}${t.dupla ? ` · dupla ${esc(curto(t.dupla))}` : ""}</span>
+                  <span class="acp-suave">${esc([g.todos ? nomeGrupoDoTec(t) : "", t.cidade, t.equipe].filter(Boolean).join(" · "))}${t.dupla ? ` · dupla ${esc(curto(t.dupla))}` : ""}</span>
                 </button>
                 <span class="acp-tec-num">${nAg ? `<span class="acp-pill" title="OS agendadas">${nAg}</span>` : ""}${nRe ? `<span class="acp-pill re" title="Reagendadas">${nRe}↺</span>` : ""}</span>
                 <span class="acp-fones">${fs.length ? fs.map(f => `<span class="acp-fone"><a href="tel:+55${f}" title="Ligar">${foneFmt(f)}</a><button type="button" class="acp-copiar" data-ac-copiar="${f}" title="Copiar o número">Copiar</button><a class="acp-wa" href="https://wa.me/55${f}" target="_blank" rel="noopener" title="WhatsApp">WhatsApp</a></span>`).join("") : `<span class="acp-suave">sem telefone</span>`}</span>
@@ -357,7 +397,7 @@
     function desenharTimeline() {
         const board = $("acpTlBoard"), grid = $("acpTlGrid");
         if (!board || !grid || !est.tl || !est.tl.dados) return;
-        const rows = linhasTimeline(grupos()[est.grupo]);
+        const rows = linhasTimeline(ehTodos() ? grupoTodos() : grupos()[est.grupo]);
         const NAMEW = 220, hw = Math.max(70, Math.floor((board.clientWidth - NAMEW) / (TL_JANELA_FIM - TL_JANELA_INI)));
         const laneW = (TL_DIA_FIM - TL_DIA_INI) * hw;
         const antes = _tlHourW;
@@ -419,14 +459,20 @@
         // agrupa por técnico (OS da terceira/cidade sem técnico do grupo vão para o fim)
         const blocos = new Map();
         for (const o of lista) {
-            const k = o.tec ? o.tec.nome : o.dono === "setor" ? `${o.setor} (filial — sem técnico definido)` : "Sem técnico do grupo (pela cidade)";
+            const k = o.grupoNome !== undefined   // visão "Todos os grupos"
+                ? (o.tec ? `${curto(o.tec.nome)} · ${o.grupoNome}` : o.dono === "setor" ? `${o.setor} (filial — sem técnico definido) · ${o.grupoNome}`
+                    : o.dono === "nenhum" ? `Sem grupo · ${o.cidade || "sem cidade"}` : `Sem técnico do grupo (pela cidade) · ${o.grupoNome}`)
+                : o.tec ? o.tec.nome : o.dono === "setor" ? `${o.setor} (filial — sem técnico definido)` : "Sem técnico do grupo (pela cidade)";
             (blocos.get(k) || blocos.set(k, []).get(k)).push(o);
         }
-        const ordem = [...blocos.keys()].sort((a, b) => (/^Sem|filial/.test(a) - /^Sem|filial/.test(b)) || a.localeCompare(b, "pt-BR"));
+        // na visão "Todos os grupos" ordena pelo grupo (parte depois do " · "), depois pelo técnico
+        const gr = k => (k.includes(" · ") ? k.split(" · ").pop() : "");
+        const ordem = [...blocos.keys()].sort((a, b) => (/^Sem grupo/.test(a) - /^Sem grupo/.test(b)) || gr(a).localeCompare(gr(b), "pt-BR")
+            || (/^Sem|filial/.test(a) - /^Sem|filial/.test(b)) || a.localeCompare(b, "pt-BR"));
         return ordem.map(k => {
             const os = blocos.get(k);
             return `<div class="acp-card acp-bloco">
-              <div class="acp-card-tit">${esc(/^Sem|filial/.test(k) ? k : curto(k))} <span class="acp-suave">${os.length} OS</span></div>
+              <div class="acp-card-tit">${esc(/^Sem|filial| · /.test(k) ? k : curto(k))} <span class="acp-suave">${os.length} OS</span></div>
               <div class="acp-tab-wrap"><table class="acp-tab">
                 <thead><tr><th>Hora</th><th>OS</th><th>Cliente</th><th>Assunto</th><th>Bairro</th><th>Status</th><th>Observações / última mensagem</th></tr></thead>
                 <tbody>${os.map(o => `<tr>
@@ -452,7 +498,7 @@
                 <td class="acp-hora">${hora(r.data)}</td>
                 <td><a href="#" data-ac-os="${esc(r.os.id)}">${esc(r.os.id)}</a></td>
                 <td>${esc(r.os.cliente)}<div class="acp-suave">${esc([r.os.bairro, r.os.cidade].filter(Boolean).join(" · "))}</div></td>
-                <td>${esc(nomeBonito(r.quem) || "—")}${r.tec && norm(curto(r.tec.nome)) !== norm(curto(r.quem)) ? `<div class="acp-suave">técnico: ${esc(curto(r.tec.nome))}</div>` : ""}</td>
+                <td>${esc(nomeBonito(r.quem) || "—")}${r.tec && norm(curto(r.tec.nome)) !== norm(curto(r.quem)) ? `<div class="acp-suave">técnico: ${esc(curto(r.tec.nome))}</div>` : ""}${r.grupoNome ? `<div class="acp-suave">${esc(r.grupoNome)}</div>` : ""}</td>
                 <td class="acp-motivo">${(() => {
                     const resp = r.resposta.trim(), msg = r.msg.trim();
                     const resto = resp && norm(msg).startsWith(norm(resp)) ? msg.slice(resp.length).replace(/^[\s.\-–:]+/, "") : msg;
