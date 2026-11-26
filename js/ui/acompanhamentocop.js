@@ -243,6 +243,10 @@
         if (!grupos().length) { alvo.innerHTML = `<div class="acp-card acp-vazio">Nenhum grupo configurado ainda.${podeEditar() ? ` <button class="acp-btn" data-ac-editar>⚙ Configurar grupos</button>` : ""}</div>`; ligar(alvo); return; }
         if (est.grupo === null || (!grupos()[est.grupo] && !ehTodos())) { const m = grupoDoUsuario(); est.grupo = m >= 0 ? m : podeVerTodos() ? TODOS : 0; }
         if (!est.cache) { alvo.innerHTML = `<div class="acp-card acp-vazio">Carregando as OS…</div>`; return; }
+        if (est.obsDia !== isoDia(diaAlvo()) && !est.obsCarregando) {
+            est.obsCarregando = true;
+            carregarObs().finally(() => { est.obsCarregando = false; render(); });
+        }
         const D = ehTodos() ? dadosTodos() : dadosDoGrupo(est.grupo);
         const tecSel = est.tec;
         const filtraTec = arr => tecSel ? arr.filter(x => x.tec && String(x.tec.id || x.tec.nome) === tecSel) : arr;
@@ -309,7 +313,8 @@
                   <b>${esc(curto(t.nome))}</b>
                   <span class="acp-suave">${esc([g.todos ? nomeGrupoDoTec(t) : "", t.cidade, t.equipe].filter(Boolean).join(" · "))}${t.dupla ? ` · dupla ${esc(curto(t.dupla))}` : ""}</span>
                 </button>
-                <span class="acp-tec-num">${nAg ? `<span class="acp-pill" title="OS agendadas">${nAg}</span>` : ""}${nRe ? `<span class="acp-pill re" title="Reagendadas">${nRe}↺</span>` : ""}</span>
+                <span class="acp-tec-num">${nAg ? `<span class="acp-pill" title="OS agendadas">${nAg}</span>` : ""}${nRe ? `<span class="acp-pill re" title="Reagendadas">${nRe}↺</span>` : ""}${obsDoTec(t) || est.obsEditando === chave ? "" : `<button type="button" class="acp-obs-add" data-ac-obs="${esc(chave)}" title="Observação do dia (carro quebrado, problema de rota…)">+ obs</button>`}</span>
+                ${htmlObsTec(t)}
                 <span class="acp-fones">${fs.length ? fs.map(f => `<span class="acp-fone"><a href="tel:+55${f}" title="Ligar">${foneFmt(f)}</a><button type="button" class="acp-copiar" data-ac-copiar="${f}" title="Copiar o número">Copiar</button><a class="acp-wa" href="https://wa.me/55${f}" target="_blank" rel="noopener" title="WhatsApp">WhatsApp</a></span>`).join("") : `<span class="acp-suave">sem telefone</span>`}</span>
               </li>`;
         }).join("");
@@ -476,7 +481,7 @@
         return ordem.map(k => {
             const os = blocos.get(k);
             return `<div class="acp-card acp-bloco">
-              <div class="acp-card-tit">${esc(/^Sem|filial| · /.test(k) ? k : curto(k))} <span class="acp-suave">${os.length} OS</span></div>
+              <div class="acp-card-tit">${esc(/^Sem|filial| · /.test(k) ? k : curto(k))} <span class="acp-suave">${os.length} OS</span>${(() => { const ob = obsDoTec(os[0].tec); return ob ? `<span class="acp-bloco-obs" title="Observação do dia">📝 ${esc(ob.texto)}</span>` : ""; })()}</div>
               <div class="acp-tab-wrap"><table class="acp-tab">
                 <thead><tr><th>Hora</th><th>OS</th><th>Cliente</th><th>Assunto</th><th>Bairro</th><th>Cidade</th><th>Status</th><th>Observações / última mensagem</th></tr></thead>
                 <tbody>${os.map(o => `<tr>
@@ -551,8 +556,19 @@
         on("[data-ac-tec]", "click", e => { const k = e.currentTarget.dataset.acTec; est.tec = !k || est.tec === k ? null : k; render(); });
         on("[data-ac-aba]", "click", e => { est.aba = e.currentTarget.dataset.acAba; render(); });
         on("[data-ac-os]", "click", e => { e.preventDefault(); abrirHistorico(e.currentTarget.dataset.acOs); });
-        on("[data-ac-recarregar]", "click", async () => { if (est.tl) await carregarTimeline(); carregarOs(true); });
+        on("[data-ac-recarregar]", "click", async () => { if (est.tl) await carregarTimeline(); await carregarObs(); carregarOs(true); });
         on("[data-ac-editar]", "click", () => { est.editando = true; est.aviso = null; render(); });
+        on("[data-ac-obs]", "click", e => { e.stopPropagation(); est.obsEditando = e.currentTarget.dataset.acObs; render(); const i = alvo.querySelector("[data-ac-obs-input]"); if (i) { i.focus(); i.select(); } });
+        on("[data-ac-obs-cancelar]", "click", () => { est.obsEditando = null; render(); });
+        const salvarObsDaTela = async () => {
+            const i = alvo.querySelector("[data-ac-obs-input]"); if (!i) return;
+            i.disabled = true;
+            try { await salvarObs(i.dataset.acObsInput, i.value); est.obsEditando = null; est.aviso = null; }
+            catch (err) { est.aviso = { texto: "Não salvou a observação: " + (err.message || err), erro: true }; }
+            render();
+        };
+        on("[data-ac-obs-salvar]", "click", salvarObsDaTela);
+        on("[data-ac-obs-input]", "keydown", e => { if (e.key === "Enter") salvarObsDaTela(); if (e.key === "Escape") { est.obsEditando = null; render(); } });
         on("[data-ac-copiar]", "click", async e => {
             const b = e.currentTarget, txt = b.dataset.acCopiar, antes = b.textContent;
             try { await navigator.clipboard.writeText(txt); }
@@ -621,6 +637,48 @@
         });
     }
 
+    // ---------- observação do técnico no dia (26/11) ----------
+    // "quebrou o carro", "problema de rota"… — uma por técnico por dia, todos veem e editam; zera no dia seguinte.
+    // Guardada na tabela os_anotacoes (qualquer login lê/grava) com a chave "tecobs|AAAA-MM-DD|<ID IXC ou nome>".
+    const OBS_PREF = "tecobs|";
+    const chaveTec = t => String(t.id || norm(t.nome));
+    async function carregarObs() {
+        const dia = isoDia(diaAlvo());
+        try {
+            const { data, error } = await supabaseClient.from("os_anotacoes").select("os_id, texto, autor, atualizado_em").like("os_id", `${OBS_PREF}${dia}|%`);
+            if (error) throw error;
+            est.obs = new Map((data || []).map(r => [String(r.os_id).split("|").slice(2).join("|"), r]));
+        } catch (e) { console.warn("Acompanhamento COP / observações:", e.message || e); est.obs = est.obs || new Map(); }
+        est.obsDia = dia;
+        if (!est.obsLimpo) {   // apaga as de dias anteriores (zera todo dia)
+            est.obsLimpo = true;
+            supabaseClient.from("os_anotacoes").delete().like("os_id", `${OBS_PREF}%`).lt("os_id", `${OBS_PREF}${isoDia(new Date())}`).then(() => {}, () => {});
+        }
+    }
+    async function salvarObs(chave, texto) {
+        const dia = isoDia(diaAlvo()), id = `${OBS_PREF}${dia}|${chave}`, t = String(texto || "").trim().slice(0, 200);
+        if (!t) {
+            const { error } = await supabaseClient.from("os_anotacoes").delete().eq("os_id", id);
+            if (error) throw error;
+            est.obs.delete(chave); return;
+        }
+        const reg = { os_id: id, texto: t, autor: APP?.usuario?.nome || APP?.usuario?.email || null, atualizado_em: new Date().toISOString() };
+        const { error } = await supabaseClient.from("os_anotacoes").upsert(reg, { onConflict: "os_id" });
+        if (error) throw error;
+        est.obs.set(chave, reg);
+    }
+    const obsDoTec = t => (t && est.obs && est.obsDia === isoDia(diaAlvo()) ? est.obs.get(chaveTec(t)) : null) || null;
+    function htmlObsTec(t) {
+        const k = chaveTec(t), ob = obsDoTec(t);
+        if (est.obsEditando === k) return `<span class="acp-obs-ed">
+            <input data-ac-obs-input="${esc(k)}" maxlength="200" value="${esc(ob ? ob.texto : "")}" placeholder="Ex.: carro quebrou, problema de rota, saiu mais cedo…">
+            <button type="button" class="acp-copiar" data-ac-obs-salvar="${esc(k)}">Salvar</button>
+            <button type="button" class="acp-copiar" data-ac-obs-cancelar>Cancelar</button></span>`;
+        if (!ob) return "";
+        const quando = new Date(ob.atualizado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+        return `<button type="button" class="acp-obs-tec" data-ac-obs="${esc(k)}" title="Clique para editar ou apagar">📝 ${esc(ob.texto)} <span class="acp-suave">— ${esc(curto(ob.autor || ""))} ${quando}</span></button>`;
+    }
+
     // ---------- carga ----------
     async function carregarCfg() {
         const { data, error } = await supabaseClient.from("configuracoes_app").select("valor").eq("chave", CHAVE).maybeSingle();
@@ -658,8 +716,9 @@
         clearInterval(est.timer);
         est.timer = setInterval(async () => {
             if (!$("secao-acompanhamento-cop")?.classList.contains("ativa")) { clearInterval(est.timer); clearInterval(est.tlTick); est.tlTick = null; return; }
-            if (est.editando) return;
+            if (est.editando || est.obsEditando) return;
             if (est.tl && est.tl.dados) await carregarTimeline();
+            await carregarObs();
             await carregarOs(true);
         }, ATUALIZA_MS);
     }
@@ -712,6 +771,14 @@
 .acp-copiar-todos{margin-left:auto;font-size:.76rem;padding:3px 10px;font-weight:600}
 .acp-pill{display:inline-block;min-width:22px;text-align:center;padding:1px 7px;border-radius:999px;font-size:.76rem;font-weight:700;background:color-mix(in srgb,var(--cor-primaria) 14%,transparent);color:var(--cor-primaria)}
 .acp-pill.re{background:#fee2e2;color:#b91c1c}
+.acp-obs-add{border:1px dashed var(--cor-borda);background:transparent;color:var(--cor-texto-suave);border-radius:999px;padding:0 8px;font:inherit;font-size:.72rem;cursor:pointer}
+.acp-obs-add:hover{border-color:#d97706;color:#b45309}
+.acp-obs-tec{grid-column:1/-1;margin-left:15px;text-align:left;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:8px;padding:4px 8px;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer}
+.acp-obs-tec .acp-suave{font-weight:400}
+.acp-obs-ed{grid-column:1/-1;margin-left:15px;display:flex;gap:6px;align-items:center}
+.acp-obs-ed input{flex:1;min-width:0;padding:5px 8px;border:1px solid #d97706;border-radius:8px;font:inherit;font-size:.82rem;background:var(--cor-fundo);color:var(--cor-texto)}
+.acp-bloco-obs{font-size:.78rem;font-weight:600;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:999px;padding:1px 9px}
+@media (prefers-color-scheme:dark){.acp-obs-tec,.acp-bloco-obs{background:#451a03;color:#fde68a;border-color:#92400e}}
 .acp-ponto{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--cor-borda);flex:none}
 .acp-ponto.campo{background:#d97706} .acp-ponto.agenda{background:var(--cor-primaria)}
 .acp-legenda{display:flex;gap:12px;margin-top:8px;font-size:.76rem;color:var(--cor-texto-suave)}
