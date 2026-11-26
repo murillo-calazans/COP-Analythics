@@ -276,18 +276,18 @@ registrarInfografico("agenda-agendadas", async () => {
         });
     }
 
+    // 26/11 (usuário): cada ASSUNTO pelo nome (não só o grupo); o grupo vai no rótulo pequeno
     const porAssunto = new Map();
     for (const o of itens) {
-        const k = unificar(o.assunto);
+        const k = IG.assuntoCurto(o.assunto);
         if (!porAssunto.has(k)) porAssunto.set(k, []);
         porAssunto.get(k).push(o);
     }
-    const assuntos = [...porAssunto].sort((a, b) => b[1].length - a[1].length).slice(0, 10);
-    const tituloAssunto = (a, oss) => typeof grupoDoAssunto === "function"
-        ? [...new Set(oss.map(o => IG.assuntoCurto(o.assunto)))].join(" · ") : a;
+    const assuntos = [...porAssunto].sort((a, b) => b[1].length - a[1].length).slice(0, 15);
+    const grupoDe = oss => typeof grupoDoAssunto === "function" ? nomeAssunto(unificar(oss[0].assunto)) : "";
     cartoes.push({
-        titulo: "Por assunto", sub: "Em aberto por grupo de assunto", cor: "verde", icone: "lista",
-        blocos: [{ t: "linhas", itens: assuntos.map(([a, oss]) => ({ rotulo: nomeAssunto(a), titulo: tituloAssunto(a, oss), n: oss.length, cor: "verde", extra: IG.pctDe(oss.length, total), acao: pop(nomeAssunto(a), oss) })) }]
+        titulo: "Por assunto", sub: `Em aberto por assunto${porAssunto.size > 15 ? ` · 15 de ${porAssunto.size}` : ""}`, cor: "verde", icone: "lista",
+        blocos: [{ t: "linhas", itens: assuntos.map(([a, oss]) => ({ rotulo: a, titulo: grupoDe(oss) ? `Grupo: ${grupoDe(oss)}` : a, n: oss.length, cor: "verde", extra: IG.pctDe(oss.length, total), acao: pop(a, oss) })) }]
     });
 
     const porCidade = new Map();
