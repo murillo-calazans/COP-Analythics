@@ -85,21 +85,25 @@
             }
             const col = String(r["COLABORADOR RESPONSAVEL"] ?? "").trim();
             const hist = String(r.HISTARICO || "");
-            const msg = { data: quando, status: String(r.STATUS || "").trim(), msg: String(r.MENSAGEM || "").trim(), hist, col,
+            // 26/11: mensagem registrada e "Alteração de dados da O.S." trazem o colaborador de QUEM ESCREVEU (atendente do COP),
+            // não o técnico — ex.: OS 2058713 agendada p/ David Targino (129) e depois mensagem do Rafael (68) tirava do David
+            const movTec = !/^1[56]$/.test(String(r.EVENTO ?? "").trim()) && !/registrou uma mensagem/i.test(hist)
+                && !/^altera[cç][aã]o de dados/i.test(String(r.MENSAGEM || "").trim());
+            const msg = { data: quando, status: String(r.STATUS || "").trim(), msg: String(r.MENSAGEM || "").trim(), hist, col, movTec,
                 tarefa: String(r["PRAXIMA TAREFA"] || "").trim(), resposta: String(r["RESPOSTA PADRAO"] || "").trim() };
             o.msgs.push(msg);
             if (!o.setor && r.SETOR) o.setor = String(r.SETOR).trim();
             if (quando && (!o.ultima || quando >= o.ultima)) {
                 o.ultima = quando; o.status = msg.status;
                 o.agenda = dataBR(r.AGENDAMENTO);
-                if (col && col !== "0") o.tecId = col;
             }
+            if (movTec && col && col !== "0" && quando && (!o.tecQuando || quando >= o.tecQuando)) { o.tecQuando = quando; o.tecId = col; }
             if (/reagendou/i.test(hist) && quando) {
                 const quem = (hist.match(/Usu[aá]rio\s+(.+?)\s*,\s*reagendou/i) || [])[1] || "";
                 reag.push({ os: o, data: quando, quem: quem.trim(), col, msg: msg.msg, resposta: msg.resposta, status: msg.status });
             }
         }
-        // técnico da OS: última movimentação com colaborador (a última pode ser do sistema, com 0)
+        // técnico da OS: última movimentação DE TÉCNICO com colaborador (acima); sem nenhuma, a última com colaborador
         for (const o of porOs.values()) if (!o.tecId) {
             const m = o.msgs.filter(x => x.col && x.col !== "0" && x.data).sort((a, b) => b.data - a.data)[0];
             if (m) o.tecId = m.col;
