@@ -478,13 +478,14 @@
             return `<div class="acp-card acp-bloco">
               <div class="acp-card-tit">${esc(/^Sem|filial| · /.test(k) ? k : curto(k))} <span class="acp-suave">${os.length} OS</span></div>
               <div class="acp-tab-wrap"><table class="acp-tab">
-                <thead><tr><th>Hora</th><th>OS</th><th>Cliente</th><th>Assunto</th><th>Bairro</th><th>Status</th><th>Observações / última mensagem</th></tr></thead>
+                <thead><tr><th>Hora</th><th>OS</th><th>Cliente</th><th>Assunto</th><th>Bairro</th><th>Cidade</th><th>Status</th><th>Observações / última mensagem</th></tr></thead>
                 <tbody>${os.map(o => `<tr>
                   <td class="acp-hora">${hora(o.agenda)}</td>
                   <td><a href="#" data-ac-os="${esc(o.id)}">${esc(o.id)}</a></td>
                   <td>${esc(o.cliente)}</td>
                   <td class="acp-assunto">${esc(o.assunto)}</td>
-                  <td>${esc(o.bairro)}${o.cidade && o.dono !== "tec" ? ` <span class="acp-suave">· ${esc(o.cidade)}</span>` : ""}</td>
+                  <td>${esc(o.bairro)}</td>
+                  <td>${esc(o.cidade || "—")}</td>
                   <td><span class="acp-status ${stCls(o.status)}">${esc(o.status || "—")}</span></td>
                   <td class="acp-obs-cel">${o.obs.map(chipObs).join("")}${ultimaMsg(o)}</td>
                 </tr>`).join("")}</tbody>
