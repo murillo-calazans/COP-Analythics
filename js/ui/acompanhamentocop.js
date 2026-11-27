@@ -355,7 +355,11 @@
             const porOs = tlPorOs(movs);
             const ordensMap = new Map((j.ordens || []).map(o => [String(o.id), o]));
             const previstas = tlAgendadasPrevistas(j.osHoje || [], new Set(porOs.keys()));
-            est.tl = { dados: tlMontar(movs, ordensMap, previstas, []), geradoEm: j.geradoEm, lidoEm: Date.now() };
+            const dados = tlMontar(movs, ordensMap, previstas, []);
+            // 27/11: pop-up da OS (tlAbrirOs) e aba Operação hoje usam as movimentações/ordens do arquivo
+            dados.mov = movs; dados.ordens = ordensMap; dados.linhasOs = j.osHoje || [];
+            dados.osHojePorId = new Map((j.osHoje || []).map(l => [String((l.dados || l)["ID OS"]), l.dados || l]));
+            est.tl = { dados, geradoEm: j.geradoEm, lidoEm: Date.now() };
         } catch (e) {
             console.error("Acompanhamento COP / timeline:", e);
             est.tl = { ...(est.tl || {}), carregando: false, erro: e.message || String(e) };
@@ -697,6 +701,7 @@
             }
             if (!linhas || !linhas.length) throw new Error("a leitura das OS em aberto voltou vazia — clique em ↻ ou saia e entre de novo");
             est.cache = montar(linhas);
+            est.linhasOs = linhas;
             est.aviso = null;
         } catch (e) {
             console.error("Acompanhamento COP:", e);
@@ -820,7 +825,8 @@ html[data-tema="dark"] .acp-pill.re{background:#7f1d1d;color:#fecaca}
 .acp-diag{margin:4px 0 0;font-size:.72rem;color:var(--cor-texto-suave);opacity:.75}
 @media (max-width:700px){.acp-grid{grid-template-columns:1fr}}`;
         // cores/variáveis da timeline da Agenda valem também aqui
-        if (typeof TL_CSS === "string") s.textContent += "\n" + TL_CSS.replace(/#agendaTimelineConteudo/g, "#acpTimeline");
+        if (typeof TL_CSS === "string") s.textContent += "\n" + TL_CSS.replace(/#agendaTimelineConteudo/g, "#acpTimeline")
+            + "\n" + TL_CSS.replace(/#agendaTimelineConteudo/g, "#opHojeConteudo");
         s.textContent += `
 #acpTimeline{padding:14px}
 .acp-tl-topo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;margin-bottom:10px}
@@ -831,7 +837,37 @@ html[data-tema="dark"] .acp-pill.re{background:#7f1d1d;color:#fecaca}
 .acp-tl-res .exec{color:var(--tl-azul);background:var(--tl-azul-bg)} .acp-tl-res .desloc{color:var(--tl-roxo);background:var(--tl-roxo-bg)}
 .acp-tl-res .interr{color:var(--tl-rosa);background:var(--tl-rosa-bg)} .acp-tl-res .prev{color:var(--cor-texto-suave)}
 .acp-velho{color:#b91c1c;font-weight:600}
-#acpTimeline .tl-board{max-height:72vh}`;
+#acpTimeline .tl-board{max-height:72vh}
+#opHojeConteudo{display:flex;flex-direction:column;gap:14px}
+#opHojeConteudo .acp-kpi small{font-size:.8rem;font-weight:500;color:var(--cor-texto-suave)}
+#opHojeConteudo .acp-kpi.ok b{color:var(--tl-verde)}
+.op-filtros{display:flex;flex-wrap:wrap;gap:8px}
+.op-grupo{padding:14px 16px}
+.op-grupo-topo{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 14px}
+.op-grupo-nome{font-size:1.05rem}
+.op-mini{display:flex;flex-wrap:wrap;gap:5px}
+.op-mini span{font-size:.78rem;padding:2px 9px;border-radius:999px;border:1px solid var(--cor-borda)}
+.op-mini .fin{color:var(--tl-verde);background:var(--tl-verde-bg)} .op-mini .over{color:var(--tl-amarelo);background:var(--tl-amarelo-bg)}
+.op-mini .exec{color:var(--tl-azul);background:var(--tl-azul-bg)} .op-mini .interr{color:var(--tl-rosa);background:var(--tl-rosa-bg)} .op-mini .prev{color:var(--cor-texto-suave)}
+.op-barra{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--tl-cinza-bg);margin:10px 0 6px}
+.op-barra i{display:block;height:100%}
+.op-barra .fin{background:var(--tl-verde)} .op-barra .over{background:var(--tl-amarelo)} .op-barra .exec{background:var(--tl-azul)}
+.op-barra .desloc{background:var(--tl-roxo)} .op-barra .interr{background:var(--tl-rosa)} .op-barra .atras{background:var(--tl-vermelho)} .op-barra .prev{background:var(--tl-cinza);opacity:.45}
+.op-tab tbody tr{cursor:pointer} .op-tab tbody tr:hover td{background:color-mix(in srgb,var(--cor-primaria) 5%,transparent)}
+.op-tab tbody tr.on td{background:color-mix(in srgb,var(--cor-primaria) 11%,transparent)}
+.op-n{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+.op-over{color:var(--tl-amarelo);font-weight:600} .op-interr{color:var(--tl-rosa);font-weight:700} .op-atras{color:var(--tl-vermelho);font-size:.74rem;font-weight:600}
+.op-obs{font-size:.76rem;font-weight:600;color:#92400e;margin-top:2px}
+html[data-tema="dark"] .op-obs{color:#fde68a}
+.op-agora{display:inline-block;font-size:.8rem;padding:2px 9px;border-radius:8px;background:var(--tl-cinza-bg);color:var(--tl-cinza)}
+.op-agora.exec{background:var(--tl-azul-bg);color:var(--tl-azul);font-weight:600} .op-agora.desloc{background:var(--tl-roxo-bg);color:var(--tl-roxo);font-weight:600}
+.op-agora.livre{background:var(--tl-verde-bg);color:var(--tl-verde)} .op-agora.atras{background:var(--tl-vermelho-bg);color:var(--tl-vermelho);font-weight:600}
+.op-sit{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.74rem;font-weight:600;white-space:nowrap;background:var(--tl-cinza-bg);color:var(--tl-cinza)}
+.op-sit.fin{background:var(--tl-verde-bg);color:var(--tl-verde)} .op-sit.over{background:var(--tl-amarelo-bg);color:var(--tl-amarelo)}
+.op-sit.exec{background:var(--tl-azul-bg);color:var(--tl-azul)} .op-sit.desloc{background:var(--tl-roxo-bg);color:var(--tl-roxo)}
+.op-sit.interr{background:var(--tl-rosa-bg);color:var(--tl-rosa)} .op-sit.atras{background:var(--tl-vermelho-bg);color:var(--tl-vermelho)}
+.op-lista-topo{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
+.op-busca{flex:1;min-width:200px;padding:7px 12px;border:1px solid var(--cor-borda);border-radius:999px;font:inherit;font-size:.86rem;background:var(--cor-fundo);color:var(--cor-texto)}`;
         document.head.appendChild(s);
     }
 
@@ -840,6 +876,244 @@ html[data-tema="dark"] .acp-pill.re{background:#7f1d1d;color:#fecaca}
         if (est.aba !== "timeline" || !$("acpTlGrid")) return;
         clearTimeout(_rz); _rz = setTimeout(desenharTimeline, 150);
     });
+
+    // ---------- Gestão do COP > Operação hoje (27/11) ----------
+    // O que cada técnico fez hoje (pela timeline do IXC que o robô publica no R2): finalizadas no tempo / passaram,
+    // em execução, deslocamento, não concluídas, previstas e atrasadas — separado por grupo do COP, com filtro
+    // de cidade e a lista completa das OS do dia. Clicar numa OS abre o pop-up da OS (tlAbrirOs).
+    const op = { cidade: "", grupo: "", tec: "", sit: "", busca: "", timer: null };
+    const OP_SIT = {
+        fin: ["Feita no tempo", "fin"], "fin-over": ["Passou do tempo", "over"], exec: ["Em execução", "exec"],
+        desloc: ["Em deslocamento", "desloc"], interr: ["Não concluída", "interr"], prev: ["Prevista", "prev"], atras: ["Atrasada (não iniciada)", "atras"]
+    };
+    const sitDe = b => b.tipo === "prev" ? (b.fila ? "atras" : "prev") : b.estado;
+    const OP_FILTROS = [["", "Todas"], ["final", "Finalizadas"], ["campo", "Em campo"], ["interr", "Não concluídas"], ["pend", "Previstas / atrasadas"]];
+    const passaSit = s => !op.sit || (op.sit === "final" ? s === "fin" || s === "fin-over" : op.sit === "campo" ? s === "exec" || s === "desloc"
+        : op.sit === "pend" ? s === "prev" || s === "atras" : s === op.sit);
+
+    function opInfoOs(id) {
+        const d = est.tl.dados, o = (d.ordens && d.ordens.get(id)) || {}, c = est.cache && est.cache.porOs.get(id);
+        const h = (d.osHojePorId && d.osHojePorId.get(id)) || {};
+        return {
+            cliente: (c && c.cliente) || o.cliente || h.CLIENTE || "", assunto: (c && c.assunto) || o.assunto || h.ASSUNTO || "",
+            cidade: (c && c.cidade) || nomeBonito(o.cidade || h.CIDADE || ""), bairro: (c && c.bairro) || nomeBonito(h.BAIRRO || "")
+        };
+    }
+    function opModelo() {
+        const linhas = est.tl.dados.linhasTec || [], usadas = new Set(), tecs = [];
+        const cad = grupos().flatMap((g, gi) => (g.tecnicos || []).map(t => ({ g, gi, t })));
+        for (const { g, gi, t } of cad) {
+            const outros = new Set(cad.filter(x => x.t !== t).map(x => semSufixo(x.t.nome)));
+            const blocos = [];
+            for (const lt of linhas) if (mesmoNome(lt.nome, t.nome) && (semSufixo(lt.nome) === semSufixo(t.nome) || !outros.has(semSufixo(lt.nome)))) { blocos.push(...lt.blocos); usadas.add(lt); }
+            tecs.push({ chave: `${gi}|${t.id || norm(t.nome)}`, nome: curto(t.nome), t, gi, grupo: g.nome, cidade: t.cidade || "", dupla: t.dupla || "", blocos });
+        }
+        for (const lt of linhas) if (!usadas.has(lt) && lt.blocos.length)
+            tecs.push({ chave: `-1|${norm(lt.nome)}|${norm(lt.cidade)}`, nome: lt.fora ? `Fora da escala (${lt.cidade})` : curto(nomeBonito(lt.nome)), t: null, gi: -1, grupo: "Fora dos grupos", cidade: lt.cidade === "Sem cidade" ? "" : lt.cidade, blocos: [...lt.blocos] });
+        for (const x of tecs) x.blocos = x.blocos.map(b => ({ ...b, sit: sitDe(b), info: opInfoOs(String(b.id)) })).sort((a, b) => a.ini - b.ini);
+        return tecs;
+    }
+    const cidadesDe = x => String(x.cidade || "").split(/\s*[,;\/]\s*/).map(c => c.trim()).filter(Boolean);
+    function opCidades(tecs) {
+        const s = new Map();
+        tecs.forEach(x => { cidadesDe(x).forEach(c => s.set(norm(c), nomeBonito(c))); x.blocos.forEach(b => { if (b.info.cidade) s.set(norm(b.info.cidade), b.info.cidade); }); });
+        return [...s.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
+    // recorte de cidade/grupo: técnico entra se é da cidade ou tem OS nela; só contam as OS da cidade
+    function opRecorte(tecs) {
+        const c = norm(op.cidade);
+        return tecs.filter(x => op.grupo === "" || String(x.gi) === op.grupo).map(x => {
+            if (!c) return x;
+            const daCidade = cidadesDe(x).some(k => norm(k) === c);
+            const blocos = x.blocos.filter(b => norm(b.info.cidade) === c || (!b.info.cidade && daCidade));
+            return (daCidade || blocos.length) ? { ...x, blocos } : null;
+        }).filter(Boolean);
+    }
+    function opConta(blocos) {
+        const c = { fin: 0, "fin-over": 0, exec: 0, desloc: 0, interr: 0, prev: 0, atras: 0 };
+        blocos.forEach(b => { c[b.sit] = (c[b.sit] || 0) + 1; });
+        c.final = c.fin + c["fin-over"]; c.total = blocos.length;
+        return c;
+    }
+    function opAgora(x) {
+        const vivos = x.blocos.filter(b => b.tipo === "os");
+        const ex = vivos.find(b => b.sit === "exec"), de = vivos.find(b => b.sit === "desloc");
+        const prox = x.blocos.filter(b => b.sit === "prev" || b.sit === "atras").sort((a, b) => a.ini - b.ini)[0];
+        const proxTxt = p => `${p.id}${p.sit === "atras" ? " (atrasada)" : ` às ${hora(p.ini)}`}`;
+        if (ex) return { cls: "exec", txt: `Executando a OS ${ex.id} desde ${hora(ex.execIni || ex.ini)}` };
+        if (de) return { cls: "desloc", txt: `Indo para a OS ${de.id} (saiu ${hora(de.ini)})` };
+        const ult = vivos.filter(b => b.fim).sort((a, b) => b.fim - a.fim)[0];
+        if (ult) return { cls: prox ? "livre" : "fim", txt: `${prox ? "Livre" : "Sem mais OS"} desde ${hora(ult.fim)}${prox ? ` · próxima ${proxTxt(prox)}` : ""}` };
+        if (prox) return { cls: "atras", txt: `Não começou · 1ª OS ${proxTxt(prox)}` };
+        return { cls: "nada", txt: x.dupla ? `Sem OS no nome dele — anda com ${curto(x.dupla)}` : "Sem OS hoje" };
+    }
+    const opChip = s => `<span class="op-sit ${OP_SIT[s] ? OP_SIT[s][1] : ""}">${esc(OP_SIT[s] ? OP_SIT[s][0] : s)}</span>`;
+    const opMin = (a, b) => a && b ? Math.round((b - a) / 60000) : null;
+
+    function opRender() {
+        const alvo = $("opHojeConteudo");
+        if (!alvo) return;
+        if (!grupos().length) { alvo.innerHTML = `<div class="acp-card acp-vazio">Nenhum grupo do COP configurado (Acompanhamento COP › ⚙ Grupos).</div>`; return; }
+        if (!est.tl || (!est.tl.dados && !est.tl.erro)) { alvo.innerHTML = `<div class="acp-card acp-vazio">Montando a operação de hoje…</div>`; return; }
+        if (!est.tl.dados) { alvo.innerHTML = `<div class="acp-card acp-vazio">Não consegui ler a timeline do dia: ${esc(est.tl.erro)} <button type="button" class="acp-btn" data-op-recarregar>Tentar de novo</button></div>`; opLigar(alvo); return; }
+
+        const todos = opModelo(), cidades = opCidades(todos), tecs = opRecorte(todos);
+        const k = opConta(tecs.flatMap(x => x.blocos));
+        const comOs = tecs.filter(x => x.blocos.some(b => b.tipo === "os")).length;
+        const semMov = tecs.filter(x => x.gi >= 0 && !x.blocos.some(b => b.tipo === "os")).length;
+        const ger = est.tl.geradoEm ? new Date(est.tl.geradoEm) : null, velho = ger && (Date.now() - ger) > 30 * 60000;
+        const pct = k.final ? Math.round(k.fin / k.final * 100) : 0;
+        const kpi = (rot, v, cls = "", dica = "") => `<div class="acp-kpi ${cls}" ${dica ? `title="${esc(dica)}"` : ""}><span>${rot}</span><b>${v}</b></div>`;
+        const obsOk = est.obsDia === isoDia(new Date());
+
+        const gruposVis = [...new Set(tecs.map(x => x.gi))].sort((a, b) => ((a < 0) - (b < 0)) || a - b);
+        const htmlGrupo = gi => {
+            const lista = tecs.filter(x => x.gi === gi).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+            const g = gi >= 0 ? grupos()[gi] : { nome: "Fora dos grupos", responsavel: "técnicos/terceiras sem grupo cadastrado" };
+            const c = opConta(lista.flatMap(x => x.blocos));
+            const tot = c.total || 1;
+            const barra = ["fin", "fin-over", "exec", "desloc", "interr", "atras", "prev"].map(s => c[s] ? `<i class="${OP_SIT[s][1]}" style="width:${c[s] / tot * 100}%" title="${OP_SIT[s][0]}: ${c[s]}"></i>` : "").join("");
+            const linhas = lista.map(x => {
+                const cx = opConta(x.blocos), ag = opAgora(x), ini = x.blocos.find(b => b.tipo === "os");
+                const ob = obsOk && x.t && est.obs ? est.obs.get(chaveTec(x.t)) : null;
+                return `<tr class="${op.tec === x.chave ? "on" : ""}" data-op-tec="${esc(x.chave)}" title="Ver as OS deste técnico na lista completa">
+                  <td><b>${esc(x.nome)}</b><div class="acp-suave">${esc([x.cidade, x.t && x.t.equipe].filter(Boolean).join(" · "))}</div>${ob ? `<div class="op-obs">📝 ${esc(ob.texto)}</div>` : ""}</td>
+                  <td><span class="op-agora ${ag.cls}">${esc(ag.txt)}</span></td>
+                  <td class="op-n">${ini ? hora(ini.ini) : "—"}</td>
+                  <td class="op-n"><b>${cx.final}</b>${cx.final ? `<div class="acp-suave">${cx.fin} no tempo${cx["fin-over"] ? ` · <span class="op-over">${cx["fin-over"]} passou</span>` : ""}</div>` : ""}</td>
+                  <td class="op-n">${cx.exec + cx.desloc || "—"}</td>
+                  <td class="op-n">${cx.interr ? `<span class="op-interr">${cx.interr}</span>` : "—"}</td>
+                  <td class="op-n">${cx.prev + cx.atras ? `${cx.prev + cx.atras}${cx.atras ? `<div class="op-atras">${cx.atras} atrasada${cx.atras > 1 ? "s" : ""}</div>` : ""}` : "—"}</td>
+                </tr>`;
+            }).join("");
+            return `<div class="acp-card op-grupo">
+                <div class="op-grupo-topo">
+                  <div><b class="op-grupo-nome">${esc(g.nome)}</b> <span class="acp-suave">${esc(g.responsavel || "")} · ${lista.length} técnico${lista.length === 1 ? "" : "s"}</span></div>
+                  <div class="op-mini"><span><b>${c.final}</b> finalizadas</span><span class="fin"><b>${c.fin}</b> no tempo</span><span class="over"><b>${c["fin-over"]}</b> passaram</span><span class="exec"><b>${c.exec + c.desloc}</b> em campo</span><span class="interr"><b>${c.interr}</b> não concluídas</span><span class="prev"><b>${c.prev + c.atras}</b> faltam</span></div>
+                </div>
+                <div class="op-barra">${barra}</div>
+                <div class="acp-tab-wrap"><table class="acp-tab op-tab">
+                  <thead><tr><th>Técnico</th><th>Como está agora</th><th>Começou</th><th>Finalizadas</th><th>Em campo</th><th>Não concluídas</th><th>Faltam</th></tr></thead>
+                  <tbody>${linhas || `<tr><td colspan="7" class="acp-suave">Nenhum técnico neste recorte.</td></tr>`}</tbody>
+                </table></div>
+              </div>`;
+        };
+
+        // lista completa
+        const bq = norm(op.busca);
+        const lista = tecs.filter(x => !op.tec || x.chave === op.tec).flatMap(x => x.blocos.map(b => ({ x, b })))
+            .filter(({ x, b }) => passaSit(b.sit) && (!bq || norm(`${b.id} ${b.info.cliente} ${b.info.bairro} ${b.info.assunto} ${x.nome}`).includes(bq)))
+            .sort((p, q) => p.b.ini - q.b.ini);
+        const tecSel = op.tec && tecs.find(x => x.chave === op.tec);
+        op.ultimaLista = lista;
+        const htmlLista = `<div class="acp-card" id="opLista">
+            <div class="op-lista-topo">
+              <b>Lista completa <span class="acp-suave">${lista.length} OS</span></b>
+              ${tecSel ? `<button type="button" class="acp-limpar" data-op-tec="">× ${esc(tecSel.nome)}</button>` : ""}
+              <div class="acp-abas">${OP_FILTROS.map(([v, r]) => `<button type="button" class="${op.sit === v ? "on" : ""}" data-op-sit="${v}">${r}</button>`).join("")}</div>
+              <input class="op-busca" data-op-busca placeholder="Buscar OS, cliente, bairro, técnico…" value="${esc(op.busca)}">
+              <button type="button" class="acp-copiar" data-op-csv>Baixar CSV</button>
+            </div>
+            <div class="acp-tab-wrap"><table class="acp-tab">
+              <thead><tr><th>Início</th><th>OS</th><th>Cliente</th><th>Cidade / Bairro</th><th>Assunto</th><th>Técnico</th><th>Situação</th><th>Fim</th><th>Tempo</th></tr></thead>
+              <tbody>${lista.map(({ x, b }) => {
+                  const dur = b.tipo === "os" ? opMin(b.execIni || b.ini, b.fim || (b.sit === "exec" ? new Date() : null)) : null;
+                  return `<tr>
+                    <td class="acp-hora">${hora(b.ini)}${b.tipo === "os" && b.descFim ? `<div class="acp-suave">exec ${hora(b.descFim)}</div>` : ""}</td>
+                    <td><a href="#" data-op-os="${esc(b.id)}">${esc(b.id)}</a></td>
+                    <td>${esc(b.info.cliente || "—")}</td>
+                    <td>${esc(b.info.cidade || "—")}${b.info.bairro ? `<div class="acp-suave">${esc(b.info.bairro)}</div>` : ""}</td>
+                    <td class="acp-assunto">${esc(tlCurto(b.info.assunto || b.a))}</td>
+                    <td>${esc(x.nome)}<div class="acp-suave">${esc(x.grupo)}</div></td>
+                    <td>${opChip(b.sit)}${b.perf && b.sit === "interr" ? `<div class="acp-suave">${esc(b.perf.replace(/^↺\s*/, ""))}</div>` : ""}</td>
+                    <td class="acp-hora">${b.tipo === "os" ? (b.fim ? hora(b.fim) : "—") : ""}</td>
+                    <td class="op-n">${dur != null ? `${dur} min<div class="acp-suave">esperado ${b.exp}</div>` : b.tipo === "prev" ? `<span class="acp-suave">esperado ${b.exp}</span>` : ""}</td>
+                  </tr>`;
+              }).join("") || `<tr><td colspan="9" class="acp-suave">Nenhuma OS neste filtro.</td></tr>`}</tbody>
+            </table></div>
+          </div>`;
+
+        alvo.innerHTML = `
+          <div class="acp-topo">
+            <div class="acp-topo-esq">
+              <div class="op-filtros">
+                <select class="acp-sel" data-op-cidade aria-label="Cidade"><option value="">Todas as cidades</option>${cidades.map(c => `<option ${norm(c) === norm(op.cidade) ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+                <select class="acp-sel" data-op-grupo aria-label="Grupo"><option value="">Todos os grupos</option>${grupos().map((g, i) => `<option value="${i}" ${op.grupo === String(i) ? "selected" : ""}>${esc(g.nome)} — ${esc(g.responsavel || "")}</option>`).join("")}<option value="-1" ${op.grupo === "-1" ? "selected" : ""}>Fora dos grupos</option></select>
+              </div>
+              <span class="acp-suave">${esc(new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }))} · clique no técnico para ver as OS dele, e na OS para abrir</span>
+            </div>
+            <div class="acp-acoes">
+              ${ger ? `<span class="acp-suave ${velho ? "acp-velho" : ""}">timeline do IXC às ${hora(ger)}${velho ? " — o robô não atualiza há mais de 30 min" : ""} · atualiza de 10 em 10 min</span>` : ""}
+              <button type="button" class="acp-btn" data-op-recarregar title="Buscar de novo">↻</button>
+            </div>
+          </div>
+          <div class="acp-kpis">
+            ${kpi("Técnicos com OS hoje", `${comOs}<small> / ${tecs.length}</small>`)}
+            ${kpi("Finalizadas", k.final, "prim")}
+            ${kpi("No tempo", `${k.fin}${k.final ? `<small> ${pct}%</small>` : ""}`, "ok")}
+            ${kpi("Passaram do tempo", k["fin-over"], k["fin-over"] ? "alerta" : "")}
+            ${kpi("Em campo agora", k.exec + k.desloc, "", `${k.exec} em execução · ${k.desloc} em deslocamento`)}
+            ${kpi("Não concluídas", k.interr, k.interr ? "aviso" : "", "Visitas que terminaram sem fechar (reagendada, encaminhada ou outro técnico assumiu)")}
+            ${kpi("Faltam", k.prev + k.atras, "", `${k.prev} previstas · ${k.atras} atrasadas (a agenda passou e não começou)`)}
+            ${kpi("Sem movimento", semMov, semMov ? "alerta" : "", "Técnicos dos grupos sem nenhuma OS iniciada hoje")}
+          </div>
+          ${gruposVis.map(htmlGrupo).join("") || `<div class="acp-card acp-vazio">Nenhum técnico nesta cidade/grupo.</div>`}
+          ${htmlLista}`;
+        opLigar(alvo);
+    }
+
+    function opLigar(alvo) {
+        const on = (sel, ev, fn) => alvo.querySelectorAll(sel).forEach(b => b.addEventListener(ev, fn));
+        on("[data-op-cidade]", "change", e => { op.cidade = e.target.value; op.tec = ""; opRender(); });
+        on("[data-op-grupo]", "change", e => { op.grupo = e.target.value; op.tec = ""; opRender(); });
+        on("[data-op-sit]", "click", e => { op.sit = e.currentTarget.dataset.opSit; opRender(); });
+        on("[data-op-tec]", "click", e => {
+            const k = e.currentTarget.dataset.opTec; op.tec = !k || op.tec === k ? "" : k; opRender();
+            if (op.tec) $("opLista")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        on("[data-op-os]", "click", e => {
+            e.preventDefault();
+            if (typeof tlAbrirOs === "function") tlAbrirOs(e.currentTarget.dataset.opOs, { ...est.tl.dados, linhasOs: est.linhasOs || est.tl.dados.linhasOs });
+        });
+        on("[data-op-recarregar]", "click", async () => { est.tl = null; opRender(); await opCarregar(true); });
+        on("[data-op-csv]", "click", () => {
+            const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+            const cab = ["Início", "OS", "Cliente", "Cidade", "Bairro", "Assunto", "Técnico", "Grupo", "Situação", "Fim", "Esperado (min)"];
+            const l = (op.ultimaLista || []).map(({ x, b }) => [hora(b.ini), b.id, b.info.cliente, b.info.cidade, b.info.bairro, tlCurto(b.info.assunto || b.a), x.nome, x.grupo,
+                OP_SIT[b.sit] ? OP_SIT[b.sit][0] : b.sit, b.tipo === "os" && b.fim ? hora(b.fim) : "", b.exp].map(cel).join(";"));
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob(["﻿" + [cab.join(";"), ...l].join("\r\n")], { type: "text/csv;charset=utf-8" }));
+            a.download = `Operação hoje ${isoDia(new Date())}.csv`; a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        });
+        const busca = alvo.querySelector("[data-op-busca]");
+        if (busca) busca.addEventListener("input", () => {
+            op.busca = busca.value; const pos = busca.selectionStart; opRender();
+            const n = $("opHojeConteudo")?.querySelector("[data-op-busca]"); if (n) { n.focus(); n.setSelectionRange(pos, pos); }
+        });
+    }
+
+    async function opCarregar(forcar) {
+        await carregarTimeline();
+        opRender();
+        if (est.diaOffset === 0 && est.obsDia !== isoDia(new Date())) { await carregarObs(); opRender(); }
+        if (forcar || !est.cache || Date.now() - est.cache.lidoEm > 120000) { await carregarOs(!!forcar); opRender(); }
+    }
+    async function renderizarOperacaoHoje() {
+        const alvo = $("opHojeConteudo");
+        if (!alvo) return;
+        estilo();
+        try { if (!est.cfg || est.cfgVazia) await carregarCfg(); }
+        catch (e) { alvo.innerHTML = `<div class="acp-card acp-vazio">Não consegui ler os grupos: ${esc(e.message || e)}</div>`; return; }
+        if (est.tl && est.tl.dados && Date.now() - est.tl.lidoEm < 120000) opRender();
+        else { if (!est.tl || !est.tl.dados) { est.tl = null; opRender(); } await opCarregar(false); }
+        clearInterval(op.timer);
+        op.timer = setInterval(async () => {
+            if (!$("secao-operacao-hoje")?.classList.contains("ativa")) { clearInterval(op.timer); return; }
+            await opCarregar(true);
+        }, ATUALIZA_MS);
+    }
+    window.renderizarOperacaoHoje = renderizarOperacaoHoje;
 
     window.renderizarAcompanhamentoCop = renderizar;
 })();

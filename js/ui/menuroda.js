@@ -31,7 +31,7 @@
         };
 
         const LABELS = {
-            "acompanhamento-cop": "Acompanhamento COP",
+            "acompanhamento-cop": "Acompanhamento COP", "operacao-hoje": "Operação hoje",
             "clientes-cto": "Cadastro na CTO", alertas: "Alertas", "ctos-lacres": "CTOs e Lacres", enderecos: "Endereços a corrigir",
             "agenda-agendadas": "Ordens", "agenda-hoje": "Agenda",
             "escala-hoje": "Escala do dia", "escala-contatos": "Contatos", "escala-capacidade": "Capacidade", "escala-terceiras": "Programação terceiras",

@@ -1,6 +1,7 @@
 const MODULO_DA_SECAO = {
     "inicio": "inicio",
     "acompanhamento-cop": "cop",
+    "operacao-hoje": "cop",
     "clientes-cto": "clientes",
     "alertas": "clientes",
     "ctos-lacres": "clientes",
@@ -25,7 +26,7 @@ function podeVerSecao(nome) {
     if (nome === "agenda-agendadas") return abas.includes("agenda-hoje");
     if (nome === "escala-terceiras") return abas.includes("escala-capacidade");
     // 25/11: todo atendente vê o Acompanhamento COP (o conteúdo já vem filtrado pelo grupo do login)
-    if (nome === "acompanhamento-cop") return true;
+    if (nome === "acompanhamento-cop" || nome === "operacao-hoje") return true;
     return abas.includes(nome);
 }
 
@@ -117,6 +118,7 @@ function mostrarSecao(nome) {
     if (nome === "escala-capacidade" && typeof renderizarEscalaCapacidade === "function") renderizarEscalaCapacidade();
     if (nome === "escala-terceiras" && typeof renderizarEscalaTerceiras === "function") renderizarEscalaTerceiras();
     if (nome === "acompanhamento-cop" && typeof renderizarAcompanhamentoCop === "function") renderizarAcompanhamentoCop();
+    if (nome === "operacao-hoje" && typeof renderizarOperacaoHoje === "function") renderizarOperacaoHoje();
     if (nome === "agenda-agendadas" && typeof carregarAgendaAgendadas === "function") carregarAgendaAgendadas();
     if (nome === "agenda-hoje") {
         const sub = document.getElementById("agendaHojeData");

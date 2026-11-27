@@ -86,6 +86,10 @@
                 <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 Acompanhamento COP
             </button>
+            <button data-secao="operacao-hoje">
+                <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+                Operação hoje
+            </button>
 
 
 
@@ -358,6 +362,17 @@
             </div>
         </div>
         <div id="acompCopConteudo"></div>
+    </section>
+
+    <!-- COP > Operação hoje (js/ui/acompanhamentocop.js, renderizarOperacaoHoje): o que os técnicos fizeram hoje, por grupo do COP. -->
+    <section id="secao-operacao-hoje" class="secao">
+        <div class="dashboard-cabecalho">
+            <div>
+                <h2>Operação hoje</h2>
+                <p>O que cada técnico fez hoje, como está agora e quantas finalizou — por grupo do COP, com filtro de cidade e a lista completa</p>
+            </div>
+        </div>
+        <div id="opHojeConteudo"></div>
     </section>
 
     <section id="secao-clientes-cto" class="secao">
@@ -711,14 +726,14 @@
 <script src="js/ui/escalacontatos.js"></script>
 <script src="js/ui/escalacapacidade.js"></script>
 <script src="js/ui/escalaterceiras.js"></script>
-<script src="js/ui/acompanhamentocop.js"></script>
+<script src="js/ui/acompanhamentocop.js?v=2"></script>
 <script src="js/agendador/motor.js?v=36"></script>
 <script src="js/ui/agendaixc.js"></script>
 <script src="js/ui/gestaocop.js"></script>
 <script src="js/ui/agendabacklog.js"></script>
 <script src="js/ui/agendaagendadas.js"></script>
 <script src="js/ui/backloghistorico.js"></script>
-<script src="js/ui/timelineagenda.js?v=9"></script>
+<script src="js/ui/timelineagenda.js?v=10"></script>
 <script src="js/ui/paineloperacao.js"></script>
 <script src="js/ui/infograficos.js?v=5"></script>
 <script src="js/ui/info-gestaoordens.js?v=4"></script>

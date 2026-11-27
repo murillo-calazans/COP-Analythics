@@ -484,19 +484,19 @@ function tlRender() {
 // 27/11: clicar no bloco abre a OS (resumo, visitas do dia na timeline e o histórico)
 // na mesma janela da Agenda (modalOsIxc). Histórico completo vem do arquivo das OS em
 // aberto; se a OS já saiu de lá (finalizada), mostra as movimentações de hoje do banco.
-function tlAbrirOs(id) {
+function tlAbrirOs(id, dados = tlDados) {
     const corpo = document.getElementById("modalOsIxcCorpo"), titulo = document.getElementById("modalOsIxcTitulo");
-    if (!corpo || !titulo || typeof abrirModal !== "function" || !tlDados || !id) return;
+    if (!corpo || !titulo || typeof abrirModal !== "function" || !dados || !id) return;
     id = String(id);
     const esc = escaparHtml;
     const dataDe = v => (typeof ixcDataBR === "function" && ixcDataBR(v)) || (v ? new Date(v) : null);
     const okData = d => d && !isNaN(d);
 
-    const linhas = (tlDados.linhasOs || []).map(l => l && (l.dados || l)).filter(r => r && String(r["ID OS"]) === id);
+    const linhas = (dados.linhasOs || []).map(l => l && (l.dados || l)).filter(r => r && String(r["ID OS"]) === id);
     const ult = linhas[linhas.length - 1] || {};
-    const info = (tlDados.ordens && tlDados.ordens.get(id)) || {};
+    const info = (dados.ordens && dados.ordens.get(id)) || {};
     const blocos = [];
-    tlDados.linhasTec.forEach(lt => lt.blocos.forEach(b => { if (String(b.id) === id) blocos.push({ lt, b }); }));
+    dados.linhasTec.forEach(lt => lt.blocos.forEach(b => { if (String(b.id) === id) blocos.push({ lt, b }); }));
     const b0 = blocos[0] && blocos[0].b || {};
 
     let hist, fonte;
@@ -504,7 +504,7 @@ function tlAbrirOs(id) {
         hist = linhas.map(r => ({ data: dataDe(r.DATA), status: r.STATUS, evento: r.HISTARICO, msg: r.MENSAGEM }));
         fonte = "Histórico completo da OS (arquivo das OS em aberto).";
     } else {
-        hist = (tlDados.mov || []).filter(e => String(e.ordem_id) === id).map(e => ({ data: dataDe(e.data), status: e.status, msg: e.mensagem }));
+        hist = (dados.mov || []).filter(e => String(e.ordem_id) === id).map(e => ({ data: dataDe(e.data), status: e.status, msg: e.mensagem }));
         fonte = "Só as movimentações de hoje (a OS não está mais na lista das em aberto).";
     }
     hist = hist.filter(m => okData(m.data)).sort((a, b) => a.data - b.data);
