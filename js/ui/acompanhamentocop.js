@@ -247,7 +247,10 @@
             est.obsCarregando = true;
             carregarObs().finally(() => { est.obsCarregando = false; render(); });
         }
-        const D = ehTodos() ? dadosTodos() : dadosDoGrupo(est.grupo);
+        const D0 = ehTodos() ? dadosTodos() : dadosDoGrupo(est.grupo);
+        est.cidadesOpc = cidadesDoGrupo(D0);
+        const D = filtrarCidade(D0);
+        est.gVis = D.g;                      // a timeline desenha só os técnicos que sobraram no filtro
         const tecSel = est.tec;
         const filtraTec = arr => tecSel ? arr.filter(x => x.tec && String(x.tec.id || x.tec.nome) === tecSel) : arr;
         const diag = `${est.cache.porOs.size} OS em aberto lidas · ${est.cache.reag.length} reagendamentos · login ${APP?.usuario?.email || "?"} (${APP?.usuario?.papel || "?"}) · grupo ${grupoDoUsuario() >= 0 ? grupos()[grupoDoUsuario()].nome : "nenhum pelo login"}`;
@@ -262,6 +265,25 @@
         }
     }
 
+    // 27/11: filtro de cidade — OS (agendadas/reagendadas/em campo) da cidade e os técnicos da cidade
+    // (pelo cadastro do grupo, que pode ter várias cidades, ou por terem OS nela)
+    function cidadesDoGrupo({ g, agendadas, reagendadas }) {
+        const s = new Map(), add = c => { if (c) s.set(norm(c), nomeBonito(c)); };
+        (g.tecnicos || []).forEach(t => cidadesDe(t).forEach(add));
+        agendadas.forEach(o => add(o.cidade)); reagendadas.forEach(r => add(r.os && r.os.cidade));
+        return [...s.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
+    function filtrarCidade(D) {
+        const c = norm(est.cidade);
+        if (!c) return D;
+        const agendadas = D.agendadas.filter(o => norm(o.cidade) === c);
+        const reagendadas = D.reagendadas.filter(r => norm(r.os && r.os.cidade) === c);
+        const emCampo = D.emCampo.filter(o => norm(o.cidade) === c);
+        const tecnicos = (D.g.tecnicos || []).filter(t => cidadesDe(t).some(k => norm(k) === c)
+            || agendadas.some(o => o.tec === t) || reagendadas.some(r => r.tec === t) || emCampo.some(o => o.tec === t));
+        return { ...D, g: { ...D.g, tecnicos }, agendadas, reagendadas, emCampo };
+    }
+
     function htmlTopo({ g }) {
         const atualizado = est.cache.geradoEm ? new Date(est.cache.geradoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
         const sel = podeTrocarGrupo()
@@ -272,6 +294,7 @@
           <div class="acp-topo">
             <div class="acp-topo-esq">
               ${sel}
+              <select class="acp-sel" data-ac-cidade aria-label="Cidade"><option value="">Todas as cidades</option>${(est.cidadesOpc || []).map(c => `<option ${norm(c) === norm(est.cidade) ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
               <span class="acp-suave">${g.todos ? `<b>${grupos().length} grupos</b> · todas as OS agendadas do dia` : `Responsável: <b>${esc(g.responsavel || "—")}</b>${g.turno ? ` · ${esc(g.turno)}` : ""}`}</span>
             </div>
             <div class="acp-dia">
@@ -410,7 +433,7 @@
     function desenharTimeline() {
         const board = $("acpTlBoard"), grid = $("acpTlGrid");
         if (!board || !grid || !est.tl || !est.tl.dados) return;
-        const rows = linhasTimeline(ehTodos() ? grupoTodos() : grupos()[est.grupo]);
+        const rows = linhasTimeline(est.gVis || (ehTodos() ? grupoTodos() : grupos()[est.grupo]));
         const NAMEW = 220, hw = Math.max(70, Math.floor((board.clientWidth - NAMEW) / (TL_JANELA_FIM - TL_JANELA_INI)));
         const laneW = (TL_DIA_FIM - TL_DIA_INI) * hw;
         const antes = _tlHourW;
@@ -557,6 +580,7 @@
         on("[data-ac-dia]", "click", e => { est.diaOffset += Number(e.currentTarget.dataset.acDia); render(); });
         on("[data-ac-ir]", "click", e => { est.diaOffset = Number(e.currentTarget.dataset.acIr); render(); });
         on("[data-ac-grupo]", "change", e => { est.grupo = Number(e.target.value); est.tec = null; render(); });
+        on("[data-ac-cidade]", "change", e => { est.cidade = e.target.value; est.tec = null; render(); });
         on("[data-ac-tec]", "click", e => { const k = e.currentTarget.dataset.acTec; est.tec = !k || est.tec === k ? null : k; render(); });
         on("[data-ac-aba]", "click", e => { est.aba = e.currentTarget.dataset.acAba; render(); });
         on("[data-ac-os]", "click", e => { e.preventDefault(); abrirHistorico(e.currentTarget.dataset.acOs); });
@@ -881,7 +905,24 @@ html[data-tema="dark"] .op-obs{color:#fde68a}
     // O que cada técnico fez hoje (pela timeline do IXC que o robô publica no R2): finalizadas no tempo / passaram,
     // em execução, deslocamento, não concluídas, previstas e atrasadas — separado por grupo do COP, com filtro
     // de cidade e a lista completa das OS do dia. Clicar numa OS abre o pop-up da OS (tlAbrirOs).
-    const op = { cidade: "", grupo: "", tec: "", sit: "", busca: "", timer: null };
+    const op = { cidade: "", grupo: "", assunto: "", tec: "", sit: "", busca: "", timer: null };
+    // 27/11: filtro de assunto — "g:<grupo de assunto>" (grupoDoAssunto) ou "a:<assunto>"
+    const assuntoDoBloco = b => b.info.assunto || b.a || "";
+    const grupoAss = a => typeof grupoDoAssunto === "function" ? grupoDoAssunto(a) : "";
+    const passaAssunto = b => {
+        if (!op.assunto) return true;
+        const a = assuntoDoBloco(b), v = op.assunto.slice(2);
+        return op.assunto.startsWith("g:") ? grupoAss(a) === v : norm(a) === norm(v);
+    };
+    function opAssuntos(tecs) {
+        const gs = new Map(), as = new Map();
+        tecs.forEach(x => x.blocos.forEach(b => {
+            const a = assuntoDoBloco(b).trim(); if (!a) return;
+            const g = grupoAss(a); if (g) gs.set(g, (gs.get(g) || 0) + 1);
+            const k = norm(a); as.set(k, { nome: a, n: ((as.get(k) || {}).n || 0) + 1 });
+        }));
+        return { grupos: [...gs].sort((p, q) => q[1] - p[1]), assuntos: [...as.values()].sort((p, q) => p.nome.localeCompare(q.nome, "pt-BR")) };
+    }
     const OP_SIT = {
         fin: ["Feita no tempo", "fin"], "fin-over": ["Passou do tempo", "over"], exec: ["Em execução", "exec"],
         desloc: ["Em deslocamento", "desloc"], interr: ["Não concluída", "interr"], prev: ["Prevista", "prev"], atras: ["Atrasada (não iniciada)", "atras"]
@@ -923,10 +964,15 @@ html[data-tema="dark"] .op-obs{color:#fde68a}
     function opRecorte(tecs) {
         const c = norm(op.cidade);
         return tecs.filter(x => op.grupo === "" || String(x.gi) === op.grupo).map(x => {
-            if (!c) return x;
-            const daCidade = cidadesDe(x).some(k => norm(k) === c);
-            const blocos = x.blocos.filter(b => norm(b.info.cidade) === c || (!b.info.cidade && daCidade));
-            return (daCidade || blocos.length) ? { ...x, blocos } : null;
+            let blocos = x.blocos, entra = true;
+            if (c) {
+                const daCidade = cidadesDe(x).some(k => norm(k) === c);
+                blocos = blocos.filter(b => norm(b.info.cidade) === c || (!b.info.cidade && daCidade));
+                entra = daCidade || blocos.length > 0;
+            }
+            // com assunto escolhido, só ficam os técnicos que têm OS desse assunto hoje
+            if (op.assunto) { blocos = blocos.filter(passaAssunto); entra = blocos.length > 0; }
+            return entra ? { ...x, blocos } : null;
         }).filter(Boolean);
     }
     function opConta(blocos) {
@@ -957,7 +1003,7 @@ html[data-tema="dark"] .op-obs{color:#fde68a}
         if (!est.tl || (!est.tl.dados && !est.tl.erro)) { alvo.innerHTML = `<div class="acp-card acp-vazio">Montando a operação de hoje…</div>`; return; }
         if (!est.tl.dados) { alvo.innerHTML = `<div class="acp-card acp-vazio">Não consegui ler a timeline do dia: ${esc(est.tl.erro)} <button type="button" class="acp-btn" data-op-recarregar>Tentar de novo</button></div>`; opLigar(alvo); return; }
 
-        const todos = opModelo(), cidades = opCidades(todos), tecs = opRecorte(todos);
+        const todos = opModelo(), cidades = opCidades(todos), tecs = opRecorte(todos), assuntosOpc = opAssuntos(todos);
         const k = opConta(tecs.flatMap(x => x.blocos));
         const comOs = tecs.filter(x => x.blocos.some(b => b.tipo === "os")).length;
         const semMov = tecs.filter(x => x.gi >= 0 && !x.blocos.some(b => b.tipo === "os")).length;
@@ -1039,6 +1085,10 @@ html[data-tema="dark"] .op-obs{color:#fde68a}
               <div class="op-filtros">
                 <select class="acp-sel" data-op-cidade aria-label="Cidade"><option value="">Todas as cidades</option>${cidades.map(c => `<option ${norm(c) === norm(op.cidade) ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
                 <select class="acp-sel" data-op-grupo aria-label="Grupo"><option value="">Todos os grupos</option>${grupos().map((g, i) => `<option value="${i}" ${op.grupo === String(i) ? "selected" : ""}>${esc(g.nome)} — ${esc(g.responsavel || "")}</option>`).join("")}<option value="-1" ${op.grupo === "-1" ? "selected" : ""}>Fora dos grupos</option></select>
+                <select class="acp-sel" data-op-assunto aria-label="Assunto"><option value="">Todos os assuntos</option>
+                  ${assuntosOpc.grupos.length ? `<optgroup label="Grupos de assunto">${assuntosOpc.grupos.map(([g, n]) => `<option value="g:${esc(g)}" ${op.assunto === "g:" + g ? "selected" : ""}>${esc(g)} (${n})</option>`).join("")}</optgroup>` : ""}
+                  <optgroup label="Assuntos">${assuntosOpc.assuntos.map(a => `<option value="a:${esc(a.nome)}" ${op.assunto === "a:" + a.nome ? "selected" : ""}>${esc(tlCurto(a.nome))} (${a.n})</option>`).join("")}</optgroup>
+                </select>
               </div>
               <span class="acp-suave">${esc(new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }))} · clique no técnico para ver as OS dele, e na OS para abrir</span>
             </div>
@@ -1066,6 +1116,7 @@ html[data-tema="dark"] .op-obs{color:#fde68a}
         const on = (sel, ev, fn) => alvo.querySelectorAll(sel).forEach(b => b.addEventListener(ev, fn));
         on("[data-op-cidade]", "change", e => { op.cidade = e.target.value; op.tec = ""; opRender(); });
         on("[data-op-grupo]", "change", e => { op.grupo = e.target.value; op.tec = ""; opRender(); });
+        on("[data-op-assunto]", "change", e => { op.assunto = e.target.value; op.tec = ""; opRender(); });
         on("[data-op-sit]", "click", e => { op.sit = e.currentTarget.dataset.opSit; opRender(); });
         on("[data-op-tec]", "click", e => {
             const k = e.currentTarget.dataset.opTec; op.tec = !k || op.tec === k ? "" : k; opRender();
