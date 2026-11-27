@@ -362,6 +362,12 @@ html[data-tema="dark"] #agendaTimelineConteudo{ --tl-head-bg:#0e3a63; --tl-head-
 .tl-topo{ display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
 .tl-topo .tl-at{ font-size:12px; color:var(--cor-texto-suave); }
 .tl-topo .tl-relogio{ margin-left:auto; font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+[data-tl-os]{ cursor:pointer; }
+[data-tl-os]:hover{ filter:brightness(.96); box-shadow:0 0 0 2px color-mix(in srgb,var(--cor-texto-suave) 35%,transparent); }
+.tl-pop-visitas{ display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+.tl-pop-vis{ border:1px solid var(--cor-borda, rgba(127,127,127,.3)); border-radius:8px; padding:7px 10px; font-size:13px; display:flex; flex-wrap:wrap; gap:4px 14px; }
+.tl-pop-vis b{ font-weight:700; }
+.tl-pop-fonte{ margin-top:10px; font-size:12px; color:var(--cor-texto-suave); }
 .tl-vazio{ padding:28px 10px; text-align:center; color:var(--cor-texto-suave); }
 @media (max-width:720px){ .tl-cards{ grid-template-columns:1fr; } }
 `;
@@ -397,6 +403,7 @@ async function carregarTimelineAgenda(forcar = false, silencioso = false) {
         const escalaDia = (typeof EscalaDia !== "undefined" && EscalaDia.montarDia)
             ? EscalaDia.montarDia(techsEscala, hojeMeiaNoite()) : [];
         tlDados = tlMontar(mov, ordensMap, previstas, escalaDia);
+        tlDados.mov = mov; tlDados.ordens = ordensMap; tlDados.linhasOs = linhasOs;
         tlEm = Date.now();
         tlRender();
         if (!tlTimer) tlTimer = setInterval(tlTick, 30000);
@@ -461,9 +468,80 @@ function tlRender() {
         b.addEventListener("click", () => { tlCidade = b.dataset.c; tlRender(); });
     });
 
+    if (!alvo.dataset.tlClick) {
+        alvo.dataset.tlClick = "1";
+        alvo.addEventListener("click", ev => {
+            const el = ev.target.closest("[data-tl-os]");
+            if (el) tlAbrirOs(el.dataset.tlOs);
+        });
+    }
+
     tlDesenharGrade();
     tlResumo();
     tlTick();
+}
+
+// 27/11: clicar no bloco abre a OS (resumo, visitas do dia na timeline e o histórico)
+// na mesma janela da Agenda (modalOsIxc). Histórico completo vem do arquivo das OS em
+// aberto; se a OS já saiu de lá (finalizada), mostra as movimentações de hoje do banco.
+function tlAbrirOs(id) {
+    const corpo = document.getElementById("modalOsIxcCorpo"), titulo = document.getElementById("modalOsIxcTitulo");
+    if (!corpo || !titulo || typeof abrirModal !== "function" || !tlDados || !id) return;
+    id = String(id);
+    const esc = escaparHtml;
+    const dataDe = v => (typeof ixcDataBR === "function" && ixcDataBR(v)) || (v ? new Date(v) : null);
+    const okData = d => d && !isNaN(d);
+
+    const linhas = (tlDados.linhasOs || []).map(l => l && (l.dados || l)).filter(r => r && String(r["ID OS"]) === id);
+    const ult = linhas[linhas.length - 1] || {};
+    const info = (tlDados.ordens && tlDados.ordens.get(id)) || {};
+    const blocos = [];
+    tlDados.linhasTec.forEach(lt => lt.blocos.forEach(b => { if (String(b.id) === id) blocos.push({ lt, b }); }));
+    const b0 = blocos[0] && blocos[0].b || {};
+
+    let hist, fonte;
+    if (linhas.length) {
+        hist = linhas.map(r => ({ data: dataDe(r.DATA), status: r.STATUS, evento: r.HISTARICO, msg: r.MENSAGEM }));
+        fonte = "Histórico completo da OS (arquivo das OS em aberto).";
+    } else {
+        hist = (tlDados.mov || []).filter(e => String(e.ordem_id) === id).map(e => ({ data: dataDe(e.data), status: e.status, msg: e.mensagem }));
+        fonte = "Só as movimentações de hoje (a OS não está mais na lista das em aberto).";
+    }
+    hist = hist.filter(m => okData(m.data)).sort((a, b) => a.data - b.data);
+
+    const ag = dataDe(ult.AGENDAMENTO), ab = dataDe(ult["DATA/HORA ABERTURA"]);
+    const campo = (rot, v) => `<div><span>${rot}</span><strong>${esc(v || "—")}</strong></div>`;
+    const fmtDH = d => d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const ROT = { fin: "Feita no tempo", "fin-over": "Passou do tempo", exec: "Em execução", desloc: "Em deslocamento", interr: "Não concluída" };
+
+    titulo.textContent = `OS ${id}`;
+    corpo.innerHTML = `
+      <div class="modal-resumo resumo-grid">
+        ${campo("Cliente", ult.CLIENTE || info.cliente || b0.cli)}
+        ${campo("Cidade / Bairro", [ult.CIDADE || info.cidade, ult.BAIRRO].filter(Boolean).join(" / "))}
+        ${campo("Assunto", ult.ASSUNTO || info.assunto || b0.a)}
+        ${campo("Status", ult.STATUS || info.status_atual)}
+        ${ult.SETOR ? campo("Setor", ult.SETOR) : ""}
+        ${campo("Aberta em", okData(ab) ? fmtDH(ab) : "")}
+        ${campo("Agendada para", okData(ag) ? fmtDH(ag) : "")}
+      </div>
+      ${blocos.length ? `<div class="tl-pop-visitas">${blocos.map(({ lt, b }) => b.tipo === "prev"
+          ? `<div class="tl-pop-vis"><b>Prevista</b><span>${esc(lt.nome)}</span><span>${tlFmtH(b.ini)}${b.fila ? " (na fila, agenda já passou)" : ""}</span><span>esperado ${b.exp} min</span></div>`
+          : `<div class="tl-pop-vis"><b>${ROT[b.estado] || "Visita"}</b><span>${esc(lt.nome)}</span>
+               <span>início ${tlFmtH(b.ini)}</span>${b.descFim ? `<span>execução ${tlFmtH(b.descFim)}</span>` : ""}
+               <span>${b.fim ? (b.estado === "interr" ? "parou " : "fim ") + tlFmtH(b.fim) : "em andamento"}</span>
+               <span>esperado ${b.exp} min</span>${b.perf ? `<span>${esc(b.perf)}</span>` : ""}</div>`).join("")}</div>` : ""}
+      <ol class="ixc-timeline">${hist.map(m => `
+        <li class="ixc-timeline-item">
+          <div class="ixc-timeline-topo">
+            <span class="ixc-timeline-data">${fmtDH(m.data)}</span>
+            <span class="ag-status ag-st-${tlNorm(m.status).replace(/\s+/g, "-")}">${esc(m.status || "—")}</span>
+          </div>
+          ${m.evento ? `<div class="ixc-timeline-evento">${esc(m.evento)}</div>` : ""}
+          ${m.msg ? `<div class="ixc-timeline-msg">${esc(m.msg)}</div>` : ""}
+        </li>`).join("") || `<li class="ixc-timeline-item">Sem movimentações.</li>`}</ol>
+      <div class="tl-pop-fonte">${fonte}</div>`;
+    abrirModal("modalOsIxc");
 }
 
 function tlDesenharGrade() {
@@ -532,7 +610,7 @@ function tlBlocoHtml(b, faixa) {
     const titulo = `#${b.id} · ${b.cli || ""} · ${tlCurto(b.a)}`;
 
     if (b.tipo === "prev") {
-        return `<div class="tl-blk prev${b.fila ? " fila" : ""}" style="left:${left}px;width:${w}px;top:${top}px;height:${TL_ROW - 10}px" title="${escaparHtml(titulo)} · prevista">
+        return `<div class="tl-blk prev${b.fila ? " fila" : ""}" data-tl-os="${escaparHtml(b.id)}" style="left:${left}px;width:${w}px;top:${top}px;height:${TL_ROW - 10}px" title="${escaparHtml(titulo)} · prevista">
             <div class="os">#${escaparHtml(b.id)} ${escaparHtml(tlCurto(b.a))}</div>
             <div class="cli">${escaparHtml(b.cli || "—")}</div>
             <div class="perf">previsto ${b.exp}min</div></div>`;
@@ -551,7 +629,7 @@ function tlBlocoHtml(b, faixa) {
             <div class="cli">${escaparHtml(b.cli || "—")}</div>
             <div class="perf">${perf}</div></div>`;
     }
-    return `<div class="tl-os ${b.estado}" data-live="${live ? 1 : 0}" data-ini="${tlHoras(b.ini)}" data-exec="${tlHoras(b.execIni || b.ini)}" data-exp="${b.exp || 0}" style="left:${left}px;width:${w}px;top:${top}px;height:${TL_ROW - 10}px" title="${escaparHtml(titulo)}">
+    return `<div class="tl-os ${b.estado}" data-tl-os="${escaparHtml(b.id)}" data-live="${live ? 1 : 0}" data-ini="${tlHoras(b.ini)}" data-exec="${tlHoras(b.execIni || b.ini)}" data-exp="${b.exp || 0}" style="left:${left}px;width:${w}px;top:${top}px;height:${TL_ROW - 10}px" title="${escaparHtml(titulo)}">
         ${seg}${corpo}</div>`;
 }
 
